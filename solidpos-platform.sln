@@ -1,0 +1,60 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosServer.Api", "src\PosServer\SolidPOS.PosServer.Api\SolidPOS.PosServer.Api.csproj", "{9D45D1D5-42F3-41A5-9897-001000000001}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosServer.Application", "src\PosServer\SolidPOS.PosServer.Application\SolidPOS.PosServer.Application.csproj", "{9D45D1D5-42F3-41A5-9897-001000000002}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosServer.Contracts", "src\PosServer\SolidPOS.PosServer.Contracts\SolidPOS.PosServer.Contracts.csproj", "{9D45D1D5-42F3-41A5-9897-001000000003}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosServer.Domain", "src\PosServer\SolidPOS.PosServer.Domain\SolidPOS.PosServer.Domain.csproj", "{9D45D1D5-42F3-41A5-9897-001000000004}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosServer.Infrastructure", "src\PosServer\SolidPOS.PosServer.Infrastructure\SolidPOS.PosServer.Infrastructure.csproj", "{9D45D1D5-42F3-41A5-9897-001000000005}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosServer.UnitTests", "tests\SolidPOS.PosServer.UnitTests\SolidPOS.PosServer.UnitTests.csproj", "{9D45D1D5-42F3-41A5-9897-001000000006}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosServer.IntegrationTests", "tests\SolidPOS.PosServer.IntegrationTests\SolidPOS.PosServer.IntegrationTests.csproj", "{9D45D1D5-42F3-41A5-9897-001000000007}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosServer.ContractTests", "tests\SolidPOS.PosServer.ContractTests\SolidPOS.PosServer.ContractTests.csproj", "{9D45D1D5-42F3-41A5-9897-001000000008}"
+EndProject
+Global
+  GlobalSection(SolutionConfigurationPlatforms) = preSolution
+    Debug|Any CPU = Debug|Any CPU
+    Release|Any CPU = Release|Any CPU
+  EndGlobalSection
+  GlobalSection(ProjectConfigurationPlatforms) = postSolution
+    {9D45D1D5-42F3-41A5-9897-001000000001}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000001}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000001}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000001}.Release|Any CPU.Build.0 = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000002}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000002}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000002}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000002}.Release|Any CPU.Build.0 = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000003}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000003}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000003}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000003}.Release|Any CPU.Build.0 = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000004}.Release|Any CPU.Build.0 = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000005}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000005}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000005}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000005}.Release|Any CPU.Build.0 = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000006}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000006}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000006}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000006}.Release|Any CPU.Build.0 = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000007}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000007}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000007}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000007}.Release|Any CPU.Build.0 = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000008}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000008}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000008}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000008}.Release|Any CPU.Build.0 = Release|Any CPU
+  EndGlobalSection
+EndGlobal

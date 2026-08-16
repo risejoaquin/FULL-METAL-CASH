@@ -1,0 +1,17 @@
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\bin\Debug\net8.0\SolidPOS.PosServer.Application.deps.json
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\bin\Debug\net8.0\SolidPOS.PosServer.Application.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\bin\Debug\net8.0\SolidPOS.PosServer.Application.pdb
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\bin\Debug\net8.0\SolidPOS.PosServer.Contracts.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\bin\Debug\net8.0\SolidPOS.PosServer.Domain.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\bin\Debug\net8.0\SolidPOS.PosServer.Domain.pdb
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\bin\Debug\net8.0\SolidPOS.PosServer.Contracts.pdb
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.csproj.AssemblyReference.cache
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.AssemblyInfoInputs.cache
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.AssemblyInfo.cs
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.csproj.CoreCompileInputs.cache
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.2C8ED86D.Up2Date
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\refint\SolidPOS.PosServer.Application.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.pdb
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\ref\SolidPOS.PosServer.Application.dll

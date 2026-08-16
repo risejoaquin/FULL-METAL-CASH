@@ -1,0 +1,370 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\Users\\Lucilfer\\Documents\\SolidPos\\tests\\SolidPOS.PosServer.UnitTests\\SolidPOS.PosServer.UnitTests.csproj": {}
+  },
+  "projects": {
+    "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application\\SolidPOS.PosServer.Application.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application\\SolidPOS.PosServer.Application.csproj",
+        "projectName": "SolidPOS.PosServer.Application",
+        "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application\\SolidPOS.PosServer.Application.csproj",
+        "packagesPath": "C:\\Users\\Lucilfer\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\Lucilfer\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Contracts\\SolidPOS.PosServer.Contracts.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Contracts\\SolidPOS.PosServer.Contracts.csproj"
+              },
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "allWarningsAsErrors": true,
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Contracts\\SolidPOS.PosServer.Contracts.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Contracts\\SolidPOS.PosServer.Contracts.csproj",
+        "projectName": "SolidPOS.PosServer.Contracts",
+        "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Contracts\\SolidPOS.PosServer.Contracts.csproj",
+        "packagesPath": "C:\\Users\\Lucilfer\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Contracts\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\Lucilfer\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "allWarningsAsErrors": true,
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj",
+        "projectName": "SolidPOS.PosServer.Domain",
+        "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj",
+        "packagesPath": "C:\\Users\\Lucilfer\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\Lucilfer\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {}
+          }
+        },
+        "warningProperties": {
+          "allWarningsAsErrors": true,
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Infrastructure\\SolidPOS.PosServer.Infrastructure.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Infrastructure\\SolidPOS.PosServer.Infrastructure.csproj",
+        "projectName": "SolidPOS.PosServer.Infrastructure",
+        "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Infrastructure\\SolidPOS.PosServer.Infrastructure.csproj",
+        "packagesPath": "C:\\Users\\Lucilfer\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Infrastructure\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\Lucilfer\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application\\SolidPOS.PosServer.Application.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application\\SolidPOS.PosServer.Application.csproj"
+              },
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "allWarningsAsErrors": true,
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "BCrypt.Net-Next": {
+              "target": "Package",
+              "version": "[4.0.3, )"
+            },
+            "Npgsql": {
+              "target": "Package",
+              "version": "[8.0.5, )"
+            },
+            "Serilog.AspNetCore": {
+              "target": "Package",
+              "version": "[8.0.3, )"
+            },
+            "System.IdentityModel.Tokens.Jwt": {
+              "target": "Package",
+              "version": "[8.1.2, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.AspNetCore.App": {
+              "privateAssets": "none"
+            },
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
+    "C:\\Users\\Lucilfer\\Documents\\SolidPos\\tests\\SolidPOS.PosServer.UnitTests\\SolidPOS.PosServer.UnitTests.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\tests\\SolidPOS.PosServer.UnitTests\\SolidPOS.PosServer.UnitTests.csproj",
+        "projectName": "SolidPOS.PosServer.UnitTests",
+        "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\tests\\SolidPOS.PosServer.UnitTests\\SolidPOS.PosServer.UnitTests.csproj",
+        "packagesPath": "C:\\Users\\Lucilfer\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\tests\\SolidPOS.PosServer.UnitTests\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\Lucilfer\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application\\SolidPOS.PosServer.Application.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application\\SolidPOS.PosServer.Application.csproj"
+              },
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain\\SolidPOS.PosServer.Domain.csproj"
+              },
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Infrastructure\\SolidPOS.PosServer.Infrastructure.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Infrastructure\\SolidPOS.PosServer.Infrastructure.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "allWarningsAsErrors": true,
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.NET.Test.Sdk": {
+              "target": "Package",
+              "version": "[17.11.1, )"
+            },
+            "Moq": {
+              "target": "Package",
+              "version": "[4.20.72, )"
+            },
+            "System.IdentityModel.Tokens.Jwt": {
+              "target": "Package",
+              "version": "[8.1.2, )"
+            },
+            "xunit": {
+              "target": "Package",
+              "version": "[2.9.2, )"
+            },
+            "xunit.runner.visualstudio": {
+              "target": "Package",
+              "version": "[2.8.2, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    }
+  }
+}

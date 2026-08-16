@@ -1,0 +1,7 @@
+{
+  "SolidPOS.PosServer.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Api",
+  "SolidPOS.PosServer.Application, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Application",
+  "SolidPOS.PosServer.Contracts, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Contracts",
+  "SolidPOS.PosServer.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Domain",
+  "SolidPOS.PosServer.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosServer\\SolidPOS.PosServer.Infrastructure"
+}

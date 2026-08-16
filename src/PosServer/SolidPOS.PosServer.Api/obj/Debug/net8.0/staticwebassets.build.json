@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "mAYIBza3zoPStTU4zhVMLHGRKG13bzMLlafzby7zR+4=",
+  "Source": "SolidPOS.PosServer.Api",
+  "BasePath": "_content/SolidPOS.PosServer.Api",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

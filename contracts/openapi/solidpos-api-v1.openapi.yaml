@@ -1,0 +1,7282 @@
+openapi: 3.1.0
+info:
+  title: SolidPOS PosServer API
+  version: 1.0.0
+  description: 'Runtime contract for SolidPOS PosServer. Macro Phase 30 hardens parity between OpenAPI, implemented Minimal
+    API endpoints, request/response contracts and RFC 7807 ProblemDetails errors. Roadmap-only endpoints must not be documented
+    here.
+
+    '
+servers:
+- url: http://localhost:5000/api/v1
+  description: Local development
+- url: https://api.example.com/api/v1
+  description: Production
+security:
+- bearerAuth: []
+tags:
+- name: Auth
+- name: Terminals
+- name: Terminal
+- name: Tenant
+- name: Customers
+- name: Discounts
+- name: Cash Drawers
+- name: Inventory
+- name: Sales
+- name: Receipts
+- name: Returns
+- name: Sync
+- name: Admin
+- name: Audit
+- name: Reports
+- name: Builder
+- name: Updates
+- name: Observability
+- name: System
+- name: Health
+paths:
+  /admin/access/roles/{roleId}/permissions:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/access/roles/{roleId}/permissions.
+      operationId: put_admin_access_roles_roleId_permissions
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: roleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/access/users/{userId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/access/users/{userId}.
+      operationId: put_admin_access_users_userId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/barcodes/{barcodeId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/barcodes/{barcodeId}.
+      operationId: put_admin_catalog_barcodes_barcodeId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: barcodeId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/categories/{categoryId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/categories/{categoryId}.
+      operationId: put_admin_catalog_categories_categoryId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: categoryId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/modifier-groups/{modifierGroupId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/modifier-groups/{modifierGroupId}.
+      operationId: put_admin_catalog_modifier_groups_modifierGroupId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: modifierGroupId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/modifiers/{modifierId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/modifiers/{modifierId}.
+      operationId: put_admin_catalog_modifiers_modifierId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: modifierId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/prices/{priceId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/prices/{priceId}.
+      operationId: put_admin_catalog_prices_priceId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: priceId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/products/{productId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/products/{productId}.
+      operationId: put_admin_catalog_products_productId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/recipes/{recipeId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/recipes/{recipeId}.
+      operationId: put_admin_catalog_recipes_recipeId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/recipes/{recipeId}/items/{recipeItemId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/recipes/{recipeId}/items/{recipeItemId}.
+      operationId: put_admin_catalog_recipes_recipeId_items_recipeItemId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: recipeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: recipeItemId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/variants/{variantId}:
+    put:
+      tags:
+      - Admin
+      summary: Replaces /admin/catalog/variants/{variantId}.
+      operationId: put_admin_catalog_variants_variantId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: variantId
+        in: path
+        required: true
+        schema:
+          type: string
+  /admin/catalog/{entityType}/{entityId}:
+    delete:
+      tags:
+      - Admin
+      summary: Deletes /admin/catalog/{entityType}/{entityId}.
+      operationId: delete_admin_catalog_entityType_entityId
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: entityType
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: entityId
+        in: path
+        required: true
+        schema:
+          type: string
+  /audit/events:
+    get:
+      tags:
+      - Audit
+      summary: Reads /audit/events.
+      operationId: get_audit_events
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /auth/login:
+    post:
+      tags:
+      - Auth
+      summary: Creates or executes /auth/login.
+      operationId: post_auth_login
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /auth/logout:
+    post:
+      tags:
+      - Auth
+      summary: Creates or executes /auth/logout.
+      operationId: post_auth_logout
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /auth/refresh:
+    post:
+      tags:
+      - Auth
+      summary: Creates or executes /auth/refresh.
+      operationId: post_auth_refresh
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /auth/terminal/register:
+    post:
+      tags:
+      - Auth
+      summary: Creates or executes /auth/terminal/register.
+      operationId: post_auth_terminal_register
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /cash-drawers/shifts:
+    post:
+      tags:
+      - Cash Drawers
+      summary: Creates or executes /cash-drawers/shifts.
+      operationId: post_cash_drawers_shifts
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /cash-drawers/shifts/current:
+    get:
+      tags:
+      - Cash Drawers
+      summary: Reads /cash-drawers/shifts/current.
+      operationId: get_cash_drawers_shifts_current
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /cash-drawers/shifts/{shiftId}/close:
+    post:
+      tags:
+      - Cash Drawers
+      summary: Creates or executes /cash-drawers/shifts/{shiftId}/close.
+      operationId: post_cash_drawers_shifts_shiftId_close
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: shiftId
+        in: path
+        required: true
+        schema:
+          type: string
+  /cash-drawers/shifts/{shiftId}/movements:
+    post:
+      tags:
+      - Cash Drawers
+      summary: Creates or executes /cash-drawers/shifts/{shiftId}/movements.
+      operationId: post_cash_drawers_shifts_shiftId_movements
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: shiftId
+        in: path
+        required: true
+        schema:
+          type: string
+  /customers:
+    get:
+      tags:
+      - Customers
+      summary: Reads /customers.
+      operationId: get_customers
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags:
+      - Customers
+      summary: Creates or executes /customers.
+      operationId: post_customers
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /customers/{customerId}:
+    get:
+      tags:
+      - Customers
+      summary: Reads /customers/{customerId}.
+      operationId: get_customers_customerId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+    patch:
+      tags:
+      - Customers
+      summary: Updates /customers/{customerId}.
+      operationId: patch_customers_customerId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+  /customers/{customerId}/sales:
+    get:
+      tags:
+      - Customers
+      summary: Reads /customers/{customerId}/sales.
+      operationId: get_customers_customerId_sales
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+  /discounts:
+    get:
+      tags:
+      - Discounts
+      summary: Reads /discounts.
+      operationId: get_discounts
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags:
+      - Discounts
+      summary: Creates or executes /discounts.
+      operationId: post_discounts
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /discounts/validate:
+    post:
+      tags:
+      - Discounts
+      summary: Creates or executes /discounts/validate.
+      operationId: post_discounts_validate
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /discounts/{discountId}:
+    patch:
+      tags:
+      - Discounts
+      summary: Updates /discounts/{discountId}.
+      operationId: patch_discounts_discountId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: discountId
+        in: path
+        required: true
+        schema:
+          type: string
+  /health:
+    get:
+      tags:
+      - Health
+      summary: Reads /health.
+      operationId: get_health
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      security: []
+  /health/live:
+    get:
+      tags:
+      - Health
+      summary: Reads /health/live.
+      operationId: get_health_live
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /health/ready:
+    get:
+      tags:
+      - Health
+      summary: Reads /health/ready.
+      operationId: get_health_ready
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      security: []
+  /inventory/adjustments:
+    post:
+      tags:
+      - Inventory
+      summary: Creates or executes /inventory/adjustments.
+      operationId: post_inventory_adjustments
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /inventory/counts:
+    post:
+      tags:
+      - Inventory
+      summary: Creates or executes /inventory/counts.
+      operationId: post_inventory_counts
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+    get:
+      tags:
+      - Inventory
+      summary: Reads /inventory/counts.
+      operationId: get_inventory_counts
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /inventory/low-stock:
+    get:
+      tags:
+      - Inventory
+      summary: Reads /inventory/low-stock.
+      operationId: get_inventory_low_stock
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /inventory/policy:
+    get:
+      tags:
+      - Inventory
+      summary: Reads /inventory/policy.
+      operationId: get_inventory_policy
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    patch:
+      tags:
+      - Inventory
+      summary: Updates /inventory/policy.
+      operationId: patch_inventory_policy
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /inventory/stock:
+    get:
+      tags:
+      - Inventory
+      summary: Reads /inventory/stock.
+      operationId: get_inventory_stock
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /inventory/transfers:
+    post:
+      tags:
+      - Inventory
+      summary: Creates or executes /inventory/transfers.
+      operationId: post_inventory_transfers
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+    get:
+      tags:
+      - Inventory
+      summary: Reads /inventory/transfers.
+      operationId: get_inventory_transfers
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /permissions:
+    get:
+      tags:
+      - Permissions
+      summary: Reads /permissions.
+      operationId: get_permissions
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /receipts/public/{publicToken}:
+    get:
+      tags:
+      - Receipts
+      summary: Reads /receipts/public/{publicToken}.
+      operationId: get_receipts_public_publicToken
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: publicToken
+        in: path
+        required: true
+        schema:
+          type: string
+  /observability/metrics:
+    get:
+      tags:
+      - Observability
+      summary: Reads operational observability metrics.
+      operationId: get_observability_metrics
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          description: Too many requests.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /receipts/{saleId}:
+    get:
+      tags:
+      - Receipts
+      summary: Reads /receipts/{saleId}.
+      operationId: get_receipts_saleId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: saleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /receipts/{saleId}/digital:
+    get:
+      tags:
+      - Receipts
+      summary: Reads /receipts/{saleId}/digital.
+      operationId: get_receipts_saleId_digital
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: saleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /receipts/{saleId}/email:
+    post:
+      tags:
+      - Receipts
+      summary: Creates or executes /receipts/{saleId}/email.
+      operationId: post_receipts_saleId_email
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: saleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /receipts/{saleId}/issue:
+    post:
+      tags:
+      - Receipts
+      summary: Creates or executes /receipts/{saleId}/issue.
+      operationId: post_receipts_saleId_issue
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: saleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /reports/cash/shifts:
+    get:
+      tags:
+      - Reports
+      summary: Reads /reports/cash/shifts.
+      operationId: get_reports_cash_shifts
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /reports/dashboard/overview:
+    get:
+      tags:
+      - Reports
+      summary: Reads /reports/dashboard/overview.
+      operationId: get_reports_dashboard_overview
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /reports/inventory/movements:
+    get:
+      tags:
+      - Reports
+      summary: Reads /reports/inventory/movements.
+      operationId: get_reports_inventory_movements
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /reports/inventory/negative:
+    get:
+      tags:
+      - Reports
+      summary: Reads /reports/inventory/negative.
+      operationId: get_reports_inventory_negative
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /reports/products/top:
+    get:
+      tags:
+      - Reports
+      summary: Reads /reports/products/top.
+      operationId: get_reports_products_top
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /reports/sales/by-payment-method:
+    get:
+      tags:
+      - Reports
+      summary: Reads /reports/sales/by-payment-method.
+      operationId: get_reports_sales_by_payment_method
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /reports/sales/range:
+    get:
+      tags:
+      - Reports
+      summary: Reads /reports/sales/range.
+      operationId: get_reports_sales_range
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /returns:
+    post:
+      tags:
+      - Returns
+      summary: Creates or executes /returns.
+      operationId: post_returns
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+    get:
+      tags:
+      - Returns
+      summary: Reads /returns.
+      operationId: get_returns
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /returns/{returnId}:
+    get:
+      tags:
+      - Returns
+      summary: Reads /returns/{returnId}.
+      operationId: get_returns_returnId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: returnId
+        in: path
+        required: true
+        schema:
+          type: string
+  /roles:
+    get:
+      tags:
+      - Roles
+      summary: Reads /roles.
+      operationId: get_roles
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /sales:
+    get:
+      tags:
+      - Sales
+      summary: Reads /sales.
+      operationId: get_sales
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags:
+      - Sales
+      summary: Creates or executes /sales.
+      operationId: post_sales
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /sales/{saleId}:
+    get:
+      tags:
+      - Sales
+      summary: Reads /sales/{saleId}.
+      operationId: get_sales_saleId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: saleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /sales/{saleId}/void:
+    post:
+      tags:
+      - Sales
+      summary: Creates or executes /sales/{saleId}/void.
+      operationId: post_sales_saleId_void
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: saleId
+        in: path
+        required: true
+        schema:
+          type: string
+  /stores:
+    get:
+      tags:
+      - Stores
+      summary: Reads /stores.
+      operationId: get_stores
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags:
+      - Stores
+      summary: Creates or executes /stores.
+      operationId: post_stores
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /stores/{storeId}:
+    patch:
+      tags:
+      - Stores
+      summary: Updates /stores/{storeId}.
+      operationId: patch_stores_storeId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /sync/bootstrap:
+    get:
+      tags:
+      - Sync
+      summary: Reads /sync/bootstrap.
+      operationId: get_sync_bootstrap
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /sync/conflicts:
+    get:
+      tags:
+      - Sync
+      summary: Reads /sync/conflicts.
+      operationId: get_sync_conflicts
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /sync/conflicts/{conflictId}/resolve:
+    post:
+      tags:
+      - Sync
+      summary: Creates or executes /sync/conflicts/{conflictId}/resolve.
+      operationId: post_sync_conflicts_conflictId_resolve
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      parameters:
+      - name: conflictId
+        in: path
+        required: true
+        schema:
+          type: string
+  /sync/process:
+    post:
+      tags:
+      - Sync
+      summary: Creates or executes /sync/process.
+      operationId: post_sync_process
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /sync/pull:
+    get:
+      tags:
+      - Sync
+      summary: Reads /sync/pull.
+      operationId: get_sync_pull
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /sync/push:
+    post:
+      tags:
+      - Sync
+      summary: Creates or executes /sync/push.
+      operationId: post_sync_push
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /system/info:
+    get:
+      tags:
+      - System
+      summary: Reads /system/info.
+      operationId: get_system_info
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /tenant/catalog:
+    get:
+      tags:
+      - Tenant
+      summary: Reads /tenant/catalog.
+      operationId: get_tenant_catalog
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /tenant/config:
+    get:
+      tags:
+      - Tenant
+      summary: Reads /tenant/config.
+      operationId: get_tenant_config
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    put:
+      tags:
+      - Tenant
+      summary: Replaces /tenant/config.
+      operationId: put_tenant_config
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /tenants/current:
+    get:
+      tags:
+      - Tenant Admin
+      summary: Reads /tenants/current.
+      operationId: get_tenants_current
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /tenants/current/settings:
+    patch:
+      tags:
+      - Tenant Admin
+      summary: Updates /tenants/current/settings.
+      operationId: patch_tenants_current_settings
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /terminal/session:
+    get:
+      tags:
+      - Terminal
+      summary: Reads /terminal/session.
+      operationId: get_terminal_session
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /terminals:
+    get:
+      tags:
+      - Terminals
+      summary: Reads /terminals.
+      operationId: get_terminals
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /terminals/enrollment-token:
+    post:
+      tags:
+      - Terminals
+      summary: Creates or executes /terminals/enrollment-token.
+      operationId: post_terminals_enrollment_token
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /terminals/{terminalId}/revoke:
+    post:
+      tags:
+      - Terminals
+      summary: Creates or executes /terminals/{terminalId}/revoke.
+      operationId: post_terminals_terminalId_revoke
+      responses:
+        '204':
+          description: No content.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          type: string
+  /users:
+    get:
+      tags:
+      - Users
+      summary: Reads /users.
+      operationId: get_users
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags:
+      - Users
+      summary: Creates or executes /users.
+      operationId: post_users
+      responses:
+        '201':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /users/{userId}:
+    patch:
+      tags:
+      - Users
+      summary: Updates /users/{userId}.
+      operationId: patch_users_userId
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /builder/projects:
+    get:
+      tags:
+      - Builder
+      summary: Reads /builder/projects.
+      operationId: get_builder_projects
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+    post:
+      tags:
+      - Builder
+      summary: Creates /builder/projects.
+      operationId: post_builder_projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /builder/projects/{projectId}/builds:
+    post:
+      tags:
+      - Builder
+      summary: Creates /builder/projects/{projectId}/builds.
+      operationId: post_builder_projects_projectId_builds
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /updates/channels:
+    get:
+      tags:
+      - Updates
+      summary: Reads /updates/channels.
+      operationId: get_updates_channels
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /updates/releases:
+    post:
+      tags:
+      - Updates
+      summary: Creates /updates/releases.
+      operationId: post_updates_releases
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /updates/check:
+    get:
+      tags:
+      - Updates
+      summary: Reads /updates/check.
+      operationId: get_updates_check
+      parameters:
+      - name: currentVersion
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: channel
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: packageType
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    DateFrom:
+      name: from
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+    DateTo:
+      name: to
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+    StoreId:
+      name: storeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SaleId:
+      name: saleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ShiftId:
+      name: shiftId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Unauthorized:
+      description: Credenciales invalidas o token invalido.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Forbidden:
+      description: No autorizado por RBAC/policy/tenant context.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Recurso no encontrado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ValidationError:
+      description: Error de validacion.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Conflict:
+      description: Conflicto por version, idempotencia, estado o regla de negocio.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    UnexpectedError:
+      description: Error inesperado.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+  schemas:
+    CreateReturnRequest:
+      type: object
+      required:
+      - saleId
+      - reason
+      - lines
+      properties:
+        saleId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnLine'
+    ReturnListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        saleId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        totalCents:
+          type: integer
+          format: int64
+        refundCents:
+          type: integer
+          format: int64
+        occurredAt:
+          type: string
+          format: date-time
+    Return:
+      type: object
+      required:
+      - id
+      - saleId
+      - totals
+      - lines
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        saleId:
+          type: string
+          format: uuid
+        totals:
+          $ref: '#/components/schemas/SaleTotals'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReturnLine'
+        createdAt:
+          type: string
+          format: date-time
+    ProblemDetails:
+      type: object
+      required:
+      - type
+      - title
+      - status
+      - traceId
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        traceId:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+    EntityStatus:
+      type: string
+      enum:
+      - active
+      - inactive
+      - archived
+    TenantStatus:
+      type: string
+      enum:
+      - active
+      - suspended
+      - closed
+    Money:
+      type: object
+      required:
+      - amountCents
+      - currency
+      properties:
+        amountCents:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+          default: MXN
+    Quantity:
+      type: string
+      pattern: ^-?\d{1,10}(\.\d{1,4})?$
+      description: Decimal como string para conservar precision.
+    PageMeta:
+      type: object
+      required:
+      - page
+      - pageSize
+      - total
+      properties:
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    LoginRequest:
+      type: object
+      required:
+      - email
+      - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        tenantId:
+          type: string
+          format: uuid
+    RefreshTokenRequest:
+      type: object
+      required:
+      - refreshToken
+      properties:
+        refreshToken:
+          type: string
+    LogoutRequest:
+      type: object
+      required:
+      - refreshToken
+      properties:
+        refreshToken:
+          type: string
+    ChangePasswordRequest:
+      type: object
+      required:
+      - currentPassword
+      - newPassword
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 12
+    AuthSession:
+      type: object
+      required:
+      - accessToken
+      - refreshToken
+      - expiresAt
+      - user
+      - tenant
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/AuthUser'
+        tenant:
+          $ref: '#/components/schemas/AuthTenant'
+    AuthUser:
+      type: object
+      required:
+      - id
+      - email
+      - name
+      - roles
+      - permissions
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    AuthTenant:
+      type: object
+      required:
+      - id
+      - name
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+    Tenant:
+      type: object
+      required:
+      - id
+      - name
+      - status
+      - settings
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        legalName:
+          type: string
+        status:
+          $ref: '#/components/schemas/TenantStatus'
+        settings:
+          $ref: '#/components/schemas/TenantSettings'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    TenantSettings:
+      type: object
+      required:
+      - timezone
+      - currency
+      - receipt
+      - ui
+      properties:
+        timezone:
+          type: string
+          example: America/Hermosillo
+        currency:
+          type: string
+          example: MXN
+        receipt:
+          $ref: '#/components/schemas/ReceiptSettings'
+        ui:
+          $ref: '#/components/schemas/UiSettings'
+    TenantConfig:
+      type: object
+      required:
+      - tenantId
+      - businessVertical
+      - uiLayout
+      - modulesEnabled
+      - branding
+      - receiptSettings
+      - hardwareProfile
+      - featureFlags
+      - version
+      - updatedAt
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        businessVertical:
+          type: string
+          example: qsr_cafe
+        uiLayout:
+          type: string
+          example: touch_grid
+        modulesEnabled:
+          type: object
+          additionalProperties: true
+          example:
+            modifiers: true
+            recipes_bom: true
+            barcode: true
+            cash: true
+            sync: true
+        branding:
+          type: object
+          additionalProperties: true
+        receiptSettings:
+          type: object
+          additionalProperties: true
+        hardwareProfile:
+          type: object
+          additionalProperties: true
+        featureFlags:
+          type: object
+          additionalProperties: true
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+    UpdateTenantConfigRequest:
+      type: object
+      required:
+      - businessVertical
+      - uiLayout
+      - modulesEnabled
+      - branding
+      - receiptSettings
+      - hardwareProfile
+      - featureFlags
+      properties:
+        businessVertical:
+          type: string
+        uiLayout:
+          type: string
+        modulesEnabled:
+          type: object
+          additionalProperties: true
+        branding:
+          type: object
+          additionalProperties: true
+        receiptSettings:
+          type: object
+          additionalProperties: true
+        hardwareProfile:
+          type: object
+          additionalProperties: true
+        featureFlags:
+          type: object
+          additionalProperties: true
+        expectedVersion:
+          type: integer
+          format: int64
+    CatalogSnapshot:
+      type: object
+      required:
+      - tenantId
+      - generatedAt
+      - categories
+      - units
+      - products
+      - variants
+      - barcodes
+      - priceLists
+      - prices
+      - modifierGroups
+      - modifiers
+      - productModifierGroups
+      - recipes
+      - recipeItems
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        generatedAt:
+          type: string
+          format: date-time
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogCategory'
+        units:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogUnit'
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogProduct'
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogVariant'
+        barcodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogBarcode'
+        priceLists:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogPriceList'
+        prices:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogPrice'
+        modifierGroups:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogModifierGroup'
+        modifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogModifier'
+        productModifierGroups:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogProductModifierGroup'
+        recipes:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogRecipe'
+        recipeItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/CatalogRecipeItem'
+    CatalogCategory:
+      type: object
+      required:
+      - id
+      - name
+      - sortOrder
+      - status
+      - version
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sortOrder:
+          type: integer
+        status:
+          type: string
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+    CatalogUnit:
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - symbol
+      - factorToBase
+      - isBase
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        symbol:
+          type: string
+        factorToBase:
+          type: string
+        isBase:
+          type: boolean
+    CatalogProduct:
+      type: object
+      required:
+      - id
+      - sku
+      - name
+      - productType
+      - isSellable
+      - isStockTracked
+      - allowNegativeStock
+      - taxMode
+      - attributes
+      - status
+      - version
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        categoryId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        productType:
+          type: string
+        saleUnitId:
+          type: string
+          format: uuid
+        inventoryUnitId:
+          type: string
+          format: uuid
+        isSellable:
+          type: boolean
+        isStockTracked:
+          type: boolean
+        allowNegativeStock:
+          type: boolean
+        taxMode:
+          type: string
+        attributes:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+    CatalogVariant:
+      type: object
+      required:
+      - id
+      - productId
+      - sku
+      - name
+      - attributes
+      - status
+      - version
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        attributes:
+          type: object
+          additionalProperties: true
+        status:
+          type: string
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+    CatalogBarcode:
+      type: object
+      required:
+      - id
+      - productId
+      - barcode
+      - quantity
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        barcode:
+          type: string
+        quantity:
+          type: string
+        unitId:
+          type: string
+          format: uuid
+    CatalogPriceList:
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - currency
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        currency:
+          type: string
+        status:
+          type: string
+    CatalogPrice:
+      type: object
+      required:
+      - id
+      - priceListId
+      - productId
+      - priceCents
+      - currency
+      properties:
+        id:
+          type: string
+          format: uuid
+        priceListId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        priceCents:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+    UpdateAdminCategoryRequest:
+      type: object
+      required:
+      - name
+      - sortOrder
+      - status
+      properties:
+        parentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sortOrder:
+          type: integer
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+        expectedVersion:
+          type: integer
+          format: int64
+    AdminCategory:
+      type: object
+      required:
+      - id
+      - tenantId
+      - name
+      - sortOrder
+      - status
+      - version
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sortOrder:
+          type: integer
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+    UpdateAdminProductRequest:
+      type: object
+      required:
+      - sku
+      - name
+      - productType
+      - isSellable
+      - isStockTracked
+      - allowNegativeStock
+      - taxMode
+      - attributes
+      - status
+      properties:
+        categoryId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        productType:
+          type: string
+        saleUnitId:
+          type: string
+          format: uuid
+        inventoryUnitId:
+          type: string
+          format: uuid
+        isSellable:
+          type: boolean
+        isStockTracked:
+          type: boolean
+        allowNegativeStock:
+          type: boolean
+        taxMode:
+          type: string
+          enum:
+          - taxable
+          - exempt
+        attributes:
+          type: object
+          additionalProperties: true
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+        expectedVersion:
+          type: integer
+          format: int64
+    AdminProduct:
+      allOf:
+      - $ref: '#/components/schemas/CatalogProduct'
+      - type: object
+        required:
+        - tenantId
+        properties:
+          tenantId:
+            type: string
+            format: uuid
+    UpdateAdminProductPriceRequest:
+      type: object
+      required:
+      - priceListId
+      - productId
+      - priceCents
+      - currency
+      properties:
+        priceListId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        priceCents:
+          type: integer
+          format: int64
+        currency:
+          type: string
+          default: MXN
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+    AdminProductPrice:
+      allOf:
+      - $ref: '#/components/schemas/CatalogPrice'
+      - type: object
+        required:
+        - tenantId
+        properties:
+          tenantId:
+            type: string
+            format: uuid
+    UpdateAdminVariantRequest:
+      type: object
+      required:
+      - productId
+      - sku
+      - name
+      - attributes
+      - status
+      properties:
+        productId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        attributes:
+          type: object
+          additionalProperties: true
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+        expectedVersion:
+          type: integer
+          format: int64
+    AdminVariant:
+      allOf:
+      - $ref: '#/components/schemas/CatalogVariant'
+      - type: object
+        required:
+        - tenantId
+        properties:
+          tenantId:
+            type: string
+            format: uuid
+    UpdateAdminBarcodeRequest:
+      type: object
+      required:
+      - productId
+      - barcode
+      - quantity
+      properties:
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        barcode:
+          type: string
+        quantity:
+          type: string
+        unitId:
+          type: string
+          format: uuid
+    AdminBarcode:
+      allOf:
+      - $ref: '#/components/schemas/CatalogBarcode'
+      - type: object
+        required:
+        - tenantId
+        - version
+        properties:
+          tenantId:
+            type: string
+            format: uuid
+          version:
+            type: integer
+            format: int64
+    UpdateAdminModifierGroupRequest:
+      type: object
+      required:
+      - name
+      - minSelected
+      - maxSelected
+      - required
+      properties:
+        name:
+          type: string
+        minSelected:
+          type: integer
+        maxSelected:
+          type: integer
+        required:
+          type: boolean
+    AdminModifierGroup:
+      allOf:
+      - $ref: '#/components/schemas/CatalogModifierGroup'
+      - type: object
+        required:
+        - tenantId
+        - version
+        - updatedAt
+        properties:
+          tenantId:
+            type: string
+            format: uuid
+          version:
+            type: integer
+            format: int64
+          updatedAt:
+            type: string
+            format: date-time
+    UpdateAdminModifierRequest:
+      type: object
+      required:
+      - groupId
+      - name
+      - priceDeltaCents
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        priceDeltaCents:
+          type: integer
+          format: int64
+        linkedProductId:
+          type: string
+          format: uuid
+        linkedVariantId:
+          type: string
+          format: uuid
+        inventoryBehavior:
+          type: string
+          enum:
+          - none
+          - add
+          - substitute
+          default: none
+        consumptionQuantity:
+          type: string
+          nullable: true
+        consumptionUnitId:
+          type: string
+          format: uuid
+          nullable: true
+        replacesProductId:
+          type: string
+          format: uuid
+          nullable: true
+        replacesVariantId:
+          type: string
+          format: uuid
+          nullable: true
+    AdminModifier:
+      allOf:
+      - $ref: '#/components/schemas/CatalogModifier'
+      - type: object
+        required:
+        - tenantId
+        - version
+        - updatedAt
+        properties:
+          tenantId:
+            type: string
+            format: uuid
+          version:
+            type: integer
+            format: int64
+          updatedAt:
+            type: string
+            format: date-time
+    UpdateAdminRecipeRequest:
+      type: object
+      required:
+      - outputProductId
+      - version
+      - yieldQuantity
+      - yieldUnitId
+      - wastePercent
+      - status
+      properties:
+        outputProductId:
+          type: string
+          format: uuid
+        outputVariantId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        yieldQuantity:
+          type: string
+        yieldUnitId:
+          type: string
+          format: uuid
+        wastePercent:
+          type: string
+        status:
+          type: string
+          enum:
+          - draft
+          - active
+          - inactive
+          - archived
+    AdminRecipe:
+      allOf:
+      - $ref: '#/components/schemas/CatalogRecipe'
+      - type: object
+        required:
+        - tenantId
+        properties:
+          tenantId:
+            type: string
+            format: uuid
+    UpdateAdminRecipeItemRequest:
+      type: object
+      required:
+      - ingredientProductId
+      - quantity
+      - unitId
+      - optional
+      properties:
+        ingredientProductId:
+          type: string
+          format: uuid
+        ingredientVariantId:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+        unitId:
+          type: string
+          format: uuid
+        optional:
+          type: boolean
+    AdminRecipeItem:
+      allOf:
+      - $ref: '#/components/schemas/CatalogRecipeItem'
+      - type: object
+        required:
+        - tenantId
+        - version
+        properties:
+          tenantId:
+            type: string
+            format: uuid
+          version:
+            type: integer
+            format: int64
+    AdminSoftDelete:
+      type: object
+      required:
+      - tenantId
+      - entityType
+      - entityId
+      - syncEntityType
+      - version
+      - deletedAt
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        entityType:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+        syncEntityType:
+          type: string
+        version:
+          type: integer
+          format: int64
+        deletedAt:
+          type: string
+          format: date-time
+    CatalogModifierGroup:
+      type: object
+      required:
+      - id
+      - name
+      - minSelected
+      - maxSelected
+      - required
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        minSelected:
+          type: integer
+        maxSelected:
+          type: integer
+        required:
+          type: boolean
+    CatalogModifier:
+      type: object
+      required:
+      - id
+      - groupId
+      - name
+      - priceDeltaCents
+      - inventoryBehavior
+      properties:
+        id:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        priceDeltaCents:
+          type: integer
+          format: int64
+        linkedProductId:
+          type: string
+          format: uuid
+          nullable: true
+        linkedVariantId:
+          type: string
+          format: uuid
+          nullable: true
+        inventoryBehavior:
+          type: string
+          enum:
+          - none
+          - add
+          - substitute
+        consumptionQuantity:
+          type: string
+          nullable: true
+        consumptionUnitId:
+          type: string
+          format: uuid
+          nullable: true
+        replacesProductId:
+          type: string
+          format: uuid
+          nullable: true
+        replacesVariantId:
+          type: string
+          format: uuid
+          nullable: true
+    CatalogProductModifierGroup:
+      type: object
+      required:
+      - productId
+      - modifierGroupId
+      properties:
+        productId:
+          type: string
+          format: uuid
+        modifierGroupId:
+          type: string
+          format: uuid
+    CatalogRecipe:
+      type: object
+      required:
+      - id
+      - outputProductId
+      - version
+      - yieldQuantity
+      - yieldUnitId
+      - wastePercent
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        outputProductId:
+          type: string
+          format: uuid
+        outputVariantId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        yieldQuantity:
+          type: string
+        yieldUnitId:
+          type: string
+          format: uuid
+        wastePercent:
+          type: string
+        status:
+          type: string
+    CatalogRecipeItem:
+      type: object
+      required:
+      - id
+      - recipeId
+      - ingredientProductId
+      - quantity
+      - unitId
+      - optional
+      properties:
+        id:
+          type: string
+          format: uuid
+        recipeId:
+          type: string
+          format: uuid
+        ingredientProductId:
+          type: string
+          format: uuid
+        ingredientVariantId:
+          type: string
+          format: uuid
+        quantity:
+          type: string
+        unitId:
+          type: string
+          format: uuid
+        optional:
+          type: boolean
+    ReceiptSettings:
+      type: object
+      properties:
+        header:
+          type: string
+        footer:
+          type: string
+        showLogo:
+          type: boolean
+        paperWidth:
+          type: string
+          enum:
+          - mm58
+          - mm80
+          - letter
+    UiSettings:
+      type: object
+      properties:
+        brandColor:
+          type: string
+          pattern: ^#[0-9A-Fa-f]{6}$
+        logoUrl:
+          type: string
+          format: uri
+        layout:
+          type: string
+          enum:
+          - standard
+          - compact
+          - touch
+    CreateTenantRequest:
+      type: object
+      required:
+      - name
+      - ownerEmail
+      properties:
+        name:
+          type: string
+        ownerEmail:
+          type: string
+          format: email
+        timezone:
+          type: string
+        currency:
+          type: string
+    TenantPage:
+      type: object
+      required:
+      - items
+      - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+    Store:
+      type: object
+      required:
+      - id
+      - tenantId
+      - name
+      - status
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    UpsertStoreRequest:
+      type: object
+      required:
+      - name
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        address:
+          type: string
+        phone:
+          type: string
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    Device:
+      type: object
+      required:
+      - id
+      - tenantId
+      - storeId
+      - name
+      - status
+      - lastSeenAt
+      - appVersion
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        fingerprint:
+          type: string
+        status:
+          type: string
+          enum:
+          - pending
+          - active
+          - blocked
+          - retired
+        appVersion:
+          type: string
+        lastSeenAt:
+          type: string
+          format: date-time
+    RegisterDeviceRequest:
+      type: object
+      required:
+      - storeId
+      - name
+      - fingerprint
+      - appVersion
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        fingerprint:
+          type: string
+        appVersion:
+          type: string
+    DeviceRegistration:
+      type: object
+      required:
+      - deviceId
+      - deviceToken
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        deviceToken:
+          type: string
+    CreateTerminalEnrollmentTokenRequest:
+      type: object
+      required:
+      - storeId
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        expiresInMinutes:
+          type: integer
+          minimum: 5
+          maximum: 1440
+          default: 60
+    TerminalEnrollmentToken:
+      type: object
+      required:
+      - tenantId
+      - storeId
+      - enrollmentToken
+      - expiresAt
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        enrollmentToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+    RegisterTerminalRequest:
+      type: object
+      required:
+      - enrollmentToken
+      - name
+      - fingerprint
+      properties:
+        enrollmentToken:
+          type: string
+        name:
+          type: string
+        fingerprint:
+          type: string
+        appVersion:
+          type: string
+    TerminalSession:
+      type: object
+      required:
+      - accessToken
+      - expiresAt
+      - terminal
+      properties:
+        accessToken:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        terminal:
+          $ref: '#/components/schemas/Terminal'
+    Terminal:
+      type: object
+      required:
+      - id
+      - tenantId
+      - storeId
+      - name
+      - fingerprint
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        fingerprint:
+          type: string
+        status:
+          type: string
+          enum:
+          - pending
+          - active
+          - blocked
+          - retired
+        appVersion:
+          type: string
+        lastSeenAt:
+          type: string
+          format: date-time
+    TerminalRuntimeContext:
+      type: object
+      required:
+      - tenantId
+      - storeId
+      - terminalId
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+    DeviceHeartbeatRequest:
+      type: object
+      required:
+      - appVersion
+      - localDbVersion
+      - pendingOutboxCount
+      properties:
+        appVersion:
+          type: string
+        localDbVersion:
+          type: integer
+        pendingOutboxCount:
+          type: integer
+        lastSyncCursor:
+          type: string
+    User:
+      type: object
+      required:
+      - id
+      - tenantId
+      - email
+      - name
+      - status
+      - roles
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - suspended
+          - invited
+        roles:
+          type: array
+          items:
+            type: string
+        storeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    CreateUserRequest:
+      type: object
+      required:
+      - email
+      - name
+      - roleIds
+      properties:
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        password:
+          type: string
+          minLength: 12
+        roleIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        storeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - suspended
+          - invited
+        roleIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+        storeIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    UpdateAdminUserAccessRequest:
+      type: object
+      required:
+      - fullName
+      - status
+      - roleCodes
+      properties:
+        fullName:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - suspended
+          - invited
+        roleCodes:
+          type: array
+          minItems: 1
+          items:
+            type: string
+    AdminUserAccess:
+      type: object
+      required:
+      - id
+      - tenantId
+      - email
+      - fullName
+      - status
+      - roleCodes
+      - version
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        fullName:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - suspended
+          - invited
+        roleCodes:
+          type: array
+          items:
+            type: string
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+    UpdateAdminRolePermissionsRequest:
+      type: object
+      required:
+      - permissionCodes
+      properties:
+        permissionCodes:
+          type: array
+          minItems: 1
+          items:
+            type: string
+    AdminRolePermissions:
+      type: object
+      required:
+      - tenantId
+      - roleId
+      - permissionCodes
+      - version
+      - updatedAt
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        roleId:
+          type: string
+          format: uuid
+        permissionCodes:
+          type: array
+          items:
+            type: string
+        version:
+          type: integer
+          format: int64
+        updatedAt:
+          type: string
+          format: date-time
+    UserPage:
+      type: object
+      required:
+      - items
+      - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+    Role:
+      type: object
+      required:
+      - id
+      - name
+      - permissions
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    UpsertRoleRequest:
+      type: object
+      required:
+      - name
+      - permissionCodes
+      properties:
+        name:
+          type: string
+        permissionCodes:
+          type: array
+          items:
+            type: string
+    Permission:
+      type: object
+      required:
+      - code
+      - description
+      properties:
+        code:
+          type: string
+        description:
+          type: string
+    Category:
+      type: object
+      required:
+      - id
+      - name
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    UpsertCategoryRequest:
+      type: object
+      required:
+      - name
+      properties:
+        parentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    Product:
+      type: object
+      required:
+      - id
+      - sku
+      - name
+      - status
+      - taxMode
+      - variants
+      - prices
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        barcode:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+        taxMode:
+          type: string
+          enum:
+          - taxable
+          - exempt
+        imageUrl:
+          type: string
+          format: uri
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductVariant'
+        prices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductPrice'
+        version:
+          type: integer
+          format: int64
+    ProductVariant:
+      type: object
+      required:
+      - id
+      - name
+      - sku
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        sku:
+          type: string
+        barcode:
+          type: string
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    ProductPrice:
+      type: object
+      required:
+      - priceListId
+      - price
+      properties:
+        priceListId:
+          type: string
+          format: uuid
+        price:
+          $ref: '#/components/schemas/Money'
+    UpsertProductRequest:
+      type: object
+      required:
+      - sku
+      - name
+      - status
+      - taxMode
+      - variants
+      - prices
+      properties:
+        sku:
+          type: string
+        barcode:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+        taxMode:
+          type: string
+          enum:
+          - taxable
+          - exempt
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductVariant'
+        prices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductPrice'
+    ProductPage:
+      type: object
+      required:
+      - items
+      - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+    PriceList:
+      type: object
+      required:
+      - id
+      - name
+      - currency
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        currency:
+          type: string
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    UpsertPriceListRequest:
+      type: object
+      required:
+      - name
+      - currency
+      - status
+      properties:
+        name:
+          type: string
+        currency:
+          type: string
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    InventoryStockItem:
+      type: object
+      required:
+      - tenantId
+      - storeId
+      - productId
+      - unitId
+      - quantityOnHand
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        unitId:
+          type: string
+          format: uuid
+        quantityOnHand:
+          type: string
+          description: Cantidad decimal serializada como string para evitar perdida de precision.
+    CreateInventoryAdjustmentRequest:
+      type: object
+      required:
+      - localAdjustmentId
+      - adjustmentType
+      - reason
+      - createdByUserId
+      - occurredAt
+      - lines
+      properties:
+        localAdjustmentId:
+          type: string
+          format: uuid
+          description: UUID generado por cliente para idempotencia.
+        storeId:
+          type: string
+          format: uuid
+          description: Requerido para usuarios admin; en terminal se usa la sucursal vinculada.
+        adjustmentType:
+          type: string
+          enum:
+          - stock_in
+          - stock_out
+          - waste
+          - correction
+        reason:
+          type: string
+        createdByUserId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/InventoryAdjustmentLine'
+    InventoryAdjustmentLine:
+      type: object
+      required:
+      - productId
+      - quantityDelta
+      - unitId
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        movementType:
+          type: string
+          enum:
+          - adjustment
+          - waste
+          readOnly: true
+        quantityDelta:
+          type: string
+          description: Decimal serializado como string. Positivo para entrada, negativo para salida/merma.
+        unitId:
+          type: string
+          format: uuid
+        costCents:
+          type: integer
+          format: int64
+    InventoryAdjustment:
+      type: object
+      required:
+      - id
+      - tenantId
+      - storeId
+      - localAdjustmentId
+      - adjustmentType
+      - reason
+      - createdByUserId
+      - occurredAt
+      - createdAt
+      - lines
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+        localAdjustmentId:
+          type: string
+          format: uuid
+        adjustmentType:
+          type: string
+          enum:
+          - stock_in
+          - stock_out
+          - waste
+          - correction
+        reason:
+          type: string
+        createdByUserId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryAdjustmentLine'
+        createdAt:
+          type: string
+          format: date-time
+    CreateInventoryTransferRequest:
+      type: object
+      required:
+      - fromStoreId
+      - toStoreId
+      - lines
+      properties:
+        fromStoreId:
+          type: string
+          format: uuid
+        toStoreId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryTransferLine'
+    InventoryTransferLine:
+      type: object
+      required:
+      - productId
+      - quantity
+      properties:
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+    InventoryTransfer:
+      type: object
+      required:
+      - id
+      - fromStoreId
+      - toStoreId
+      - status
+      - lines
+      properties:
+        id:
+          type: string
+          format: uuid
+        fromStoreId:
+          type: string
+          format: uuid
+        toStoreId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - draft
+          - sent
+          - received
+          - cancelled
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryTransferLine'
+    CreateStockCountRequest:
+      type: object
+      required:
+      - storeId
+      - lines
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockCountLine'
+    StockCountLine:
+      type: object
+      required:
+      - productId
+      - countedQuantity
+      properties:
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        countedQuantity:
+          $ref: '#/components/schemas/Quantity'
+    StockCount:
+      type: object
+      required:
+      - id
+      - storeId
+      - status
+      - lines
+      properties:
+        id:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - open
+          - applied
+          - cancelled
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockCountLine'
+    Customer:
+      type: object
+      required:
+      - id
+      - tenantId
+      - name
+      - creditLimitCents
+      - status
+      - createdAt
+      - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        creditLimitCents:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          - archived
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CustomerListItem:
+      allOf:
+      - $ref: '#/components/schemas/Customer'
+      - type: object
+        required:
+        - salesCount
+        - grossSalesCents
+        - refundCents
+        - netSpentCents
+        - averageTicketCents
+        properties:
+          salesCount:
+            type: integer
+            format: int64
+          grossSalesCents:
+            type: integer
+            format: int64
+          refundCents:
+            type: integer
+            format: int64
+          netSpentCents:
+            type: integer
+            format: int64
+          averageTicketCents:
+            type: integer
+            format: int64
+          lastPurchaseAt:
+            type: string
+            format: date-time
+            nullable: true
+    CreateCustomerRequest:
+      type: object
+      required:
+      - name
+      - creditLimitCents
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        creditLimitCents:
+          type: integer
+          format: int64
+          minimum: 0
+    UpdateCustomerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        creditLimitCents:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          - archived
+          nullable: true
+    CustomerSalesHistory:
+      type: object
+      required:
+      - customer
+      - summary
+      - sales
+      properties:
+        customer:
+          $ref: '#/components/schemas/Customer'
+        summary:
+          type: object
+          required:
+          - salesCount
+          - grossSalesCents
+          - refundCents
+          - netSpentCents
+          - averageTicketCents
+          properties:
+            salesCount:
+              type: integer
+              format: int64
+            grossSalesCents:
+              type: integer
+              format: int64
+            refundCents:
+              type: integer
+              format: int64
+            netSpentCents:
+              type: integer
+              format: int64
+            averageTicketCents:
+              type: integer
+              format: int64
+            lastPurchaseAt:
+              type: string
+              format: date-time
+              nullable: true
+        sales:
+          type: array
+          items:
+            type: object
+            required:
+            - saleId
+            - storeId
+            - terminalId
+            - status
+            - totalCents
+            - paidCents
+            - changeCents
+            - refundCents
+            - netAfterReturnsCents
+            - currency
+            - occurredAt
+            - createdAt
+            properties:
+              saleId:
+                type: string
+                format: uuid
+              storeId:
+                type: string
+                format: uuid
+              terminalId:
+                type: string
+                format: uuid
+              cashShiftId:
+                type: string
+                format: uuid
+                nullable: true
+              status:
+                $ref: '#/components/schemas/SaleStatus'
+              totalCents:
+                type: integer
+                format: int64
+              paidCents:
+                type: integer
+                format: int64
+              changeCents:
+                type: integer
+                format: int64
+              refundCents:
+                type: integer
+                format: int64
+              netAfterReturnsCents:
+                type: integer
+                format: int64
+              currency:
+                type: string
+              occurredAt:
+                type: string
+                format: date-time
+              createdAt:
+                type: string
+                format: date-time
+    SaleStatus:
+      type: string
+      enum:
+      - suspended
+      - completed
+      - voided
+      - partially_returned
+      - returned
+    CreateSaleRequest:
+      type: object
+      required:
+      - localSaleId
+      - cashierUserId
+      - occurredAt
+      - localCreatedAt
+      - lines
+      - payments
+      properties:
+        localSaleId:
+          type: string
+          format: uuid
+        cashierUserId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        localCreatedAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CreateSaleLineRequest'
+        payments:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CreateSalePaymentRequest'
+        tipCents:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
+    CreateSaleLineRequest:
+      type: object
+      required:
+      - productId
+      - quantity
+      properties:
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        discountCents:
+          type: integer
+          format: int64
+          minimum: 0
+          default: 0
+        preparationNote:
+          type: string
+        modifierIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    CreateSalePaymentRequest:
+      type: object
+      required:
+      - localPaymentId
+      - methodCode
+      - amountCents
+      properties:
+        localPaymentId:
+          type: string
+          format: uuid
+        methodCode:
+          type: string
+        amountCents:
+          type: integer
+          format: int64
+          minimum: 1
+        reference:
+          type: string
+    Sale:
+      type: object
+      required:
+      - id
+      - tenantId
+      - storeId
+      - terminalId
+      - cashShiftId
+      - cashierUserId
+      - localSaleId
+      - status
+      - subtotalCents
+      - discountCents
+      - taxCents
+      - tipCents
+      - totalCents
+      - paidCents
+      - changeCents
+      - currency
+      - occurredAt
+      - localCreatedAt
+      - version
+      - createdAt
+      - lines
+      - payments
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+        cashShiftId:
+          type: string
+          format: uuid
+        cashierUserId:
+          type: string
+          format: uuid
+        localSaleId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/SaleStatus'
+        subtotalCents:
+          type: integer
+          format: int64
+        discountCents:
+          type: integer
+          format: int64
+        taxCents:
+          type: integer
+          format: int64
+        tipCents:
+          type: integer
+          format: int64
+        totalCents:
+          type: integer
+          format: int64
+        paidCents:
+          type: integer
+          format: int64
+        changeCents:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleLine'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/SalePayment'
+        occurredAt:
+          type: string
+          format: date-time
+        localCreatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    SaleLine:
+      type: object
+      required:
+      - id
+      - productId
+      - lineNumber
+      - description
+      - quantity
+      - unitPriceCents
+      - discountCents
+      - taxCents
+      - totalCents
+      - modifierIds
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        lineNumber:
+          type: integer
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        unitId:
+          type: string
+          format: uuid
+        unitPriceCents:
+          type: integer
+          format: int64
+        discountCents:
+          type: integer
+          format: int64
+        taxCents:
+          type: integer
+          format: int64
+        totalCents:
+          type: integer
+          format: int64
+        recipeId:
+          type: string
+          format: uuid
+        preparationNote:
+          type: string
+        modifierIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    SalePayment:
+      type: object
+      required:
+      - id
+      - paymentMethodId
+      - localPaymentId
+      - methodCode
+      - methodType
+      - amountCents
+      - currency
+      - status
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        paymentMethodId:
+          type: string
+          format: uuid
+        localPaymentId:
+          type: string
+          format: uuid
+        methodCode:
+          type: string
+        methodType:
+          type: string
+        amountCents:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        status:
+          type: string
+        reference:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    SaleTotals:
+      type: object
+      required:
+      - subtotal
+      - discount
+      - tax
+      - total
+      - paid
+      - change
+      properties:
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        discount:
+          $ref: '#/components/schemas/Money'
+        tax:
+          $ref: '#/components/schemas/Money'
+        total:
+          $ref: '#/components/schemas/Money'
+        paid:
+          $ref: '#/components/schemas/Money'
+        change:
+          $ref: '#/components/schemas/Money'
+    SaleListItem:
+      type: object
+      required:
+      - id
+      - tenantId
+      - storeId
+      - terminalId
+      - cashierUserId
+      - localSaleId
+      - status
+      - totalCents
+      - paidCents
+      - changeCents
+      - currency
+      - occurredAt
+      - createdAt
+      - lineCount
+      - paymentCount
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+        cashShiftId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        cashierUserId:
+          type: string
+          format: uuid
+        localSaleId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/SaleStatus'
+        totalCents:
+          type: integer
+          format: int64
+        paidCents:
+          type: integer
+          format: int64
+        changeCents:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        lineCount:
+          type: integer
+        paymentCount:
+          type: integer
+    SaleModifier:
+      type: object
+      required:
+      - id
+      - name
+      - priceDeltaCents
+      - inventoryBehavior
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        priceDeltaCents:
+          type: integer
+          format: int64
+        inventoryBehavior:
+          type: string
+          enum:
+          - none
+          - add
+          - substitute
+        linkedProductId:
+          type: string
+          format: uuid
+        linkedVariantId:
+          type: string
+          format: uuid
+        consumptionQuantity:
+          $ref: '#/components/schemas/Quantity'
+        consumptionUnitId:
+          type: string
+          format: uuid
+        replacesProductId:
+          type: string
+          format: uuid
+        replacesVariantId:
+          type: string
+          format: uuid
+    SaleInventoryMovement:
+      type: object
+      required:
+      - id
+      - storeId
+      - productId
+      - sku
+      - name
+      - movementType
+      - quantityDelta
+      - unitId
+      - unitCode
+      - localOccurredAt
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        movementType:
+          type: string
+        quantityDelta:
+          $ref: '#/components/schemas/Quantity'
+        unitId:
+          type: string
+          format: uuid
+        unitCode:
+          type: string
+        effect:
+          type: string
+        recipeId:
+          type: string
+          format: uuid
+        modifierId:
+          type: string
+          format: uuid
+        modifierBehavior:
+          type: string
+        localOccurredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    SaleDetail:
+      allOf:
+      - $ref: '#/components/schemas/Sale'
+      - type: object
+        required:
+        - inventoryMovements
+        properties:
+          lines:
+            type: array
+            items:
+              $ref: '#/components/schemas/SaleDetailLine'
+          inventoryMovements:
+            type: array
+            items:
+              $ref: '#/components/schemas/SaleInventoryMovement'
+    SaleDetailLine:
+      allOf:
+      - $ref: '#/components/schemas/SaleLine'
+      - type: object
+        required:
+        - modifiers
+        properties:
+          modifiers:
+            type: array
+            items:
+              $ref: '#/components/schemas/SaleModifier'
+    VoidSaleRequest:
+      type: object
+      required:
+      - voidedByUserId
+      - reason
+      - occurredAt
+      properties:
+        voidedByUserId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+    ReturnLine:
+      type: object
+      required:
+      - saleLineId
+      - quantity
+      properties:
+        saleLineId:
+          type: string
+          format: uuid
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+    PaymentMethod:
+      type: object
+      required:
+      - code
+      - name
+      - type
+      - status
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum:
+          - cash
+          - card
+          - transfer
+          - wallet
+          - other
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    CreatePaymentRequest:
+      type: object
+      required:
+      - saleId
+      - methodCode
+      - amount
+      properties:
+        saleId:
+          type: string
+          format: uuid
+        methodCode:
+          type: string
+        amount:
+          $ref: '#/components/schemas/Money'
+        reference:
+          type: string
+    Payment:
+      type: object
+      required:
+      - id
+      - saleId
+      - methodCode
+      - amount
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        saleId:
+          type: string
+          format: uuid
+        methodCode:
+          type: string
+        amount:
+          $ref: '#/components/schemas/Money'
+        reference:
+          type: string
+        status:
+          type: string
+          enum:
+          - approved
+          - declined
+          - refunded
+          - voided
+    CashShiftStatus:
+      type: string
+      enum:
+      - open
+      - closed
+      - cancelled
+    OpenCashShiftRequest:
+      type: object
+      required:
+      - openedByUserId
+      - openingAmountCents
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+        openedByUserId:
+          type: string
+          format: uuid
+        openingAmountCents:
+          type: integer
+          format: int64
+          minimum: 0
+    CashShift:
+      type: object
+      required:
+      - id
+      - tenantId
+      - storeId
+      - terminalId
+      - openedByUserId
+      - status
+      - openingAmountCents
+      - expectedCashCents
+      - openedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+        openedByUserId:
+          type: string
+          format: uuid
+        closedByUserId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/CashShiftStatus'
+        openingAmountCents:
+          type: integer
+          format: int64
+        expectedCashCents:
+          type: integer
+          format: int64
+        countedCashCents:
+          type: integer
+          format: int64
+        differenceCents:
+          type: integer
+          format: int64
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+    CreateCashMovementRequest:
+      type: object
+      required:
+      - movementType
+      - amountCents
+      - reason
+      - createdByUserId
+      properties:
+        movementType:
+          type: string
+          enum:
+          - cash_in
+          - cash_out
+          - drawer_open_no_sale
+        amountCents:
+          type: integer
+          format: int64
+          minimum: 0
+        reason:
+          type: string
+        createdByUserId:
+          type: string
+          format: uuid
+        authorizedByUserId:
+          type: string
+          format: uuid
+    CashMovement:
+      type: object
+      required:
+      - id
+      - tenantId
+      - cashShiftId
+      - movementType
+      - amountCents
+      - reason
+      - createdByUserId
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        cashShiftId:
+          type: string
+          format: uuid
+        movementType:
+          type: string
+          enum:
+          - cash_in
+          - cash_out
+          - drawer_open_no_sale
+        amountCents:
+          type: integer
+          format: int64
+        reason:
+          type: string
+        authorizedByUserId:
+          type: string
+          format: uuid
+        createdByUserId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    CloseCashShiftRequest:
+      type: object
+      required:
+      - closedByUserId
+      - countedCashCents
+      properties:
+        closedByUserId:
+          type: string
+          format: uuid
+        countedCashCents:
+          type: integer
+          format: int64
+          minimum: 0
+    Discount:
+      type: object
+      required:
+      - id
+      - name
+      - type
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        type:
+          type: string
+          enum:
+          - percentage
+          - fixed_amount
+        value:
+          type: integer
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    UpsertDiscountRequest:
+      type: object
+      required:
+      - name
+      - type
+      - value
+      - status
+      properties:
+        name:
+          type: string
+        code:
+          type: string
+        type:
+          type: string
+          enum:
+          - percentage
+          - fixed_amount
+        value:
+          type: integer
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        status:
+          $ref: '#/components/schemas/EntityStatus'
+    ValidateDiscountRequest:
+      type: object
+      required:
+      - storeId
+      - lines
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleLine'
+    DiscountValidationResult:
+      type: object
+      required:
+      - valid
+      - discount
+      properties:
+        valid:
+          type: boolean
+        discount:
+          $ref: '#/components/schemas/Money'
+        reason:
+          type: string
+    Receipt:
+      type: object
+      required:
+      - saleId
+      - tenantId
+      - storeId
+      - tenantName
+      - storeName
+      - terminalId
+      - terminalName
+      - cashierUserId
+      - cashierName
+      - localSaleId
+      - status
+      - currency
+      - occurredAt
+      - createdAt
+      - subtotalCents
+      - discountCents
+      - taxCents
+      - tipCents
+      - totalCents
+      - paidCents
+      - changeCents
+      - lines
+      - payments
+      properties:
+        saleId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        tenantName:
+          type: string
+        storeName:
+          type: string
+        storeAddress:
+          type: string
+        storePhone:
+          type: string
+        terminalId:
+          type: string
+          format: uuid
+        terminalName:
+          type: string
+        cashierUserId:
+          type: string
+          format: uuid
+        cashierName:
+          type: string
+        localSaleId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/SaleStatus'
+        currency:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        subtotalCents:
+          type: integer
+          format: int64
+        discountCents:
+          type: integer
+          format: int64
+        taxCents:
+          type: integer
+          format: int64
+        tipCents:
+          type: integer
+          format: int64
+        totalCents:
+          type: integer
+          format: int64
+        paidCents:
+          type: integer
+          format: int64
+        changeCents:
+          type: integer
+          format: int64
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptLine'
+        payments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptPayment'
+    ReceiptLine:
+      type: object
+      required:
+      - id
+      - lineNumber
+      - description
+      - quantity
+      - unitPriceCents
+      - discountCents
+      - taxCents
+      - totalCents
+      - modifiers
+      properties:
+        id:
+          type: string
+          format: uuid
+        lineNumber:
+          type: integer
+        description:
+          type: string
+        quantity:
+          $ref: '#/components/schemas/Quantity'
+        unitPriceCents:
+          type: integer
+          format: int64
+        discountCents:
+          type: integer
+          format: int64
+        taxCents:
+          type: integer
+          format: int64
+        totalCents:
+          type: integer
+          format: int64
+        preparationNote:
+          type: string
+        modifiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptModifier'
+    ReceiptModifier:
+      type: object
+      required:
+      - id
+      - name
+      - priceDeltaCents
+      - inventoryBehavior
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        priceDeltaCents:
+          type: integer
+          format: int64
+        inventoryBehavior:
+          type: string
+    ReceiptPayment:
+      type: object
+      required:
+      - id
+      - methodCode
+      - methodType
+      - amountCents
+      - currency
+      - status
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        methodCode:
+          type: string
+        methodType:
+          type: string
+        amountCents:
+          type: integer
+          format: int64
+        currency:
+          type: string
+        status:
+          type: string
+        reference:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    IssueDigitalReceiptRequest:
+      type: object
+      properties:
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+    DigitalReceipt:
+      type: object
+      required:
+      - id
+      - tenantId
+      - saleId
+      - receiptNumber
+      - publicToken
+      - publicUrl
+      - status
+      - issuedAt
+      - createdAt
+      - sendCount
+      - receipt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        saleId:
+          type: string
+          format: uuid
+        receiptNumber:
+          type: string
+        publicToken:
+          type: string
+        publicUrl:
+          type: string
+          format: uri
+        status:
+          type: string
+          enum:
+          - active
+          - revoked
+          - expired
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        issuedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastSentAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastSentEmail:
+          type: string
+          nullable: true
+        sendCount:
+          type: integer
+        receipt:
+          $ref: '#/components/schemas/Receipt'
+    EmailReceiptRequest:
+      type: object
+      required:
+      - recipientEmail
+      properties:
+        recipientEmail:
+          type: string
+          format: email
+    EmailReceiptResponse:
+      type: object
+      required:
+      - digitalReceiptId
+      - saleId
+      - receiptNumber
+      - recipientEmail
+      - status
+      - queuedAt
+      - message
+      properties:
+        digitalReceiptId:
+          type: string
+          format: uuid
+        saleId:
+          type: string
+          format: uuid
+        receiptNumber:
+          type: string
+        recipientEmail:
+          type: string
+          format: email
+        status:
+          type: string
+          enum:
+          - queued_stub
+        queuedAt:
+          type: string
+          format: date-time
+        message:
+          type: string
+    SalesRangeReport:
+      type: object
+      required:
+      - tenantId
+      - from
+      - to
+      - completedSalesCount
+      - voidedSalesCount
+      - grossSalesCents
+      - discountCents
+      - taxCents
+      - tipCents
+      - netSalesCents
+      - totalSalesCents
+      - averageTicketCents
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+          nullable: true
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        completedSalesCount:
+          type: integer
+          format: int64
+        voidedSalesCount:
+          type: integer
+          format: int64
+        grossSalesCents:
+          type: integer
+          format: int64
+        discountCents:
+          type: integer
+          format: int64
+        taxCents:
+          type: integer
+          format: int64
+        tipCents:
+          type: integer
+          format: int64
+        netSalesCents:
+          type: integer
+          format: int64
+          description: Subtotal menos descuentos; no incluye impuestos ni propinas.
+        totalSalesCents:
+          type: integer
+          format: int64
+          description: Total final de ventas completadas, incluyendo impuestos y propinas.
+        averageTicketCents:
+          type: integer
+          format: int64
+    PaymentMethodReportItem:
+      type: object
+      required:
+      - methodCode
+      - methodName
+      - methodType
+      - paymentCount
+      - saleCount
+      - totalCents
+      properties:
+        methodCode:
+          type: string
+        methodName:
+          type: string
+        methodType:
+          type: string
+        paymentCount:
+          type: integer
+          format: int64
+        saleCount:
+          type: integer
+          format: int64
+        totalCents:
+          type: integer
+          format: int64
+    CashShiftReportItem:
+      type: object
+      required:
+      - id
+      - storeId
+      - terminalId
+      - openedByUserId
+      - status
+      - openingAmountCents
+      - expectedCashCents
+      - openedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+        openedByUserId:
+          type: string
+          format: uuid
+        closedByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        openingAmountCents:
+          type: integer
+          format: int64
+        expectedCashCents:
+          type: integer
+          format: int64
+        countedCashCents:
+          type: integer
+          format: int64
+          nullable: true
+        differenceCents:
+          type: integer
+          format: int64
+          nullable: true
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+          nullable: true
+    TopProductReportItem:
+      type: object
+      required:
+      - productId
+      - sku
+      - name
+      - quantitySold
+      - lineCount
+      - totalCents
+      properties:
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+          nullable: true
+        sku:
+          type: string
+        name:
+          type: string
+        quantitySold:
+          type: string
+        lineCount:
+          type: integer
+          format: int64
+        totalCents:
+          type: integer
+          format: int64
+    NegativeInventoryItem:
+      type: object
+      required:
+      - storeId
+      - productId
+      - sku
+      - name
+      - unitId
+      - unitCode
+      - quantityOnHand
+      properties:
+        storeId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+          nullable: true
+        sku:
+          type: string
+        name:
+          type: string
+        unitId:
+          type: string
+          format: uuid
+        unitCode:
+          type: string
+        quantityOnHand:
+          type: string
+    InventoryMovementReportItem:
+      type: object
+      required:
+      - id
+      - storeId
+      - productId
+      - sku
+      - name
+      - movementType
+      - quantityDelta
+      - unitId
+      - unitCode
+      - localOccurredAt
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        terminalId:
+          type: string
+          format: uuid
+          nullable: true
+        productId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+          nullable: true
+        sku:
+          type: string
+        name:
+          type: string
+        movementType:
+          type: string
+        quantityDelta:
+          type: string
+        unitId:
+          type: string
+          format: uuid
+        unitCode:
+          type: string
+        referenceType:
+          type: string
+          nullable: true
+        referenceId:
+          type: string
+          format: uuid
+          nullable: true
+        effect:
+          type: string
+          nullable: true
+        recipeId:
+          type: string
+          format: uuid
+          nullable: true
+        modifierId:
+          type: string
+          format: uuid
+          nullable: true
+        modifierBehavior:
+          type: string
+          nullable: true
+        localOccurredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    DashboardSalesTrendPoint:
+      type: object
+      required:
+      - bucketStart
+      - completedSalesCount
+      - netSalesCents
+      - taxCents
+      - tipCents
+      - totalSalesCents
+      properties:
+        bucketStart:
+          type: string
+          format: date-time
+        completedSalesCount:
+          type: integer
+          format: int64
+        netSalesCents:
+          type: integer
+          format: int64
+        taxCents:
+          type: integer
+          format: int64
+        tipCents:
+          type: integer
+          format: int64
+        totalSalesCents:
+          type: integer
+          format: int64
+    DashboardInventorySummary:
+      type: object
+      required:
+      - negativeStockItemCount
+      - saleRecipeMovementCount
+      - recipeComponentMovementCount
+      - modifierAddMovementCount
+      - modifierSubstituteMovementCount
+      properties:
+        negativeStockItemCount:
+          type: integer
+          format: int64
+        saleRecipeMovementCount:
+          type: integer
+          format: int64
+        recipeComponentMovementCount:
+          type: integer
+          format: int64
+        modifierAddMovementCount:
+          type: integer
+          format: int64
+        modifierSubstituteMovementCount:
+          type: integer
+          format: int64
+    DashboardOverview:
+      type: object
+      required:
+      - tenantId
+      - from
+      - to
+      - trendBucket
+      - sales
+      - paymentMethods
+      - topProducts
+      - inventory
+      - negativeInventory
+      - recentCashShifts
+      - salesTrend
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+          nullable: true
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        trendBucket:
+          type: string
+          enum:
+          - hour
+          - day
+        sales:
+          $ref: '#/components/schemas/SalesRangeReport'
+        paymentMethods:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentMethodReportItem'
+        topProducts:
+          type: array
+          items:
+            $ref: '#/components/schemas/TopProductReportItem'
+        inventory:
+          $ref: '#/components/schemas/DashboardInventorySummary'
+        negativeInventory:
+          type: array
+          items:
+            $ref: '#/components/schemas/NegativeInventoryItem'
+        recentCashShifts:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashShiftReportItem'
+        salesTrend:
+          type: array
+          items:
+            $ref: '#/components/schemas/DashboardSalesTrendPoint'
+    SyncEntityType:
+      type: string
+      enum:
+      - tenant_settings
+      - store
+      - device
+      - user
+      - role
+      - product
+      - category
+      - price_list
+      - stock
+      - customer
+      - sale
+      - return
+      - payment
+      - cash_shift
+      - discount
+    SyncBootstrapResponse:
+      type: object
+      required:
+      - cursor
+      - serverTime
+      - entities
+      properties:
+        cursor:
+          type: string
+        serverTime:
+          type: string
+          format: date-time
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncChange'
+    SyncPullRequest:
+      type: object
+      required:
+      - deviceId
+      - storeId
+      - cursor
+      - maxItems
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        cursor:
+          type: string
+        maxItems:
+          type: integer
+          minimum: 1
+          maximum: 5000
+    SyncPullResponse:
+      type: object
+      required:
+      - cursor
+      - hasMore
+      - changes
+      properties:
+        cursor:
+          type: string
+        hasMore:
+          type: boolean
+        changes:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncChange'
+    SyncPushRequest:
+      type: object
+      required:
+      - deviceId
+      - storeId
+      - events
+      properties:
+        deviceId:
+          type: string
+          format: uuid
+        storeId:
+          type: string
+          format: uuid
+        events:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: '#/components/schemas/SyncEvent'
+    SyncPushResponse:
+      type: object
+      required:
+      - accepted
+      - rejected
+      - conflicts
+      - nextCursor
+      properties:
+        accepted:
+          type: array
+          items:
+            type: string
+            format: uuid
+        rejected:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncRejectedEvent'
+        conflicts:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncConflict'
+        nextCursor:
+          type: string
+    SyncEvent:
+      type: object
+      required:
+      - eventId
+      - entityType
+      - entityId
+      - operation
+      - entityVersion
+      - occurredAt
+      - payload
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        entityType:
+          $ref: '#/components/schemas/SyncEntityType'
+        entityId:
+          type: string
+          format: uuid
+        operation:
+          type: string
+          enum:
+          - create
+          - update
+          - delete
+        entityVersion:
+          type: integer
+          format: int64
+        occurredAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+    SyncChange:
+      type: object
+      required:
+      - changeId
+      - entityType
+      - entityId
+      - operation
+      - entityVersion
+      - changedAt
+      - payload
+      properties:
+        changeId:
+          type: string
+          format: uuid
+        entityType:
+          $ref: '#/components/schemas/SyncEntityType'
+        entityId:
+          type: string
+          format: uuid
+        operation:
+          type: string
+          enum:
+          - create
+          - update
+          - delete
+        entityVersion:
+          type: integer
+          format: int64
+        changedAt:
+          type: string
+          format: date-time
+        payload:
+          type: object
+          additionalProperties: true
+    SyncRejectedEvent:
+      type: object
+      required:
+      - eventId
+      - reason
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+    SyncConflict:
+      type: object
+      required:
+      - id
+      - entityType
+      - entityId
+      - status
+      - localVersion
+      - serverVersion
+      properties:
+        id:
+          type: string
+          format: uuid
+        entityType:
+          $ref: '#/components/schemas/SyncEntityType'
+        entityId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - pending
+          - resolved
+        localVersion:
+          type: integer
+          format: int64
+        serverVersion:
+          type: integer
+          format: int64
+        localPayload:
+          type: object
+          additionalProperties: true
+        serverPayload:
+          type: object
+          additionalProperties: true
+    ResolveSyncConflictRequest:
+      type: object
+      required:
+      - strategy
+      properties:
+        strategy:
+          type: string
+          enum:
+          - use_server
+          - use_client
+          - merge
+        mergedPayload:
+          type: object
+          additionalProperties: true
+    BuilderProject:
+      type: object
+      required:
+      - id
+      - tenantId
+      - name
+      - branding
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        branding:
+          $ref: '#/components/schemas/UiSettings'
+        createdAt:
+          type: string
+          format: date-time
+    CreateBuilderProjectRequest:
+      type: object
+      required:
+      - name
+      - branding
+      properties:
+        name:
+          type: string
+        branding:
+          $ref: '#/components/schemas/UiSettings'
+    CreateBuildRequest:
+      type: object
+      required:
+      - targetRuntime
+      - packageType
+      - channel
+      properties:
+        targetRuntime:
+          type: string
+          example: win-x64
+        packageType:
+          type: string
+          enum:
+          - msix
+          - velopack
+          - msi_wix
+        channel:
+          type: string
+          enum:
+          - stable
+          - beta
+          - internal
+    BuildJob:
+      type: object
+      required:
+      - id
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - queued
+          - running
+          - succeeded
+          - failed
+        artifactUrl:
+          type: string
+          format: uri
+    UpdateChannel:
+      type: object
+      required:
+      - name
+      - enabled
+      properties:
+        name:
+          type: string
+          enum:
+          - stable
+          - beta
+          - internal
+        enabled:
+          type: boolean
+    UpdateCheckRequest:
+      type: object
+      required:
+      - tenantId
+      - deviceId
+      - currentVersion
+      - channel
+      - packageType
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        currentVersion:
+          type: string
+        channel:
+          type: string
+          enum:
+          - stable
+          - beta
+          - internal
+        packageType:
+          type: string
+          enum:
+          - msix
+          - velopack
+          - msi_wix
+    UpdateCheckResponse:
+      type: object
+      required:
+      - updateAvailable
+      properties:
+        updateAvailable:
+          type: boolean
+        release:
+          $ref: '#/components/schemas/AppRelease'
+    CreateReleaseRequest:
+      type: object
+      required:
+      - version
+      - channel
+      - packageType
+      - artifactUrl
+      - signature
+      properties:
+        version:
+          type: string
+        channel:
+          type: string
+          enum:
+          - stable
+          - beta
+          - internal
+        packageType:
+          type: string
+          enum:
+          - msix
+          - velopack
+          - msi_wix
+        artifactUrl:
+          type: string
+          format: uri
+        signature:
+          type: string
+        rollbackVersion:
+          type: string
+    AppRelease:
+      type: object
+      required:
+      - id
+      - version
+      - channel
+      - packageType
+      - artifactUrl
+      - signature
+      - publishedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: string
+        channel:
+          type: string
+          enum:
+          - stable
+          - beta
+          - internal
+        packageType:
+          type: string
+          enum:
+          - msix
+          - velopack
+          - msi_wix
+        artifactUrl:
+          type: string
+          format: uri
+        signature:
+          type: string
+        rollbackVersion:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+    AuditEvent:
+      type: object
+      required:
+      - id
+      - tenantId
+      - action
+      - entityType
+      - occurredAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        actorUserId:
+          type: string
+          format: uuid
+          nullable: true
+        terminalId:
+          type: string
+          format: uuid
+          nullable: true
+        action:
+          type: string
+        entityType:
+          type: string
+        entityId:
+          type: string
+          format: uuid
+          nullable: true
+        beforeData:
+          type: object
+          nullable: true
+          additionalProperties: true
+        afterData:
+          type: object
+          nullable: true
+          additionalProperties: true
+        ipAddress:
+          type: string
+          nullable: true
+        userAgent:
+          type: string
+          nullable: true
+        traceId:
+          type: string
+          nullable: true
+        occurredAt:
+          type: string
+          format: date-time
+    AuditEventPage:
+      type: object
+      required:
+      - items
+      - meta
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEvent'
+        meta:
+          $ref: '#/components/schemas/PageMeta'
+    HealthResponse:
+      type: object
+      required:
+      - status
+      - version
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+        version:
+          type: string
+    ReadinessResponse:
+      type: object
+      required:
+      - status
+      - dependencies
+      properties:
+        status:
+          type: string
+          enum:
+          - ready
+          - degraded
+        dependencies:
+          type: object
+          additionalProperties:
+            type: string

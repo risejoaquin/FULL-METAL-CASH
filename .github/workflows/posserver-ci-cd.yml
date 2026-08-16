@@ -1,0 +1,163 @@
+name: PosServer CI/CD
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+    inputs:
+      deploy_railway:
+        description: Deploy PosServer to Railway after all gates pass
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      smoke_base_url:
+        description: Optional deployed base URL for post-deploy smoke test
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_VERSION: 8.0.x
+  SOLUTION_FILE: solidpos-platform.sln
+  DOCKERFILE: deploy/docker/Dockerfile
+  DATABASE_URL: postgresql://solidpos:solidpos_dev_password@localhost:5432/solidpos
+  ASPNETCORE_ENVIRONMENT: Production
+  ASPNETCORE_URLS: http://+:8080
+  ConnectionStrings__Postgres: Host=localhost;Port=5432;Database=solidpos;Username=solidpos;Password=solidpos_dev_password
+  Jwt__SigningKey: ci-only-solidpos-signing-key-change-before-production-0001
+  Jwt__Issuer: SolidPOS
+  Jwt__Audience: SolidPOS.PosServer
+  AllowedHosts: localhost;127.0.0.1;*.railway.app
+  Cors__AllowedOrigins__0: http://localhost:5173
+
+jobs:
+  dotnet-quality-gate:
+    name: restore-build-test-contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore ${{ env.SOLUTION_FILE }}
+
+      - name: Build
+        run: dotnet build ${{ env.SOLUTION_FILE }} --configuration Release --no-restore
+
+      - name: Test all suites
+        run: dotnet test ${{ env.SOLUTION_FILE }} --configuration Release --no-build --logger "trx;LogFileName=solidpos-tests.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidpos-test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore
+
+  environment-validation:
+    name: environment-validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment environment contract
+        run: bash scripts/validate-deployment-env.sh
+
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    needs: [ dotnet-quality-gate, environment-validation ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Docker build PosServer image
+        run: docker build -f ${{ env.DOCKERFILE }} -t solidpos-posserver:${{ github.sha }} .
+
+  migration-smoke-test:
+    name: migration-smoke-test
+    runs-on: ubuntu-latest
+    needs: dotnet-quality-gate
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: solidpos
+          POSTGRES_USER: solidpos
+          POSTGRES_PASSWORD: solidpos_dev_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U solidpos -d solidpos"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Run migration smoke test
+        run: bash scripts/ci/migration-smoke-test.sh
+
+  railway-deploy:
+    name: railway-deploy
+    runs-on: ubuntu-latest
+    needs: [ dotnet-quality-gate, environment-validation, docker-build, migration-smoke-test ]
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_railway == 'true'
+    environment: production
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
+      RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+      RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Railway secrets
+        run: |
+          test -n "${RAILWAY_TOKEN}" || (echo "Missing RAILWAY_TOKEN" >&2; exit 1)
+          test -n "${RAILWAY_SERVICE_ID}" || (echo "Missing RAILWAY_SERVICE_ID" >&2; exit 1)
+          test -n "${RAILWAY_PROJECT_ID}" || (echo "Missing RAILWAY_PROJECT_ID" >&2; exit 1)
+          test -n "${RAILWAY_ENVIRONMENT_ID}" || (echo "Missing RAILWAY_ENVIRONMENT_ID" >&2; exit 1)
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        run: railway up --service "${RAILWAY_SERVICE_ID}" --detach
+
+  post-deploy-smoke-test:
+    name: post-deploy-smoke-test
+    runs-on: ubuntu-latest
+    needs: railway-deploy
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_railway == 'true' && inputs.smoke_base_url != ''
+    env:
+      SMOKE_EMAIL: ${{ secrets.SMOKE_EMAIL }}
+      SMOKE_PASSWORD: ${{ secrets.SMOKE_PASSWORD }}
+      SMOKE_TENANT_ID: ${{ secrets.SMOKE_TENANT_ID }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run deployment smoke test
+        run: bash scripts/smoke-test-deployment.sh "${{ inputs.smoke_base_url }}"

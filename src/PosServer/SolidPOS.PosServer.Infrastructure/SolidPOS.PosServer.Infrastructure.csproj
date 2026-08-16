@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SolidPOS.PosServer.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Npgsql" Version="8.0.5" />
+    <PackageReference Include="Serilog.AspNetCore" Version="8.0.3" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.1.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SolidPOS.PosServer.Application\SolidPOS.PosServer.Application.csproj" />
+    <ProjectReference Include="..\SolidPOS.PosServer.Domain\SolidPOS.PosServer.Domain.csproj" />
+  </ItemGroup>
+</Project>
