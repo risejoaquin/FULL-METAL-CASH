@@ -9,3 +9,4 @@ C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Contracts\
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Contracts\obj\Debug\net8.0\refint\SolidPOS.PosServer.Contracts.dll
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Contracts\obj\Debug\net8.0\SolidPOS.PosServer.Contracts.pdb
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Contracts\obj\Debug\net8.0\ref\SolidPOS.PosServer.Contracts.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Contracts\obj\Debug\net8.0\SolidPOS.PosServer.Contracts.sourcelink.json

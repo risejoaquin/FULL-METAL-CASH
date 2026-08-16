@@ -471,3 +471,4 @@ C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.IntegrationTests\o
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.IntegrationTests\obj\Debug\net8.0\SolidPOS.PosServer.IntegrationTests.pdb
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.IntegrationTests\obj\Debug\net8.0\SolidPOS.PosServer.IntegrationTests.genruntimeconfig.cache
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.IntegrationTests\obj\Debug\net8.0\ref\SolidPOS.PosServer.IntegrationTests.dll
+C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.IntegrationTests\obj\Debug\net8.0\SolidPOS.PosServer.IntegrationTests.sourcelink.json

@@ -9,3 +9,4 @@ C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Domain\obj
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Domain\obj\Debug\net8.0\refint\SolidPOS.PosServer.Domain.dll
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Domain\obj\Debug\net8.0\SolidPOS.PosServer.Domain.pdb
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Domain\obj\Debug\net8.0\ref\SolidPOS.PosServer.Domain.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Domain\obj\Debug\net8.0\SolidPOS.PosServer.Domain.sourcelink.json

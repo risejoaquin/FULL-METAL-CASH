@@ -472,3 +472,4 @@ C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.ContractTests\bin\
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.ContractTests\bin\Debug\net8.0\SolidPOS.PosServer.Contracts.pdb
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.ContractTests\bin\Debug\net8.0\SolidPOS.PosServer.Domain.pdb
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.ContractTests\bin\Debug\net8.0\SolidPOS.PosServer.Infrastructure.pdb
+C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.ContractTests\obj\Debug\net8.0\SolidPOS.PosServer.ContractTests.sourcelink.json

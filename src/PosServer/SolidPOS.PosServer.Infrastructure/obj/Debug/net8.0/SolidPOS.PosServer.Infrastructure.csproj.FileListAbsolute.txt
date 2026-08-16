@@ -17,3 +17,4 @@ C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Infrastruc
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Infrastructure\obj\Debug\net8.0\refint\SolidPOS.PosServer.Infrastructure.dll
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Infrastructure\obj\Debug\net8.0\SolidPOS.PosServer.Infrastructure.pdb
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Infrastructure\obj\Debug\net8.0\ref\SolidPOS.PosServer.Infrastructure.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Infrastructure\obj\Debug\net8.0\SolidPOS.PosServer.Infrastructure.sourcelink.json

@@ -68,3 +68,4 @@ C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Api\obj\De
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Api\obj\Debug\net8.0\SolidPOS.PosServer.Api.pdb
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Api\obj\Debug\net8.0\SolidPOS.PosServer.Api.genruntimeconfig.cache
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Api\obj\Debug\net8.0\ref\SolidPOS.PosServer.Api.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Api\obj\Debug\net8.0\SolidPOS.PosServer.Api.sourcelink.json

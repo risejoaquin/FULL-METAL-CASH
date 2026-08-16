@@ -15,3 +15,4 @@ C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Applicatio
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\refint\SolidPOS.PosServer.Application.dll
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.pdb
 C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\ref\SolidPOS.PosServer.Application.dll
+C:\Users\Lucilfer\Documents\SolidPos\src\PosServer\SolidPOS.PosServer.Application\obj\Debug\net8.0\SolidPOS.PosServer.Application.sourcelink.json

@@ -125,3 +125,4 @@ C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.UnitTests\obj\Debu
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.UnitTests\obj\Debug\net8.0\SolidPOS.PosServer.UnitTests.pdb
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.UnitTests\obj\Debug\net8.0\SolidPOS.PosServer.UnitTests.genruntimeconfig.cache
 C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.UnitTests\obj\Debug\net8.0\ref\SolidPOS.PosServer.UnitTests.dll
+C:\Users\Lucilfer\Documents\SolidPos\tests\SolidPOS.PosServer.UnitTests\obj\Debug\net8.0\SolidPOS.PosServer.UnitTests.sourcelink.json

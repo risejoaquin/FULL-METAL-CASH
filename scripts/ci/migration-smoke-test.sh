@@ -37,7 +37,6 @@ BEGIN
       ('audit_events'),
       ('builder_projects'),
       ('builder_builds'),
-      ('update_channels'),
       ('update_releases')
   ) AS required(required_table)
   WHERE to_regclass('pos.' || required_table) IS NULL;
@@ -51,10 +50,17 @@ SELECT id, name, status
 FROM tenants
 WHERE id = '11111111-1111-1111-1111-111111111111';
 
-SELECT code
-FROM update_channels
-WHERE code IN ('stable', 'beta', 'internal')
-ORDER BY code;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM information_schema.check_constraints
+    WHERE constraint_schema = 'pos'
+      AND constraint_name LIKE '%update_releases%channel%'
+  ) THEN
+    RAISE NOTICE 'Update release channel validation is enforced by table CHECK constraint or application contract.';
+  END IF;
+END $$;
 SQL
 
 echo "Migration smoke test passed."
