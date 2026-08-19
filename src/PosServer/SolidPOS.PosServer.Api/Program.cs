@@ -149,6 +149,8 @@ builder.Services.AddScoped<ISyncPullService, SyncPullService>();
 builder.Services.AddScoped<ISyncChangeWriter, PostgreSqlSyncChangeWriter>();
 builder.Services.AddScoped<ISyncConflictRepository, PostgreSqlSyncConflictRepository>();
 builder.Services.AddScoped<ISyncConflictService, SyncConflictService>();
+builder.Services.AddScoped<ISyncOperationsRepository, PostgreSqlSyncOperationsRepository>();
+builder.Services.AddScoped<ISyncOperationsService, SyncOperationsService>();
 builder.Services.AddScoped<ITenantConfigRepository, PostgreSqlTenantConfigRepository>();
 builder.Services.AddScoped<ITenantConfigService, TenantConfigService>();
 builder.Services.AddScoped<ITerminalRepository, PostgreSqlTerminalRepository>();

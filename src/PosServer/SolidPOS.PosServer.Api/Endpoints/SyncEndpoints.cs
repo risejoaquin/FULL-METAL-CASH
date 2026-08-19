@@ -66,6 +66,69 @@ public static class SyncEndpoints
         .RequireAuthorization(PermissionCodes.SyncPull)
         .WithName("PullSyncChanges");
 
+
+        group.MapGet("/status", async Task<IResult> (
+            [AsParameters] SyncStatusQuery query,
+            ISyncOperationsService syncOperationsService,
+            CancellationToken cancellationToken) =>
+        {
+            SyncRuntimeStatusResponse? response = await syncOperationsService.GetStatusAsync(query.StoreId, query.TerminalId, cancellationToken);
+
+            return response is null
+                ? Results.Problem(
+                    title: "Sync status rejected",
+                    detail: "The sync status endpoint requires a valid tenant context.",
+                    statusCode: StatusCodes.Status409Conflict,
+                    type: "https://solidpos.local/problems/sync-status-rejected")
+                : Results.Ok(response);
+        })
+        .RequireAuthorization(PermissionCodes.SyncConflictsRead)
+        .WithName("GetSyncRuntimeStatus");
+
+        group.MapGet("/contract", (ISyncOperationsService syncOperationsService) =>
+        {
+            return Results.Ok(syncOperationsService.GetContract());
+        })
+        .RequireAuthorization(PermissionCodes.SyncPull)
+        .WithName("GetSyncContract");
+
+        group.MapGet("/dead-letter", async Task<IResult> (
+            [AsParameters] SyncDeadLetterQuery query,
+            ISyncOperationsService syncOperationsService,
+            CancellationToken cancellationToken) =>
+        {
+            IReadOnlyCollection<SyncDeadLetterEventResponse>? response = await syncOperationsService.ListDeadLetterAsync(query.TerminalId, query.Limit, cancellationToken);
+
+            return response is null
+                ? Results.Problem(
+                    title: "Sync dead-letter list rejected",
+                    detail: "The sync dead-letter endpoint requires a valid tenant context.",
+                    statusCode: StatusCodes.Status409Conflict,
+                    type: "https://solidpos.local/problems/sync-dead-letter-list-rejected")
+                : Results.Ok(response);
+        })
+        .RequireAuthorization(PermissionCodes.SyncConflictsRead)
+        .WithName("ListSyncDeadLetterEvents");
+
+        group.MapPost("/dead-letter/{inboxEventId:guid}/retry", async Task<IResult> (
+            Guid inboxEventId,
+            [FromBody] RetrySyncDeadLetterRequest request,
+            ISyncOperationsService syncOperationsService,
+            CancellationToken cancellationToken) =>
+        {
+            RetrySyncDeadLetterResponse? response = await syncOperationsService.RetryDeadLetterAsync(inboxEventId, request, cancellationToken);
+
+            return response is null
+                ? Results.Problem(
+                    title: "Sync dead-letter retry rejected",
+                    detail: "The dead-letter event was not found, is not dead-lettered, or the retry reason is invalid.",
+                    statusCode: StatusCodes.Status409Conflict,
+                    type: "https://solidpos.local/problems/sync-dead-letter-retry-rejected")
+                : Results.Ok(response);
+        })
+        .RequireAuthorization(PermissionCodes.SyncConflictsResolve)
+        .WithName("RetrySyncDeadLetterEvent");
+
         group.MapGet("/conflicts", async Task<IResult> (
             [AsParameters] SyncConflictQuery query,
             ISyncConflictService syncConflictService,
@@ -126,4 +189,8 @@ public static class SyncEndpoints
     public sealed record SyncPullQuery(string? Cursor, int Limit);
 
     public sealed record SyncConflictQuery(string? Status, int Limit);
+
+    public sealed record SyncStatusQuery(Guid? StoreId, Guid? TerminalId);
+
+    public sealed record SyncDeadLetterQuery(Guid? TerminalId, int Limit);
 }

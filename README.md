@@ -859,3 +859,10 @@ scripts/operations/validate-production-pos-e2e.ps1
 SOLIDPOS_ITERATION_02_POS_OPERATIONAL_COMPLETION.md
 ITERATION_02_VALIDATION_COMMANDS.md
 ```
+
+
+## SolidPOS Iteration 03 — Offline Sync End-to-End Server Contract
+
+Iteration 03 hardens the server-side offline sync contract with runtime diagnostics, contract discovery, dead-letter inspection/retry, migration `018_sync_e2e_contract_hardening.sql`, and an E2E validation script for push/idempotency/process/pull/status.
+
+Validation guide: `ITERATION_03_VALIDATION_COMMANDS.md`.

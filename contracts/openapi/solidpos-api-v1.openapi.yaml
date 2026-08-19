@@ -2206,6 +2206,118 @@ paths:
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/UnexpectedError'
+  /sync/status:
+    get:
+      tags:
+      - Sync
+      summary: Reads sync runtime status buckets for tenant/store/terminal diagnostics.
+      operationId: get_sync_status
+      responses:
+        '200':
+          description: Sync runtime status.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /sync/contract:
+    get:
+      tags:
+      - Sync
+      summary: Reads the offline sync server contract supported by this API version.
+      operationId: get_sync_contract
+      responses:
+        '200':
+          description: Sync contract.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /sync/dead-letter:
+    get:
+      tags:
+      - Sync
+      summary: Reads dead-lettered sync inbox events for operations diagnostics.
+      operationId: get_sync_dead_letter
+      responses:
+        '200':
+          description: Dead-letter events.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /sync/dead-letter/{inboxEventId}/retry:
+    post:
+      tags:
+      - Sync
+      summary: Schedules one dead-lettered sync event for retry.
+      operationId: post_sync_dead_letter_inboxEventId_retry
+      parameters:
+      - name: inboxEventId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Dead-letter retry scheduled.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
   /sync/conflicts:
     get:
       tags:

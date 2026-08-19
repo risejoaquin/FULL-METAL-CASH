@@ -40,6 +40,7 @@ else
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/015_security_auth_hardening.sql"
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/016_production_provisioning_bootstrap.sql"
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/017_pos_operational_completion.sql"
+psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/018_sync_e2e_contract_hardening.sql"
 fi
 
 psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 <<'SQL'
