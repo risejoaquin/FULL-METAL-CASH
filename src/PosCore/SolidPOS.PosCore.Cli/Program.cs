@@ -15,7 +15,7 @@ static string GetOption(string[] args, string name, string? fallback = null)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sale-offline, outbox-status, sync-push");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sale-offline, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending");
     return 0;
 }
 
@@ -71,19 +71,29 @@ switch (command)
         return 0;
     }
 
+    case "queue-health-check":
+    {
+        var source = GetOption(args, "--source", "poscore-cli");
+        var service = new LocalHealthCheckOutboxService(repository, new SystemClock());
+        var outboxEvent = await service.QueueAsync(source).ConfigureAwait(false);
+        Console.WriteLine($"Health check queued. outboxEventId={outboxEvent.Id}; eventType={outboxEvent.EventType}; sequence={outboxEvent.SequenceNumber}");
+        return 0;
+    }
+
     case "outbox-status":
     {
         var pending = await repository.GetPendingOutboxEventsAsync(500).ConfigureAwait(false);
         var syncedCount = await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Synced).ConfigureAwait(false);
         var failedCount = await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Failed).ConfigureAwait(false);
+        var deadLetterCount = await repository.CountOutboxByStatusAsync(LocalOutboxStatus.DeadLetter).ConfigureAwait(false);
         if (pending.Count == 0)
         {
-            Console.WriteLine($"No pending local outbox events. synced={syncedCount}; failed={failedCount}");
+            Console.WriteLine($"No pending local outbox events. synced={syncedCount}; failed={failedCount}; deadLetter={deadLetterCount}");
             return 0;
         }
 
         var batch = LocalOutboxBatchPlanner.CreateBatch(Guid.NewGuid(), pending);
-        Console.WriteLine($"Pending outbox events: {pending.Count}; synced={syncedCount}; failed={failedCount}; batchId={batch.BatchId}; firstSequence={batch.Events[0].SequenceNumber}");
+        Console.WriteLine($"Pending outbox events: {pending.Count}; synced={syncedCount}; failed={failedCount}; deadLetter={deadLetterCount}; batchId={batch.BatchId}; firstSequence={batch.Events[0].SequenceNumber}");
         return 0;
     }
 
@@ -107,6 +117,37 @@ switch (command)
         }
 
         Console.WriteLine($"Remote sync push completed. batchId={result.BatchId}; attempted={result.AttemptedCount}; accepted={result.AcceptedCount}; duplicate={result.DuplicateCount}; failed={result.FailedCount}; acknowledged={result.AcknowledgedEventIds.Count}");
+        return 0;
+    }
+
+    case "retry-failed":
+    {
+        var maxAttempts = int.Parse(GetOption(args, "--max-attempts", "5"));
+        var count = await repository.RetryFailedOutboxEventsAsync(maxAttempts, "manual_retry_requested").ConfigureAwait(false);
+        Console.WriteLine($"Failed outbox events moved back to pending: {count}");
+        return 0;
+    }
+
+    case "requeue-latest-synced":
+    {
+        var latest = await repository.GetLatestOutboxEventByStatusAsync(LocalOutboxStatus.Synced).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("No synced outbox event exists to requeue as duplicate validation.");
+        await repository.ResetOutboxEventToPendingAsync(latest.Id, "duplicate_validation_requeue").ConfigureAwait(false);
+        Console.WriteLine($"Synced outbox event requeued to pending for duplicate validation: {latest.Id}");
+        return 0;
+    }
+
+    case "fail-first-pending":
+    {
+        var pending = await repository.GetPendingOutboxEventsAsync(1).ConfigureAwait(false);
+        if (pending.Count == 0)
+        {
+            Console.WriteLine("No pending outbox event exists to mark failed.");
+            return 0;
+        }
+
+        await repository.MarkOutboxFailedAsync(pending[0].Id, "local_validation_forced_failure").ConfigureAwait(false);
+        Console.WriteLine($"Pending outbox event marked failed for retry validation: {pending[0].Id}");
         return 0;
     }
 

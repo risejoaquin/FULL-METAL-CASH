@@ -144,6 +144,15 @@ VALUES ($saleId, $tenantId, $storeId, $terminalId, $occurredAtUtc, $currency, $s
         return Task.CompletedTask;
     }
 
+    public Task SaveOutboxEventAsync(LocalOutboxEvent outboxEvent, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        InsertOutboxEvent(connection, transaction, outboxEvent);
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
     public Task<IReadOnlyList<LocalOutboxEvent>> GetPendingOutboxEventsAsync(int limit, CancellationToken cancellationToken = default)
     {
         using var connection = _database.OpenConnection();
@@ -165,6 +174,22 @@ LIMIT $limit;
         }
 
         return Task.FromResult<IReadOnlyList<LocalOutboxEvent>>(events);
+    }
+
+    public Task<LocalOutboxEvent?> GetLatestOutboxEventByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, event_type, schema_version, sequence_number, payload_json, status, created_at_utc, synced_at_utc, last_error, attempts
+FROM local_outbox_events
+WHERE status = $status
+ORDER BY sequence_number DESC
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$status", (int)status);
+        using var reader = command.ExecuteReader();
+        return Task.FromResult(reader.Read() ? ReadOutboxEvent(reader) : null);
     }
 
     public Task MarkOutboxSyncedAsync(IEnumerable<Guid> eventIds, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default)
@@ -193,6 +218,39 @@ LIMIT $limit;
         command.Parameters.AddWithValue("$id", eventId.ToString());
         command.ExecuteNonQuery();
         return Task.CompletedTask;
+    }
+
+    public Task ResetOutboxEventToPendingAsync(Guid eventId, string reason, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+UPDATE local_outbox_events
+SET status = $pendingStatus, synced_at_utc = NULL, last_error = $reason
+WHERE id = $id;
+""";
+        command.Parameters.AddWithValue("$pendingStatus", (int)LocalOutboxStatus.Pending);
+        command.Parameters.AddWithValue("$reason", reason);
+        command.Parameters.AddWithValue("$id", eventId.ToString());
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<int> RetryFailedOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+UPDATE local_outbox_events
+SET status = $pendingStatus, last_error = $reason
+WHERE status = $failedStatus AND attempts < $maxAttempts;
+SELECT changes();
+""";
+        command.Parameters.AddWithValue("$pendingStatus", (int)LocalOutboxStatus.Pending);
+        command.Parameters.AddWithValue("$failedStatus", (int)LocalOutboxStatus.Failed);
+        command.Parameters.AddWithValue("$maxAttempts", maxAttempts);
+        command.Parameters.AddWithValue("$reason", reason);
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
     }
 
     public Task SaveSyncAcknowledgementsAsync(IEnumerable<LocalSyncAcknowledgement> acknowledgements, CancellationToken cancellationToken = default)

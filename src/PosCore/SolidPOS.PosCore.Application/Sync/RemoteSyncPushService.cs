@@ -32,7 +32,20 @@ public sealed class RemoteSyncPushService
 
         var batch = LocalOutboxBatchPlanner.CreateBatch(batchId, pending);
         var request = RemoteSyncPushMapper.Map(batch);
-        var result = await _remoteClient.PushAsync(request, terminalAccessToken, cancellationToken).ConfigureAwait(false);
+        RemoteSyncPushResult result;
+        try
+        {
+            result = await _remoteClient.PushAsync(request, terminalAccessToken, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            foreach (var pendingEvent in batch.Events)
+            {
+                await _repository.MarkOutboxFailedAsync(pendingEvent.Id, exception.Message, cancellationToken).ConfigureAwait(false);
+            }
+
+            throw;
+        }
 
         if (result.FailedCount == 0)
         {
@@ -42,7 +55,7 @@ public sealed class RemoteSyncPushService
         {
             foreach (var failed in batch.Events.Where(item => !result.AcknowledgedEventIds.Contains(item.Id)))
             {
-                await _repository.MarkOutboxFailedAsync(failed.Id, "Remote sync push returned failed events.", cancellationToken).ConfigureAwait(false);
+                await _repository.MarkOutboxFailedAsync(failed.Id, "Remote sync push returned rejected or failed events.", cancellationToken).ConfigureAwait(false);
             }
 
             if (result.AcknowledgedEventIds.Count > 0)

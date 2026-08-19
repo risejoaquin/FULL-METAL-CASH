@@ -34,11 +34,17 @@ public sealed class HttpRemoteSyncClient : IRemoteSyncClient
         var root = document.RootElement;
         var acceptedCount = GetInt(root, "acceptedCount");
         var duplicateCount = GetInt(root, "duplicateCount");
-        var failedCount = GetInt(root, "failedCount");
+        var failedCount = GetInt(root, "failedCount") + GetInt(root, "rejectedCount");
 
-        var acknowledged = failedCount == 0
-            ? request.Events.Select(item => item.EventId).ToArray()
-            : request.Events.Take(acceptedCount + duplicateCount).Select(item => item.EventId).ToArray();
+        Guid[] acknowledged = ExtractAcknowledgedEventIds(root);
+        if (acknowledged.Length == 0 && failedCount == 0)
+        {
+            acknowledged = request.Events.Select(item => item.EventId).ToArray();
+        }
+        else if (acknowledged.Length == 0)
+        {
+            acknowledged = request.Events.Take(acceptedCount + duplicateCount).Select(item => item.EventId).ToArray();
+        }
 
         return new RemoteSyncPushResult(
             request.BatchId,
@@ -64,6 +70,36 @@ public sealed class HttpRemoteSyncClient : IRemoteSyncClient
             payload = item.Payload
         })
     };
+
+    private static Guid[] ExtractAcknowledgedEventIds(JsonElement root)
+    {
+        if (!root.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        List<Guid> acknowledged = [];
+        foreach (var result in results.EnumerateArray())
+        {
+            if (!result.TryGetProperty("status", out var statusProperty) || statusProperty.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var status = statusProperty.GetString();
+            if (status is not ("accepted" or "duplicate"))
+            {
+                continue;
+            }
+
+            if (result.TryGetProperty("eventId", out var eventIdProperty) && eventIdProperty.ValueKind == JsonValueKind.String && Guid.TryParse(eventIdProperty.GetString(), out var eventId))
+            {
+                acknowledged.Add(eventId);
+            }
+        }
+
+        return acknowledged.ToArray();
+    }
 
     private static int GetInt(JsonElement root, string name)
     {

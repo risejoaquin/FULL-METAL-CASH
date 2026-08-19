@@ -902,3 +902,26 @@ Validation script:
   -AdminPassword "AdminSeguro123!" `
   -ProductId "dd272b64-d450-4dd5-ace2-b17fc04ecc62"
 ```
+
+
+## SolidPOS Iteration 06 — PosCore Sync Processing + Conflict/Retry Runtime
+
+Esta iteración endurece el runtime local de sync de PosCore:
+
+- evento local procesable `pos.health_check`;
+- push remoto con ack;
+- transición remota `received -> processed`;
+- duplicate real con mismo `eventId`;
+- retry local de eventos fallidos;
+- status/pull/dead-letter remoto verificables.
+
+Validación:
+
+```powershell
+.\scripts\poscore\validate-poscore-sync-processing-retry.ps1 `
+  -BaseUrl "https://full-metal-cash-production.up.railway.app" `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -StoreId "8e446c29-e9ad-41ed-a738-125aff7608b6" `
+  -AdminEmail "admin@micafeteria.com" `
+  -AdminPassword "AdminSeguro123!"
+```
