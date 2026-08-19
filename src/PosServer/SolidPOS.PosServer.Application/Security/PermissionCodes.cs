@@ -29,6 +29,7 @@ public static class PermissionCodes
     public const string CashClose = "cash.close";
     public const string CashMove = "cash.move";
     public const string ReportsRead = "reports.read";
+    public const string ReportsCashShiftSummary = "reports.cash_shift_summary";
     public const string SyncPush = "sync.push";
     public const string SyncPull = "sync.pull";
     public const string SyncConflictsRead = "sync.conflicts.read";
@@ -66,6 +67,7 @@ public static class PermissionCodes
         CashClose,
         CashMove,
         ReportsRead,
+        ReportsCashShiftSummary,
         SyncPush,
         SyncPull,
         SyncConflictsRead,

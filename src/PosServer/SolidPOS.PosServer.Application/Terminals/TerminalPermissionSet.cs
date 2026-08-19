@@ -13,6 +13,7 @@ public static class TerminalPermissionSet
         PermissionCodes.CustomersManage,
         PermissionCodes.DiscountsRead,
         PermissionCodes.DiscountsValidate,
+        PermissionCodes.SalesRead,
         PermissionCodes.SalesCreate,
         PermissionCodes.SalesVoid,
         PermissionCodes.ReturnsCreate,
@@ -20,6 +21,7 @@ public static class TerminalPermissionSet
         PermissionCodes.CashOpen,
         PermissionCodes.CashClose,
         PermissionCodes.CashMove,
+        PermissionCodes.ReportsCashShiftSummary,
         PermissionCodes.SyncPush,
         PermissionCodes.SyncPull
     ];

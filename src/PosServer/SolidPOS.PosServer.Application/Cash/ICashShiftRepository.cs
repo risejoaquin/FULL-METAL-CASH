@@ -6,6 +6,8 @@ public interface ICashShiftRepository
 {
     Task<CashShiftResponse?> GetCurrentOpenShiftAsync(Guid tenantId, Guid storeId, Guid terminalId, CancellationToken cancellationToken);
 
+    Task<CashShiftOperationalSummaryResponse?> GetOperationalSummaryAsync(Guid tenantId, Guid shiftId, CancellationToken cancellationToken);
+
     Task<CashShiftResponse?> OpenAsync(
         Guid tenantId,
         Guid storeId,

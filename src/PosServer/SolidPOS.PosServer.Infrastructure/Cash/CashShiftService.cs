@@ -54,6 +54,28 @@ public sealed class CashShiftService : ICashShiftService
         return shift;
     }
 
+
+    public async Task<CashShiftOperationalSummaryResponse?> GetOperationalSummaryAsync(Guid shiftId, CancellationToken cancellationToken)
+    {
+        if (!_tenantContext.TenantId.HasValue || shiftId == Guid.Empty)
+        {
+            _logger.LogWarning("Cash shift operational summary rejected because tenant context or shift id is missing");
+            return null;
+        }
+
+        CashShiftOperationalSummaryResponse? summary = await _repository.GetOperationalSummaryAsync(
+            _tenantContext.TenantId.Value,
+            shiftId,
+            cancellationToken);
+
+        if (summary is null)
+        {
+            _logger.LogWarning("Cash shift operational summary {ShiftId} not found for tenant {TenantId}", shiftId, _tenantContext.TenantId.Value);
+        }
+
+        return summary;
+    }
+
     public async Task<CashShiftResponse?> OpenAsync(OpenCashShiftRequest request, CancellationToken cancellationToken)
     {
         if (request.OpeningAmountCents < 0)

@@ -844,3 +844,18 @@ See:
 SOLIDPOS_ITERATION_01_PRODUCTION_BOOTSTRAP.md
 ITERATION_01_VALIDATION_COMMANDS.md
 ```
+
+
+## SolidPOS Iteration 02 — POS Operational Completion API
+
+Iteration 02 adds operational cash-shift summaries, migration `017_pos_operational_completion.sql`, production POS runtime seeding and an E2E script that validates admin login, terminal enrollment, shift open, sale creation, digital receipt issuing and shift close.
+
+Key files:
+
+```text
+database/postgresql/017_pos_operational_completion.sql
+scripts/operations/seed-production-pos-runtime.ps1
+scripts/operations/validate-production-pos-e2e.ps1
+SOLIDPOS_ITERATION_02_POS_OPERATIONAL_COMPLETION.md
+ITERATION_02_VALIDATION_COMMANDS.md
+```

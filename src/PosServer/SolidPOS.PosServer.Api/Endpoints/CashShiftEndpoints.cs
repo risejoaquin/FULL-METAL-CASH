@@ -48,6 +48,26 @@ public static class CashShiftEndpoints
         .RequireAuthorization(PermissionCodes.CashOpen)
         .WithName("OpenCashShift");
 
+
+        group.MapGet("/{shiftId:guid}/summary", async Task<IResult> (
+            Guid shiftId,
+            ICashShiftService cashShiftService,
+            CancellationToken cancellationToken) =>
+        {
+            CashShiftOperationalSummaryResponse? summary = await cashShiftService.GetOperationalSummaryAsync(shiftId, cancellationToken);
+
+            return summary is null
+                ? Results.NotFound(new
+                {
+                    type = "https://solidpos.local/problems/cash-shift-summary-not-found",
+                    title = "Cash shift summary not found",
+                    status = StatusCodes.Status404NotFound
+                })
+                : Results.Ok(summary);
+        })
+        .RequireAuthorization(PermissionCodes.ReportsCashShiftSummary)
+        .WithName("GetCashShiftOperationalSummary");
+
         group.MapPost("/{shiftId:guid}/movements", async Task<IResult> (
             Guid shiftId,
             [FromBody] CreateCashMovementRequest request,

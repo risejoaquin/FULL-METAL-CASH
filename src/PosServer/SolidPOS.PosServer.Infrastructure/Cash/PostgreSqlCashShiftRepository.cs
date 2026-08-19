@@ -46,6 +46,102 @@ public sealed class PostgreSqlCashShiftRepository : ICashShiftRepository
         return await reader.ReadAsync(cancellationToken) ? ReadCashShift(reader) : null;
     }
 
+
+    public async Task<CashShiftOperationalSummaryResponse?> GetOperationalSummaryAsync(Guid tenantId, Guid shiftId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            SELECT
+              cs.id,
+              cs.tenant_id,
+              cs.store_id,
+              cs.terminal_id,
+              cs.status,
+              cs.opening_amount_cents,
+              cs.expected_cash_cents,
+              cs.counted_cash_cents,
+              cs.difference_cents,
+              COALESCE(SUM(p.amount_cents) FILTER (WHERE p.status = 'approved' AND pm.method_type = 'cash' AND s.status <> 'voided'), 0)::bigint AS cash_sales_cents,
+              COALESCE(SUM(p.amount_cents) FILTER (WHERE p.status = 'approved' AND pm.method_type <> 'cash' AND s.status <> 'voided'), 0)::bigint AS non_cash_sales_cents,
+              COALESCE((
+                SELECT SUM(rr.amount_cents)
+                FROM pos.returns r
+                JOIN pos.return_refunds rr ON rr.tenant_id = r.tenant_id AND rr.return_id = r.id
+                WHERE r.tenant_id = cs.tenant_id
+                  AND r.cash_shift_id = cs.id
+                  AND r.status = 'completed'
+                  AND rr.status = 'approved'
+                  AND rr.method_type = 'cash'
+              ), 0)::bigint AS cash_refunds_cents,
+              COALESCE((
+                SELECT SUM(rr.amount_cents)
+                FROM pos.returns r
+                JOIN pos.return_refunds rr ON rr.tenant_id = r.tenant_id AND rr.return_id = r.id
+                WHERE r.tenant_id = cs.tenant_id
+                  AND r.cash_shift_id = cs.id
+                  AND r.status = 'completed'
+                  AND rr.status = 'approved'
+                  AND rr.method_type <> 'cash'
+              ), 0)::bigint AS non_cash_refunds_cents,
+              COALESCE((
+                SELECT SUM(cm.amount_cents)
+                FROM pos.cash_movements cm
+                WHERE cm.tenant_id = cs.tenant_id
+                  AND cm.cash_shift_id = cs.id
+                  AND cm.movement_type = 'cash_in'
+              ), 0)::bigint AS cash_in_cents,
+              COALESCE((
+                SELECT SUM(cm.amount_cents)
+                FROM pos.cash_movements cm
+                WHERE cm.tenant_id = cs.tenant_id
+                  AND cm.cash_shift_id = cs.id
+                  AND cm.movement_type = 'cash_out'
+              ), 0)::bigint AS cash_out_cents,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM pos.cash_movements cm
+                WHERE cm.tenant_id = cs.tenant_id
+                  AND cm.cash_shift_id = cs.id
+                  AND cm.movement_type = 'drawer_open_no_sale'
+              ), 0)::integer AS no_sale_drawer_open_count,
+              COUNT(DISTINCT s.id) FILTER (WHERE s.status <> 'voided')::integer AS sales_count,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM pos.returns r
+                WHERE r.tenant_id = cs.tenant_id
+                  AND r.cash_shift_id = cs.id
+                  AND r.status = 'completed'
+              ), 0)::integer AS returns_count,
+              COALESCE((
+                SELECT COUNT(*)
+                FROM pos.cash_movements cm
+                WHERE cm.tenant_id = cs.tenant_id
+                  AND cm.cash_shift_id = cs.id
+              ), 0)::integer AS movement_count,
+              cs.opened_at,
+              cs.closed_at
+            FROM pos.cash_shifts cs
+            LEFT JOIN pos.sales s ON s.tenant_id = cs.tenant_id AND s.cash_shift_id = cs.id
+            LEFT JOIN pos.payments p ON p.tenant_id = s.tenant_id AND p.sale_id = s.id
+            LEFT JOIN pos.payment_methods pm ON pm.tenant_id = p.tenant_id AND pm.id = p.payment_method_id
+            WHERE cs.tenant_id = @tenant_id
+              AND cs.id = @shift_id
+            GROUP BY cs.id, cs.tenant_id, cs.store_id, cs.terminal_id, cs.status,
+                     cs.opening_amount_cents, cs.expected_cash_cents, cs.counted_cash_cents,
+                     cs.difference_cents, cs.opened_at, cs.closed_at;
+            """;
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await PostgreSqlTenantSession.SetTenantAsync(connection, tenantId, cancellationToken);
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("tenant_id", tenantId);
+        command.Parameters.AddWithValue("shift_id", shiftId);
+
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadOperationalSummary(reader) : null;
+    }
+
     public async Task<CashShiftResponse?> OpenAsync(
         Guid tenantId,
         Guid storeId,
@@ -373,6 +469,33 @@ public sealed class PostgreSqlCashShiftRepository : ICashShiftRepository
     private static void AddNullableGuid(NpgsqlCommand command, string name, Guid? value)
     {
         command.Parameters.Add(name, NpgsqlDbType.Uuid).Value = value.HasValue ? value.Value : (object)DBNull.Value;
+    }
+
+
+    private static CashShiftOperationalSummaryResponse ReadOperationalSummary(NpgsqlDataReader reader)
+    {
+        return new CashShiftOperationalSummaryResponse(
+            reader.GetGuid(0),
+            reader.GetGuid(1),
+            reader.GetGuid(2),
+            reader.GetGuid(3),
+            reader.GetString(4),
+            reader.GetInt64(5),
+            reader.GetInt64(6),
+            reader.IsDBNull(7) ? null : reader.GetInt64(7),
+            reader.IsDBNull(8) ? null : reader.GetInt64(8),
+            reader.GetInt64(9),
+            reader.GetInt64(10),
+            reader.GetInt64(11),
+            reader.GetInt64(12),
+            reader.GetInt64(13),
+            reader.GetInt64(14),
+            reader.GetInt32(15),
+            reader.GetInt32(16),
+            reader.GetInt32(17),
+            reader.GetInt32(18),
+            reader.GetFieldValue<DateTimeOffset>(19),
+            reader.IsDBNull(20) ? null : reader.GetFieldValue<DateTimeOffset>(20));
     }
 
     private static CashShiftResponse ReadCashShift(NpgsqlDataReader reader)

@@ -759,6 +759,37 @@ paths:
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/UnexpectedError'
+  /cash-drawers/shifts/{shiftId}/summary:
+    get:
+      tags:
+      - Cash Drawers
+      summary: Reads the operational close summary for a cash shift.
+      operationId: get_cash_drawers_shifts_shiftId_summary
+      responses:
+        '200':
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: shiftId
+        in: path
+        required: true
+        schema:
+          type: string
   /cash-drawers/shifts/{shiftId}/close:
     post:
       tags:

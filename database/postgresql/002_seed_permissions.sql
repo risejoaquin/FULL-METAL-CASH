@@ -33,6 +33,7 @@ INSERT INTO permissions (code, description) VALUES
   ('cash.close', 'Close cash shift'),
   ('cash.move', 'Create cash movements'),
   ('reports.read', 'Read reports'),
+  ('reports.cash_shift_summary', 'Read operational cash-shift close summaries'),
   ('sync.push', 'Push terminal sync events'),
   ('sync.pull', 'Pull tenant sync changes'),
   ('sync.conflicts.read', 'Read sync conflicts and dead-letter diagnostics'),
