@@ -43,7 +43,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -72,7 +72,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Validate deployment environment contract
         run: bash scripts/validate-deployment-env.sh
@@ -83,7 +83,7 @@ jobs:
     needs: [ dotnet-quality-gate, environment-validation ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Docker build PosServer image
         run: docker build -f ${{ env.DOCKERFILE }} -t solidpos-posserver:${{ github.sha }} .
@@ -108,7 +108,7 @@ jobs:
           --health-retries 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install PostgreSQL client
         run: |
@@ -128,7 +128,7 @@ jobs:
       PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install PostgreSQL client
         run: |
@@ -151,7 +151,7 @@ jobs:
       RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Verify Railway secrets
         run: |
@@ -177,7 +177,7 @@ jobs:
       SMOKE_TENANT_ID: ${{ secrets.SMOKE_TENANT_ID }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run deployment smoke test
         run: bash scripts/smoke-test-deployment.sh "${{ inputs.smoke_base_url }}"
