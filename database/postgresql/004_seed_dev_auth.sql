@@ -3,7 +3,7 @@
 
 BEGIN;
 
-SET search_path TO pos, public;
+SET search_path TO pos, extensions, public;
 
 INSERT INTO tenants (id, name, legal_name, status)
 VALUES (
@@ -55,7 +55,7 @@ VALUES (
   '33333333-3333-3333-3333-333333333333',
   '11111111-1111-1111-1111-111111111111',
   'owner@solidpos.local',
-  public.crypt('Admin123!', public.gen_salt('bf', 12)),
+  crypt('Admin123!', gen_salt('bf', 12)),
   'SolidPOS Owner',
   'active'
 )

@@ -1,6 +1,6 @@
 # Macro Fase 34 — CI/CD + Deployment Verification
 
-Status: IMPLEMENTED — pending local/remote validation
+Status: PASS REAL — validated in local, GitHub Actions, Railway, Supabase/PostgreSQL, and post-deploy smoke test
 
 ## Objective
 
@@ -114,13 +114,38 @@ database/postgresql/014_builder_updates_runtime.sql
 
 This keeps Linux CI aligned with the Windows PowerShell migration script.
 
-## Pending validation
+## Final validation
 
 ```text
-Local build/test after Fase 34              PENDIENTE
-GitHub Actions syntax/execution             PENDIENTE
-Docker build from workflow                  PENDIENTE
-Migration smoke test in GitHub Actions      PENDIENTE
-Railway deployment                          PENDIENTE
-Post-deploy smoke test                      PENDIENTE
+Local restore/build/test                 PASS
+GitHub Actions quality gates             PASS
+Docker build local/CI                    PASS
+Migration smoke test in GitHub Actions   PASS
+Railway deployment                       PASS
+Supabase/PostgreSQL real connection      PASS
+Remote PostgreSQL migrations             PASS
+GET /health/live                         PASS
+GET /health/ready                        PASS
+POST /api/v1/auth/login                  PASS
+GET /api/v1/observability/metrics        PASS
+Post-deploy smoke test                   PASS
+```
+
+## Validated deployment URL
+
+```text
+https://full-metal-cash-production.up.railway.app
+```
+
+## Closure
+
+```text
+Macro Fase 34 — CI/CD + Deployment Verification = PASS REAL
+```
+
+See also:
+
+```text
+MACRO_PHASE_34_CLOSURE.md
+MACRO_PHASE_34_HOTFIX_34_4.md
 ```

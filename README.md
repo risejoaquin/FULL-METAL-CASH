@@ -777,3 +777,20 @@ PosServer production deployment accepts either `ConnectionStrings__Postgres` or 
 Railway must use `/health/ready` as the final healthcheck. This endpoint now returns HTTP 503 with a JSON readiness diagnostic body for expected readiness failures instead of leaking an unhandled HTTP 500.
 
 Manual Railway deploys through GitHub Actions now include a `production-migration` job before `railway-deploy`. Configure the GitHub secret `PRODUCTION_DATABASE_URL` before running the manual deployment workflow.
+
+## Macro Fase 34 closure
+
+Macro Fase 34 — CI/CD + Deployment Verification is closed as PASS REAL after validating local build/test, GitHub Actions, Docker build, migration smoke test, Railway deployment, Supabase/PostgreSQL readiness, login, authenticated metrics, and post-deploy smoke test.
+
+Validated deployment URL:
+
+```text
+https://full-metal-cash-production.up.railway.app
+```
+
+Relevant closure documents:
+
+```text
+MACRO_PHASE_34_CLOSURE.md
+MACRO_PHASE_34_HOTFIX_34_4.md
+```
