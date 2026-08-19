@@ -866,3 +866,18 @@ ITERATION_02_VALIDATION_COMMANDS.md
 Iteration 03 hardens the server-side offline sync contract with runtime diagnostics, contract discovery, dead-letter inspection/retry, migration `018_sync_e2e_contract_hardening.sql`, and an E2E validation script for push/idempotency/process/pull/status.
 
 Validation guide: `ITERATION_03_VALIDATION_COMMANDS.md`.
+
+
+## SolidPOS Iteration 04 — PosCore Local Foundation + SQLite Offline Runtime
+
+Iteration 04 adds the first real PosCore local runtime foundation:
+
+- `src/PosCore/SolidPOS.PosCore.Domain`
+- `src/PosCore/SolidPOS.PosCore.Application`
+- `src/PosCore/SolidPOS.PosCore.Infrastructure`
+- `src/PosCore/SolidPOS.PosCore.Cli`
+- `tests/SolidPOS.PosCore.UnitTests`
+
+The local runtime uses SQLite WAL, stores terminal binding, creates offline sales, and queues local outbox events that will later be pushed to PosServer sync endpoints.
+
+See `SOLIDPOS_ITERATION_04_POSCORE_LOCAL_FOUNDATION.md` and `ITERATION_04_VALIDATION_COMMANDS.md`.

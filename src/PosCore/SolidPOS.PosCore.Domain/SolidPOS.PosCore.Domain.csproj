@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SolidPOS.PosCore.Domain</RootNamespace>
+  </PropertyGroup>
+</Project>

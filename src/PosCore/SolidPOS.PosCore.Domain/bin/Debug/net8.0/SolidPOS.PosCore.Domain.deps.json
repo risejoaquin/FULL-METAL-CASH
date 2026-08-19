@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "SolidPOS.PosCore.Domain/1.0.0": {
+        "runtime": {
+          "SolidPOS.PosCore.Domain.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "SolidPOS.PosCore.Domain/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
