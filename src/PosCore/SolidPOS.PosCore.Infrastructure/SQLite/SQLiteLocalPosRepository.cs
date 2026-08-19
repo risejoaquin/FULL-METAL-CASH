@@ -80,7 +80,51 @@ CREATE TABLE IF NOT EXISTS local_catalog_sync_state (
   product_count INTEGER NOT NULL,
   synced_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS local_inventory_recipes (
+  recipe_id TEXT PRIMARY KEY,
+  output_product_id TEXT NOT NULL,
+  output_variant_id TEXT NULL,
+  yield_quantity TEXT NOT NULL,
+  yield_unit_id TEXT NOT NULL,
+  waste_percent TEXT NOT NULL,
+  status TEXT NOT NULL,
+  synced_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_inventory_recipe_items (
+  recipe_item_id TEXT PRIMARY KEY,
+  recipe_id TEXT NOT NULL,
+  ingredient_product_id TEXT NOT NULL,
+  ingredient_variant_id TEXT NULL,
+  quantity TEXT NOT NULL,
+  unit_id TEXT NOT NULL,
+  optional INTEGER NOT NULL,
+  synced_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_inventory_cache_sync_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  recipe_count INTEGER NOT NULL,
+  recipe_item_count INTEGER NOT NULL,
+  synced_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_inventory_movements (
+  id TEXT PRIMARY KEY,
+  local_sale_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  variant_id TEXT NULL,
+  movement_type TEXT NOT NULL,
+  quantity_delta TEXT NOT NULL,
+  unit_id TEXT NOT NULL,
+  occurred_at_utc TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_at_utc TEXT NOT NULL
+);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_local_catalog_products_sku ON local_catalog_products(sku);
+CREATE INDEX IF NOT EXISTS idx_local_inventory_recipes_output ON local_inventory_recipes(output_product_id, output_variant_id, status);
+CREATE INDEX IF NOT EXISTS idx_local_inventory_recipe_items_recipe ON local_inventory_recipe_items(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_local_inventory_movements_sale ON local_inventory_movements(local_sale_id);
 CREATE INDEX IF NOT EXISTS idx_local_outbox_pending ON local_outbox_events(status, sequence_number);
 CREATE INDEX IF NOT EXISTS idx_local_sync_ack_event ON local_sync_acknowledgements(outbox_event_id, acknowledged_at_utc);
 """);
@@ -155,6 +199,41 @@ VALUES ($saleId, $tenantId, $storeId, $terminalId, $occurredAtUtc, $currency, $s
             saleCommand.Parameters.AddWithValue("$totalCents", sale.TotalCents);
             saleCommand.Parameters.AddWithValue("$paidCents", sale.PaidCents);
             saleCommand.ExecuteNonQuery();
+        }
+
+        InsertOutboxEvent(connection, transaction, outboxEvent);
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+
+    public Task SaveOfflineSaleWithInventoryAsync(OfflineSaleDraft sale, LocalOutboxEvent outboxEvent, IReadOnlyCollection<LocalInventoryMovement> movements, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var saleCommand = connection.CreateCommand())
+        {
+            saleCommand.Transaction = transaction;
+            saleCommand.CommandText = """
+INSERT INTO offline_sales (local_sale_id, tenant_id, store_id, terminal_id, occurred_at_utc, currency, subtotal_cents, discount_cents, total_cents, paid_cents, status)
+VALUES ($saleId, $tenantId, $storeId, $terminalId, $occurredAtUtc, $currency, $subtotalCents, $discountCents, $totalCents, $paidCents, 'pending_sync');
+""";
+            saleCommand.Parameters.AddWithValue("$saleId", sale.LocalSaleId.ToString());
+            saleCommand.Parameters.AddWithValue("$tenantId", sale.TenantId.ToString());
+            saleCommand.Parameters.AddWithValue("$storeId", sale.StoreId.ToString());
+            saleCommand.Parameters.AddWithValue("$terminalId", sale.TerminalId.ToString());
+            saleCommand.Parameters.AddWithValue("$occurredAtUtc", sale.OccurredAtUtc.ToString("O"));
+            saleCommand.Parameters.AddWithValue("$currency", sale.Currency);
+            saleCommand.Parameters.AddWithValue("$subtotalCents", sale.SubtotalCents);
+            saleCommand.Parameters.AddWithValue("$discountCents", sale.DiscountCents);
+            saleCommand.Parameters.AddWithValue("$totalCents", sale.TotalCents);
+            saleCommand.Parameters.AddWithValue("$paidCents", sale.PaidCents);
+            saleCommand.ExecuteNonQuery();
+        }
+
+        foreach (LocalInventoryMovement movement in movements)
+        {
+            InsertInventoryMovement(connection, transaction, movement);
         }
 
         InsertOutboxEvent(connection, transaction, outboxEvent);
@@ -245,6 +324,177 @@ LIMIT 1;
         using var connection = _database.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM local_catalog_products;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+
+    public Task SaveInventoryRecipeCacheAsync(IReadOnlyCollection<LocalInventoryRecipe> recipes, IReadOnlyCollection<LocalInventoryRecipeItem> recipeItems, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var deleteItems = connection.CreateCommand())
+        {
+            deleteItems.Transaction = transaction;
+            deleteItems.CommandText = "DELETE FROM local_inventory_recipe_items;";
+            deleteItems.ExecuteNonQuery();
+        }
+        using (var deleteRecipes = connection.CreateCommand())
+        {
+            deleteRecipes.Transaction = transaction;
+            deleteRecipes.CommandText = "DELETE FROM local_inventory_recipes;";
+            deleteRecipes.ExecuteNonQuery();
+        }
+
+        foreach (LocalInventoryRecipe recipe in recipes)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_inventory_recipes (recipe_id, output_product_id, output_variant_id, yield_quantity, yield_unit_id, waste_percent, status, synced_at_utc)
+VALUES ($recipeId, $outputProductId, $outputVariantId, $yieldQuantity, $yieldUnitId, $wastePercent, $status, $syncedAtUtc);
+""";
+            command.Parameters.AddWithValue("$recipeId", recipe.RecipeId.ToString());
+            command.Parameters.AddWithValue("$outputProductId", recipe.OutputProductId.ToString());
+            command.Parameters.AddWithValue("$outputVariantId", recipe.OutputVariantId?.ToString() ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$yieldQuantity", recipe.YieldQuantity.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$yieldUnitId", recipe.YieldUnitId.ToString());
+            command.Parameters.AddWithValue("$wastePercent", recipe.WastePercent.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$status", recipe.Status);
+            command.Parameters.AddWithValue("$syncedAtUtc", recipe.SyncedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        foreach (LocalInventoryRecipeItem item in recipeItems)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_inventory_recipe_items (recipe_item_id, recipe_id, ingredient_product_id, ingredient_variant_id, quantity, unit_id, optional, synced_at_utc)
+VALUES ($recipeItemId, $recipeId, $ingredientProductId, $ingredientVariantId, $quantity, $unitId, $optional, $syncedAtUtc);
+""";
+            command.Parameters.AddWithValue("$recipeItemId", item.RecipeItemId.ToString());
+            command.Parameters.AddWithValue("$recipeId", item.RecipeId.ToString());
+            command.Parameters.AddWithValue("$ingredientProductId", item.IngredientProductId.ToString());
+            command.Parameters.AddWithValue("$ingredientVariantId", item.IngredientVariantId?.ToString() ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$quantity", item.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$unitId", item.UnitId.ToString());
+            command.Parameters.AddWithValue("$optional", item.Optional ? 1 : 0);
+            command.Parameters.AddWithValue("$syncedAtUtc", item.SyncedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        using (var state = connection.CreateCommand())
+        {
+            state.Transaction = transaction;
+            state.CommandText = """
+INSERT INTO local_inventory_cache_sync_state (id, recipe_count, recipe_item_count, synced_at_utc)
+VALUES (1, $recipeCount, $recipeItemCount, $syncedAtUtc)
+ON CONFLICT(id) DO UPDATE SET
+  recipe_count = excluded.recipe_count,
+  recipe_item_count = excluded.recipe_item_count,
+  synced_at_utc = excluded.synced_at_utc;
+""";
+            state.Parameters.AddWithValue("$recipeCount", recipes.Count);
+            state.Parameters.AddWithValue("$recipeItemCount", recipeItems.Count);
+            state.Parameters.AddWithValue("$syncedAtUtc", syncedAtUtc.ToString("O"));
+            state.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalInventoryRecipe?> GetRecipeForOutputAsync(Guid productId, Guid? variantId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT recipe_id, output_product_id, output_variant_id, yield_quantity, yield_unit_id, waste_percent, status, synced_at_utc
+FROM local_inventory_recipes
+WHERE output_product_id = $productId
+  AND ((output_variant_id IS NULL AND $variantId IS NULL) OR output_variant_id = $variantId)
+  AND status = 'active'
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$productId", productId.ToString());
+        command.Parameters.AddWithValue("$variantId", variantId?.ToString() ?? (object)DBNull.Value);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalInventoryRecipe?>(null);
+        return Task.FromResult<LocalInventoryRecipe?>(new LocalInventoryRecipe(
+            Guid.Parse(reader.GetString(0)),
+            Guid.Parse(reader.GetString(1)),
+            reader.IsDBNull(2) ? null : Guid.Parse(reader.GetString(2)),
+            decimal.Parse(reader.GetString(3), System.Globalization.CultureInfo.InvariantCulture),
+            Guid.Parse(reader.GetString(4)),
+            decimal.Parse(reader.GetString(5), System.Globalization.CultureInfo.InvariantCulture),
+            reader.GetString(6),
+            DateTimeOffset.Parse(reader.GetString(7))));
+    }
+
+    public Task<IReadOnlyList<LocalInventoryRecipeItem>> GetRecipeItemsAsync(Guid recipeId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT recipe_item_id, recipe_id, ingredient_product_id, ingredient_variant_id, quantity, unit_id, optional, synced_at_utc
+FROM local_inventory_recipe_items
+WHERE recipe_id = $recipeId
+ORDER BY recipe_item_id;
+""";
+        command.Parameters.AddWithValue("$recipeId", recipeId.ToString());
+        using var reader = command.ExecuteReader();
+        var items = new List<LocalInventoryRecipeItem>();
+        while (reader.Read())
+        {
+            items.Add(new LocalInventoryRecipeItem(
+                Guid.Parse(reader.GetString(0)),
+                Guid.Parse(reader.GetString(1)),
+                Guid.Parse(reader.GetString(2)),
+                reader.IsDBNull(3) ? null : Guid.Parse(reader.GetString(3)),
+                decimal.Parse(reader.GetString(4), System.Globalization.CultureInfo.InvariantCulture),
+                Guid.Parse(reader.GetString(5)),
+                reader.GetInt32(6) == 1,
+                DateTimeOffset.Parse(reader.GetString(7))));
+        }
+
+        return Task.FromResult<IReadOnlyList<LocalInventoryRecipeItem>>(items);
+    }
+
+    public Task<IReadOnlyList<LocalInventoryMovement>> GetInventoryMovementsByLocalSaleIdAsync(Guid localSaleId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, local_sale_id, tenant_id, store_id, terminal_id, product_id, variant_id, movement_type, quantity_delta, unit_id, occurred_at_utc, source, created_at_utc
+FROM local_inventory_movements
+WHERE local_sale_id = $localSaleId
+ORDER BY product_id, movement_type;
+""";
+        command.Parameters.AddWithValue("$localSaleId", localSaleId.ToString());
+        using var reader = command.ExecuteReader();
+        var movements = new List<LocalInventoryMovement>();
+        while (reader.Read())
+        {
+            movements.Add(ReadInventoryMovement(reader));
+        }
+
+        return Task.FromResult<IReadOnlyList<LocalInventoryMovement>>(movements);
+    }
+
+    public Task<int> CountInventoryRecipesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_inventory_recipes;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<int> CountInventoryRecipeItemsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_inventory_recipe_items;";
         return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
     }
 
@@ -390,6 +640,31 @@ VALUES ($id, $batchId, $outboxEventId, $remoteStatus, $remoteResponseJson, $ackn
         return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
     }
 
+
+    private static void InsertInventoryMovement(SqliteConnection connection, SqliteTransaction transaction, LocalInventoryMovement movement)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+INSERT INTO local_inventory_movements (id, local_sale_id, tenant_id, store_id, terminal_id, product_id, variant_id, movement_type, quantity_delta, unit_id, occurred_at_utc, source, created_at_utc)
+VALUES ($id, $localSaleId, $tenantId, $storeId, $terminalId, $productId, $variantId, $movementType, $quantityDelta, $unitId, $occurredAtUtc, $source, $createdAtUtc);
+""";
+        command.Parameters.AddWithValue("$id", movement.Id.ToString());
+        command.Parameters.AddWithValue("$localSaleId", movement.LocalSaleId.ToString());
+        command.Parameters.AddWithValue("$tenantId", movement.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", movement.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", movement.TerminalId.ToString());
+        command.Parameters.AddWithValue("$productId", movement.ProductId.ToString());
+        command.Parameters.AddWithValue("$variantId", movement.VariantId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$movementType", movement.MovementType);
+        command.Parameters.AddWithValue("$quantityDelta", movement.QuantityDelta.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$unitId", movement.UnitId.ToString());
+        command.Parameters.AddWithValue("$occurredAtUtc", movement.OccurredAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$source", movement.Source);
+        command.Parameters.AddWithValue("$createdAtUtc", movement.CreatedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+    }
+
     private static void InsertOutboxEvent(SqliteConnection connection, SqliteTransaction transaction, LocalOutboxEvent outboxEvent)
     {
         using var command = connection.CreateCommand();
@@ -413,6 +688,22 @@ VALUES ($id, $tenantId, $storeId, $terminalId, $eventType, $schemaVersion, $sequ
         command.Parameters.AddWithValue("$attempts", outboxEvent.Attempts);
         command.ExecuteNonQuery();
     }
+
+
+    private static LocalInventoryMovement ReadInventoryMovement(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        Guid.Parse(reader.GetString(4)),
+        Guid.Parse(reader.GetString(5)),
+        reader.IsDBNull(6) ? null : Guid.Parse(reader.GetString(6)),
+        reader.GetString(7),
+        decimal.Parse(reader.GetString(8), System.Globalization.CultureInfo.InvariantCulture),
+        Guid.Parse(reader.GetString(9)),
+        DateTimeOffset.Parse(reader.GetString(10)),
+        reader.GetString(11),
+        DateTimeOffset.Parse(reader.GetString(12)));
 
     private static LocalOutboxEvent ReadOutboxEvent(SqliteDataReader reader) => new(
         Guid.Parse(reader.GetString(0)),

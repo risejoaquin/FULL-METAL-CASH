@@ -18,6 +18,23 @@ public sealed class OfflineSaleService
 
     public async Task<LocalOutboxEvent> CreateOfflineSaleAsync(OfflineSaleDraft sale, CancellationToken cancellationToken = default)
     {
+        LocalOutboxEvent outboxEvent = BuildSaleCompletedEvent(sale);
+        await _repository.SaveOfflineSaleAsync(sale, outboxEvent, cancellationToken).ConfigureAwait(false);
+        return outboxEvent;
+    }
+
+    public async Task<LocalOutboxEvent> CreateOfflineSaleWithInventoryAsync(
+        OfflineSaleDraft sale,
+        IReadOnlyCollection<LocalInventoryMovement> movements,
+        CancellationToken cancellationToken = default)
+    {
+        LocalOutboxEvent outboxEvent = BuildSaleCompletedEvent(sale);
+        await _repository.SaveOfflineSaleWithInventoryAsync(sale, outboxEvent, movements, cancellationToken).ConfigureAwait(false);
+        return outboxEvent;
+    }
+
+    private LocalOutboxEvent BuildSaleCompletedEvent(OfflineSaleDraft sale)
+    {
         OfflineSaleCalculator.Validate(sale);
 
         if (!sale.CashierUserId.HasValue || sale.CashierUserId.Value == Guid.Empty)
@@ -64,7 +81,6 @@ public sealed class OfflineSaleService
             LocalOutboxStatus.Pending,
             _clock.UtcNow);
 
-        await _repository.SaveOfflineSaleAsync(sale, outboxEvent, cancellationToken).ConfigureAwait(false);
         return outboxEvent;
     }
 }

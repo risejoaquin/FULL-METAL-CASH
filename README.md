@@ -952,3 +952,18 @@ PosCore ahora puede sincronizar catálogo remoto desde `GET /api/v1/tenant/catal
 ```
 
 La venta offline ya no requiere `ProductId` manual en el script; toma `productId`, `name`, `priceCents` y `currency` desde el cache local.
+
+## SolidPOS Iteration 09 — PosCore Local Inventory Consumption Cache
+
+Iteration 09 adds local inventory recipe/BOM caching to PosCore SQLite and validates offline sale inventory consumption against remote `pos.inventory_ledger` after sync processing.
+
+Validation script:
+
+```powershell
+.\scripts\poscore\validate-poscore-local-inventory-consumption-cache.ps1 `
+  -BaseUrl "https://full-metal-cash-production.up.railway.app" `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -StoreId "8e446c29-e9ad-41ed-a738-125aff7608b6" `
+  -AdminEmail "admin@micafeteria.com" `
+  -AdminPassword "AdminSeguro123!"
+```

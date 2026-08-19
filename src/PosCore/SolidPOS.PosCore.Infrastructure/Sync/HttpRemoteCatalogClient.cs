@@ -4,7 +4,7 @@ using SolidPOS.PosCore.Application.Catalog;
 
 namespace SolidPOS.PosCore.Infrastructure.Sync;
 
-public sealed class HttpRemoteCatalogClient : IRemoteCatalogClient
+public sealed class HttpRemoteCatalogClient : IRemoteCatalogClient, IRemoteInventoryCatalogClient
 {
     private readonly HttpClient _httpClient;
     private readonly string _baseUrl;
@@ -94,6 +94,69 @@ public sealed class HttpRemoteCatalogClient : IRemoteCatalogClient
             .ToArray();
     }
 
+
+    public async Task<RemoteInventoryCacheSnapshot> GetInventoryCacheAsync(
+        string accessToken,
+        CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_baseUrl}/api/v1/tenant/catalog");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        var responseJson = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Remote inventory catalog sync failed with HTTP {(int)response.StatusCode}: {responseJson}");
+        }
+
+        using var document = JsonDocument.Parse(responseJson);
+        var root = document.RootElement;
+        var recipes = new List<RemoteCatalogRecipeSnapshot>();
+        if (root.TryGetProperty("recipes", out var recipesElement) && recipesElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var recipe in recipesElement.EnumerateArray())
+            {
+                Guid recipeId = GetGuid(recipe, "id", Guid.Empty);
+                Guid outputProductId = GetGuid(recipe, "outputProductId", Guid.Empty);
+                Guid yieldUnitId = GetGuid(recipe, "yieldUnitId", Guid.Empty);
+                if (recipeId == Guid.Empty || outputProductId == Guid.Empty || yieldUnitId == Guid.Empty) continue;
+
+                recipes.Add(new RemoteCatalogRecipeSnapshot(
+                    recipeId,
+                    outputProductId,
+                    GetNullableGuid(recipe, "outputVariantId"),
+                    GetDecimal(recipe, "yieldQuantity", 1m),
+                    yieldUnitId,
+                    GetDecimal(recipe, "wastePercent", 0m),
+                    GetString(recipe, "status", "active")));
+            }
+        }
+
+        var recipeItems = new List<RemoteCatalogRecipeItemSnapshot>();
+        if (root.TryGetProperty("recipeItems", out var recipeItemsElement) && recipeItemsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in recipeItemsElement.EnumerateArray())
+            {
+                Guid recipeItemId = GetGuid(item, "id", Guid.Empty);
+                Guid recipeId = GetGuid(item, "recipeId", Guid.Empty);
+                Guid ingredientProductId = GetGuid(item, "ingredientProductId", Guid.Empty);
+                Guid unitId = GetGuid(item, "unitId", Guid.Empty);
+                if (recipeItemId == Guid.Empty || recipeId == Guid.Empty || ingredientProductId == Guid.Empty || unitId == Guid.Empty) continue;
+
+                recipeItems.Add(new RemoteCatalogRecipeItemSnapshot(
+                    recipeItemId,
+                    recipeId,
+                    ingredientProductId,
+                    GetNullableGuid(item, "ingredientVariantId"),
+                    GetDecimal(item, "quantity", 0m),
+                    unitId,
+                    GetBool(item, "optional", false)));
+            }
+        }
+
+        return new RemoteInventoryCacheSnapshot(recipes, recipeItems);
+    }
+
     private static string GetString(JsonElement element, string name, string fallback)
     {
         if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return fallback;
@@ -115,6 +178,26 @@ public sealed class HttpRemoteCatalogClient : IRemoteCatalogClient
     {
         if (!element.TryGetProperty(name, out var value)) return fallback;
         return value.TryGetInt32(out var intValue) ? intValue : fallback;
+    }
+
+
+    private static Guid GetGuid(JsonElement element, string name, Guid fallback)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return fallback;
+        return Guid.TryParse(value.GetString(), out var parsed) ? parsed : fallback;
+    }
+
+    private static Guid? GetNullableGuid(JsonElement element, string name)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return null;
+        return Guid.TryParse(value.GetString(), out var parsed) ? parsed : null;
+    }
+
+    private static decimal GetDecimal(JsonElement element, string name, decimal fallback)
+    {
+        if (!element.TryGetProperty(name, out var value) || value.ValueKind == JsonValueKind.Null) return fallback;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
+        return decimal.TryParse(value.GetString(), System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : fallback;
     }
 
     private static DateTimeOffset GetDateTimeOffset(JsonElement element, string name, DateTimeOffset fallback)
