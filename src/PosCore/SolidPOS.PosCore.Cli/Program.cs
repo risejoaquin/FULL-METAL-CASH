@@ -55,15 +55,19 @@ switch (command)
         var name = GetOption(args, "--name", "Americano 12oz");
         var priceCents = int.Parse(GetOption(args, "--price-cents", "4500"));
         var quantity = int.Parse(GetOption(args, "--quantity", "1"));
+        var cashierUserId = Guid.Parse(GetOption(args, "--cashier-user-id", binding.TerminalId.ToString()));
+        var localSaleId = Guid.Parse(GetOption(args, "--local-sale-id", Guid.NewGuid().ToString()));
+        var localPaymentId = Guid.Parse(GetOption(args, "--local-payment-id", Guid.NewGuid().ToString()));
         var sale = new OfflineSaleDraft(
-            Guid.NewGuid(),
+            localSaleId,
             binding.TenantId,
             binding.StoreId,
             binding.TerminalId,
             DateTimeOffset.UtcNow,
             new[] { new OfflineSaleLineDraft(productId, null, sku, name, quantity, priceCents) },
-            new[] { new OfflineSalePaymentDraft("cash", quantity * priceCents) },
-            GetOption(args, "--currency", "MXN"));
+            new[] { new OfflineSalePaymentDraft("cash", quantity * priceCents, localPaymentId) },
+            GetOption(args, "--currency", "MXN"),
+            cashierUserId);
 
         var service = new OfflineSaleService(repository, new SystemClock());
         var outboxEvent = await service.CreateOfflineSaleAsync(sale).ConfigureAwait(false);

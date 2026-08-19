@@ -58,9 +58,17 @@ public static class RemoteSyncPushMapper
 
     private static Guid ResolveEntityId(string entityType, JsonElement payload, LocalOutboxEvent localEvent)
     {
-        if (entityType == "sale" && payload.TryGetProperty("saleId", out var saleIdProperty) && saleIdProperty.ValueKind == JsonValueKind.String)
+        if (entityType == "sale")
         {
-            return Guid.Parse(saleIdProperty.GetString()!);
+            if (payload.TryGetProperty("saleId", out var saleIdProperty) && saleIdProperty.ValueKind == JsonValueKind.String)
+            {
+                return Guid.Parse(saleIdProperty.GetString()!);
+            }
+
+            if (payload.TryGetProperty("localSaleId", out var localSaleIdProperty) && localSaleIdProperty.ValueKind == JsonValueKind.String)
+            {
+                return Guid.Parse(localSaleIdProperty.GetString()!);
+            }
         }
 
         if (payload.TryGetProperty("entityId", out var entityIdProperty) && entityIdProperty.ValueKind == JsonValueKind.String)

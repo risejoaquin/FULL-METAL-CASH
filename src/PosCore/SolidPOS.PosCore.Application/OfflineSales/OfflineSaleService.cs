@@ -20,19 +20,36 @@ public sealed class OfflineSaleService
     {
         OfflineSaleCalculator.Validate(sale);
 
+        if (!sale.CashierUserId.HasValue || sale.CashierUserId.Value == Guid.Empty)
+        {
+            throw new InvalidOperationException("Offline sale requires a cashier user id before it can be synchronized as sale.completed.");
+        }
+
         var payload = new
         {
-            saleId = sale.LocalSaleId,
-            sale.TenantId,
-            sale.StoreId,
-            sale.TerminalId,
-            sale.OccurredAtUtc,
-            sale.Currency,
-            subtotalCents = sale.SubtotalCents,
-            discountCents = sale.DiscountCents,
-            totalCents = sale.TotalCents,
-            payments = sale.Payments,
-            lines = sale.Lines
+            localSaleId = sale.LocalSaleId,
+            cashierUserId = sale.CashierUserId.Value,
+            customerId = sale.CustomerId,
+            occurredAt = sale.OccurredAtUtc,
+            localCreatedAt = sale.OccurredAtUtc,
+            lines = sale.Lines.Select(line => new
+            {
+                productId = line.ProductId,
+                variantId = line.VariantId,
+                quantity = line.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                discountCents = line.DiscountCents,
+                preparationNote = line.PreparationNote,
+                modifierIds = line.ModifierIds,
+                discountId = line.DiscountId
+            }).ToArray(),
+            payments = sale.Payments.Select(payment => new
+            {
+                localPaymentId = payment.LocalPaymentId ?? Guid.NewGuid(),
+                methodCode = payment.MethodCode,
+                amountCents = payment.AmountCents,
+                reference = payment.Reference
+            }).ToArray(),
+            tipCents = sale.TipCents
         };
 
         var outboxEvent = new LocalOutboxEvent(
@@ -43,7 +60,7 @@ public sealed class OfflineSaleService
             "sale.completed",
             4,
             _clock.UtcNow.ToUnixTimeMilliseconds(),
-            JsonSerializer.Serialize(payload),
+            JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             LocalOutboxStatus.Pending,
             _clock.UtcNow);
 

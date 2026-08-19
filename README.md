@@ -925,3 +925,15 @@ Validación:
   -AdminEmail "admin@micafeteria.com" `
   -AdminPassword "AdminSeguro123!"
 ```
+
+## SolidPOS Iteration 07 — PosCore Offline Sale Semantic Processing
+
+Adds semantic processing validation for a real PosCore offline `sale.completed` event. The local SQLite outbox now emits a payload compatible with PosServer `CreateSaleRequest`, pushes it to `/api/v1/sync/push`, processes it with `/api/v1/sync/process`, verifies that the remote sale is materialized, emits a digital receipt, closes the cash shift, and validates sync diagnostics.
+
+See:
+
+```text
+SOLIDPOS_ITERATION_07_POSCORE_OFFLINE_SALE_SEMANTIC_PROCESSING.md
+ITERATION_07_VALIDATION_COMMANDS.md
+scripts/poscore/validate-poscore-offline-sale-semantic-processing.ps1
+```
