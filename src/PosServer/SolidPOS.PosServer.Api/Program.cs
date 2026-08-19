@@ -61,6 +61,15 @@ using SolidPOS.PosServer.Infrastructure.Time;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+PostgreSqlConnectionStringResolution postgresConnectionStringResolution = PostgreSqlConnectionStringResolver.Resolve(builder.Configuration);
+if (postgresConnectionStringResolution.IsValid && !string.IsNullOrWhiteSpace(postgresConnectionStringResolution.ConnectionString))
+{
+    builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["ConnectionStrings:Postgres"] = postgresConnectionStringResolution.ConnectionString
+    });
+}
+
 string serviceName = "SolidPOS.PosServer";
 string version = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.1.0";
 
@@ -136,10 +145,11 @@ builder.Services.AddScoped<ITenantConfigService, TenantConfigService>();
 builder.Services.AddScoped<ITerminalRepository, PostgreSqlTerminalRepository>();
 builder.Services.AddScoped<ITerminalEnrollmentService, TerminalEnrollmentService>();
 builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddSingleton(postgresConnectionStringResolution);
 builder.Services.AddSingleton(sp =>
 {
-    IConfiguration configuration = sp.GetRequiredService<IConfiguration>();
-    return new PostgreSqlReadinessProbe(configuration.GetConnectionString("Postgres"));
+    PostgreSqlConnectionStringResolution connectionStringResolution = sp.GetRequiredService<PostgreSqlConnectionStringResolution>();
+    return new PostgreSqlReadinessProbe(connectionStringResolution);
 });
 
 builder.Services.AddProblemDetails(options =>
@@ -208,10 +218,14 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-string? postgresConnectionString = builder.Configuration.GetConnectionString("Postgres");
-if (string.IsNullOrWhiteSpace(postgresConnectionString) && !builder.Environment.IsEnvironment("Testing"))
+if (!postgresConnectionStringResolution.IsConfigured && !builder.Environment.IsEnvironment("Testing"))
 {
-    throw new InvalidOperationException("ConnectionStrings:Postgres is required.");
+    throw new InvalidOperationException("ConnectionStrings:Postgres or DATABASE_URL is required.");
+}
+
+if (postgresConnectionStringResolution.IsConfigured && !postgresConnectionStringResolution.IsValid && !builder.Environment.IsEnvironment("Testing"))
+{
+    throw new InvalidOperationException($"PostgreSQL connection string is invalid: {postgresConnectionStringResolution.ErrorMessage}");
 }
 
 if (builder.Environment.IsProduction() && !builder.Environment.IsEnvironment("Testing"))
@@ -220,6 +234,14 @@ if (builder.Environment.IsProduction() && !builder.Environment.IsEnvironment("Te
     if (string.IsNullOrWhiteSpace(allowedHosts) || allowedHosts.Trim() == "*")
     {
         throw new InvalidOperationException("AllowedHosts must be explicitly configured in production.");
+    }
+
+    if (!allowedHosts.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Any(host => host.Equals("healthcheck.railway.app", StringComparison.OrdinalIgnoreCase)
+            || host.Equals("*.railway.app", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".railway.app", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("AllowedHosts must include the Railway application host, healthcheck.railway.app, or *.railway.app in production.");
     }
 
     if (allowedOrigins.Length == 0)
@@ -361,17 +383,20 @@ app.MapGet("/health/ready", async (
     IClock clock,
     CancellationToken cancellationToken) =>
 {
-    (bool isReady, string detail) = await readinessProbe.CheckAsync(cancellationToken);
-    string status = isReady ? "ready" : "degraded";
-    ReadinessResponse response = new(status, isReady ? "ready" : "unavailable", clock.UtcNow, detail);
+    PostgreSqlReadinessResult readiness = await readinessProbe.CheckAsync(cancellationToken);
+    string status = readiness.IsReady ? "ready" : "degraded";
+    ReadinessResponse response = new(
+        status,
+        readiness.Database,
+        clock.UtcNow,
+        readiness.Detail,
+        readiness.ErrorCode,
+        readiness.MissingTables,
+        readiness.ConnectionStringSource);
 
-    return isReady
+    return readiness.IsReady
         ? Results.Ok(response)
-        : Results.Problem(
-            title: "Service is not ready",
-            detail: detail,
-            statusCode: StatusCodes.Status503ServiceUnavailable,
-            type: "https://solidpos.local/problems/service-not-ready");
+        : Results.Json(response, statusCode: StatusCodes.Status503ServiceUnavailable);
 })
 .WithName("Readiness")
 .WithTags("Health");

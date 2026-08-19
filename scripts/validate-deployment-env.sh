@@ -4,7 +4,6 @@ set -euo pipefail
 required=(
   ASPNETCORE_ENVIRONMENT
   ASPNETCORE_URLS
-  ConnectionStrings__Postgres
   Jwt__SigningKey
   Jwt__Issuer
   Jwt__Audience
@@ -19,6 +18,10 @@ for name in "${required[@]}"; do
   fi
 done
 
+if [[ -z "${ConnectionStrings__Postgres:-}" && -z "${DATABASE_URL:-}" ]]; then
+  missing+=("ConnectionStrings__Postgres or DATABASE_URL")
+fi
+
 if (( ${#missing[@]} > 0 )); then
   echo "Missing required environment variables: ${missing[*]}" >&2
   exit 1
@@ -31,6 +34,11 @@ fi
 
 if [[ "${ASPNETCORE_ENVIRONMENT}" == "Production" && ( "${AllowedHosts}" == "*" || -z "${AllowedHosts}" ) ]]; then
   echo "AllowedHosts must be explicit in Production." >&2
+  exit 1
+fi
+
+if [[ "${ASPNETCORE_ENVIRONMENT}" == "Production" && "${AllowedHosts}" != *"healthcheck.railway.app"* && "${AllowedHosts}" != *"*.railway.app"* && "${AllowedHosts}" != *".railway.app"* ]]; then
+  echo "AllowedHosts must include the Railway application host, healthcheck.railway.app, or *.railway.app in Production." >&2
   exit 1
 fi
 

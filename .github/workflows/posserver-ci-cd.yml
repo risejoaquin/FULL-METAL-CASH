@@ -118,10 +118,30 @@ jobs:
       - name: Run migration smoke test
         run: bash scripts/ci/migration-smoke-test.sh
 
+  production-migration:
+    name: production-migration
+    runs-on: ubuntu-latest
+    needs: [ dotnet-quality-gate, environment-validation, docker-build, migration-smoke-test ]
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_railway == 'true'
+    environment: production
+    env:
+      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply and validate production PostgreSQL migrations
+        run: bash scripts/ci/apply-production-migrations.sh
+
   railway-deploy:
     name: railway-deploy
     runs-on: ubuntu-latest
-    needs: [ dotnet-quality-gate, environment-validation, docker-build, migration-smoke-test ]
+    needs: production-migration
     if: github.event_name == 'workflow_dispatch' && inputs.deploy_railway == 'true'
     environment: production
     env:

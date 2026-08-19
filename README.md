@@ -769,3 +769,11 @@ or:
 ```bash
 bash scripts/smoke-test-deployment.sh "https://<your-service>.up.railway.app"
 ```
+
+## Macro Fase 34 Hotfix 34.2 — Production deployment hardening
+
+PosServer production deployment accepts either `ConnectionStrings__Postgres` or `DATABASE_URL`. `DATABASE_URL` values such as `postgresql://user:password@host:port/db?sslmode=require` are normalized internally before Npgsql opens a connection.
+
+Railway must use `/health/ready` as the final healthcheck. This endpoint now returns HTTP 503 with a JSON readiness diagnostic body for expected readiness failures instead of leaking an unhandled HTTP 500.
+
+Manual Railway deploys through GitHub Actions now include a `production-migration` job before `railway-deploy`. Configure the GitHub secret `PRODUCTION_DATABASE_URL` before running the manual deployment workflow.

@@ -44,11 +44,17 @@ paths:
       operationId: put_admin_access_roles_roleId_permissions
       responses:
         '200':
-          description: Success.
+          description: Ready.
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: Service is not ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -1093,11 +1099,17 @@ paths:
       operationId: get_health_ready
       responses:
         '200':
-          description: Success.
+          description: Ready.
           content:
             application/json:
               schema:
-                type: object
+                $ref: '#/components/schemas/ReadinessResponse'
+        '503':
+          description: Service is not ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadinessResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -7269,14 +7281,36 @@ components:
       type: object
       required:
       - status
-      - dependencies
+      - database
+      - serverTimeUtc
       properties:
         status:
           type: string
           enum:
           - ready
           - degraded
-        dependencies:
-          type: object
-          additionalProperties:
+        database:
+          type: string
+          enum:
+          - ready
+          - unavailable
+          - not_configured
+          - invalid_configuration
+          - missing_migrations
+        serverTimeUtc:
+          type: string
+          format: date-time
+        detail:
+          type: string
+          nullable: true
+        errorCode:
+          type: string
+          nullable: true
+        missingTables:
+          type: array
+          nullable: true
+          items:
             type: string
+        connectionStringSource:
+          type: string
+          nullable: true

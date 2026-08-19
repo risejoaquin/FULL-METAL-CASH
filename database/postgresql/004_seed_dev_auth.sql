@@ -55,7 +55,7 @@ VALUES (
   '33333333-3333-3333-3333-333333333333',
   '11111111-1111-1111-1111-111111111111',
   'owner@solidpos.local',
-  crypt('Admin123!', gen_salt('bf', 12)),
+  public.crypt('Admin123!', public.gen_salt('bf', 12)),
   'SolidPOS Owner',
   'active'
 )
