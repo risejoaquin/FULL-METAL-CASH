@@ -55,7 +55,16 @@ CREATE TABLE IF NOT EXISTS local_outbox_events (
   last_error TEXT NULL,
   attempts INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS local_sync_acknowledgements (
+  id TEXT PRIMARY KEY,
+  batch_id TEXT NOT NULL,
+  outbox_event_id TEXT NOT NULL,
+  remote_status TEXT NOT NULL,
+  remote_response_json TEXT NOT NULL,
+  acknowledged_at_utc TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_local_outbox_pending ON local_outbox_events(status, sequence_number);
+CREATE INDEX IF NOT EXISTS idx_local_sync_ack_event ON local_sync_acknowledgements(outbox_event_id, acknowledged_at_utc);
 """);
         return Task.CompletedTask;
     }
@@ -184,6 +193,39 @@ LIMIT $limit;
         command.Parameters.AddWithValue("$id", eventId.ToString());
         command.ExecuteNonQuery();
         return Task.CompletedTask;
+    }
+
+    public Task SaveSyncAcknowledgementsAsync(IEnumerable<LocalSyncAcknowledgement> acknowledgements, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        foreach (var acknowledgement in acknowledgements)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = @"
+INSERT INTO local_sync_acknowledgements (id, batch_id, outbox_event_id, remote_status, remote_response_json, acknowledged_at_utc)
+VALUES ($id, $batchId, $outboxEventId, $remoteStatus, $remoteResponseJson, $acknowledgedAtUtc);";
+            command.Parameters.AddWithValue("$id", acknowledgement.Id.ToString());
+            command.Parameters.AddWithValue("$batchId", acknowledgement.BatchId.ToString());
+            command.Parameters.AddWithValue("$outboxEventId", acknowledgement.OutboxEventId.ToString());
+            command.Parameters.AddWithValue("$remoteStatus", acknowledgement.RemoteStatus);
+            command.Parameters.AddWithValue("$remoteResponseJson", acknowledgement.RemoteResponseJson);
+            command.Parameters.AddWithValue("$acknowledgedAtUtc", acknowledgement.AcknowledgedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountOutboxByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_outbox_events WHERE status = $status;";
+        command.Parameters.AddWithValue("$status", (int)status);
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
     }
 
     private static void InsertOutboxEvent(SqliteConnection connection, SqliteTransaction transaction, LocalOutboxEvent outboxEvent)

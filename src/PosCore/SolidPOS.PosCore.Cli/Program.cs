@@ -3,6 +3,7 @@ using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Application.Sync;
 using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Infrastructure.SQLite;
+using SolidPOS.PosCore.Infrastructure.Sync;
 
 static string GetOption(string[] args, string name, string? fallback = null)
 {
@@ -14,7 +15,7 @@ static string GetOption(string[] args, string name, string? fallback = null)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sale-offline, outbox-status");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sale-offline, outbox-status, sync-push");
     return 0;
 }
 
@@ -73,14 +74,39 @@ switch (command)
     case "outbox-status":
     {
         var pending = await repository.GetPendingOutboxEventsAsync(500).ConfigureAwait(false);
+        var syncedCount = await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Synced).ConfigureAwait(false);
+        var failedCount = await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Failed).ConfigureAwait(false);
         if (pending.Count == 0)
         {
-            Console.WriteLine("No pending local outbox events.");
+            Console.WriteLine($"No pending local outbox events. synced={syncedCount}; failed={failedCount}");
             return 0;
         }
 
         var batch = LocalOutboxBatchPlanner.CreateBatch(Guid.NewGuid(), pending);
-        Console.WriteLine($"Pending outbox events: {pending.Count}; batchId={batch.BatchId}; firstSequence={batch.Events[0].SequenceNumber}");
+        Console.WriteLine($"Pending outbox events: {pending.Count}; synced={syncedCount}; failed={failedCount}; batchId={batch.BatchId}; firstSequence={batch.Events[0].SequenceNumber}");
+        return 0;
+    }
+
+    case "sync-push":
+    {
+        var binding = await repository.GetTerminalBindingAsync().ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal must be bound before remote sync push.");
+        var baseUrl = GetOption(args, "--base-url");
+        var batchId = Guid.Parse(GetOption(args, "--batch-id", Guid.NewGuid().ToString()));
+        var limit = int.Parse(GetOption(args, "--limit", "500"));
+        var accessToken = GetOption(args, "--terminal-access-token", binding.TerminalToken);
+
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var remoteClient = new HttpRemoteSyncClient(httpClient, baseUrl);
+        var service = new RemoteSyncPushService(repository, remoteClient, new SystemClock());
+        var result = await service.PushPendingAsync(limit, batchId, accessToken).ConfigureAwait(false);
+        if (result is null)
+        {
+            Console.WriteLine("No pending local outbox events to sync.");
+            return 0;
+        }
+
+        Console.WriteLine($"Remote sync push completed. batchId={result.BatchId}; attempted={result.AttemptedCount}; accepted={result.AcceptedCount}; duplicate={result.DuplicateCount}; failed={result.FailedCount}; acknowledged={result.AcknowledgedEventIds.Count}");
         return 0;
     }
 

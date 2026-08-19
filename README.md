@@ -881,3 +881,24 @@ Iteration 04 adds the first real PosCore local runtime foundation:
 The local runtime uses SQLite WAL, stores terminal binding, creates offline sales, and queues local outbox events that will later be pushed to PosServer sync endpoints.
 
 See `SOLIDPOS_ITERATION_04_POSCORE_LOCAL_FOUNDATION.md` and `ITERATION_04_VALIDATION_COMMANDS.md`.
+
+## SolidPOS Iteration 05 — PosCore Offline-to-Online Sync Runtime
+
+Iteration 05 adds the first real bridge between local PosCore SQLite and remote PosServer sync:
+
+- Local outbox events are mapped to `/api/v1/sync/push` payloads.
+- PosCore can push pending local events using a terminal access token.
+- Accepted/duplicate remote results are stored as local acknowledgements.
+- Synced events are marked locally to prevent repeated pushes.
+
+Validation script:
+
+```powershell
+.\scripts\poscore\validate-poscore-offline-to-online-sync.ps1 `
+  -BaseUrl "https://full-metal-cash-production.up.railway.app" `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -StoreId "8e446c29-e9ad-41ed-a738-125aff7608b6" `
+  -AdminEmail "admin@micafeteria.com" `
+  -AdminPassword "AdminSeguro123!" `
+  -ProductId "dd272b64-d450-4dd5-ace2-b17fc04ecc62"
+```
