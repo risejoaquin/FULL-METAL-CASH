@@ -6,7 +6,8 @@ param(
     [string]$StoreCode = "MAIN",
     [string]$ProductSku = "QSR-AMERICANO",
     [string]$PaymentMethodCode = "cash",
-    [string]$DatabaseUrl = $env:DATABASE_URL
+    [string]$DatabaseUrl = $env:DATABASE_URL,
+    [bool]$CloseStaleOpenShifts = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +29,23 @@ function Invoke-DbScalar {
     }
 
     return ($result | Select-Object -First 1).Trim()
+}
+
+function Invoke-DbNonQuery {
+    param([Parameter(Mandatory = $true)] [string]$Sql)
+
+    if ([string]::IsNullOrWhiteSpace($DatabaseUrl)) {
+        throw "DATABASE_URL is required for E2E cleanup."
+    }
+
+    docker run --rm `
+      --env "DATABASE_URL=$DatabaseUrl" `
+      postgres:16 `
+      psql "$DatabaseUrl" -v ON_ERROR_STOP=1 -c $Sql | Write-Host
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "DB non-query command failed."
+    }
 }
 
 $base = $BaseUrl.TrimEnd('/')
@@ -82,6 +100,11 @@ $terminalSession = Invoke-RestMethod `
   -Body $terminalBody
 
 $terminalHeaders = @{ Authorization = "Bearer $($terminalSession.accessToken)" }
+
+if ($CloseStaleOpenShifts) {
+    Write-Host "Closing stale open E2E cash shifts for terminal fingerprint $fingerprint..."
+    Invoke-DbNonQuery "UPDATE pos.cash_shifts cs SET status = 'closed', closed_by_user_id = '$adminUserId', counted_cash_cents = cs.expected_cash_cents, difference_cents = 0, closed_at = now(), updated_at = now() FROM pos.terminals t WHERE cs.tenant_id = '$TenantId' AND cs.terminal_id = t.id AND t.tenant_id = cs.tenant_id AND t.fingerprint = '$fingerprint' AND cs.status = 'open';"
+}
 
 $openBody = @{
   storeId = $storeId

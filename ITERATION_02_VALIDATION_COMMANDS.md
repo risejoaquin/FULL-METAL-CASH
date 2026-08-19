@@ -70,3 +70,28 @@ docker run --rm `
 ## Hotfix 02.1
 
 Se agregó `sales.read` al permiso default de terminal para permitir que el flujo POS productivo emita recibo digital usando el token de terminal sin fallar con `403 Forbidden` en `POST /api/v1/receipts/{saleId}/issue`.
+
+## Hotfix 02.2 — E2E stale shift recovery
+
+If the E2E script previously failed after opening a cash shift, the next run may hit `409 Conflict` because the same deterministic E2E terminal still has an open shift. Hotfix 02.2 makes the validation script close stale open E2E shifts automatically before opening a new one.
+
+Default behavior:
+
+```powershell
+.\scripts\operations\validate-production-pos-e2e.ps1 `
+  -BaseUrl "https://full-metal-cash-production.up.railway.app" `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -AdminEmail "admin@micafeteria.com" `
+  -AdminPassword "AdminSeguro123!"
+```
+
+Disable automatic stale shift cleanup only when debugging the open-shift conflict itself:
+
+```powershell
+.\scripts\operations\validate-production-pos-e2e.ps1 `
+  -BaseUrl "https://full-metal-cash-production.up.railway.app" `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -AdminEmail "admin@micafeteria.com" `
+  -AdminPassword "AdminSeguro123!" `
+  -CloseStaleOpenShifts $false
+```
