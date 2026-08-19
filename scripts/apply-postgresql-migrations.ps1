@@ -23,7 +23,9 @@ $MigrationFiles = @(
     "database/postgresql/011_discounts_promotions_runtime.sql",
     "database/postgresql/012_inventory_control_hardening.sql",
     "database/postgresql/013_sync_conflict_resolution_runtime.sql",
-    "database/postgresql/014_builder_updates_runtime.sql"
+    "database/postgresql/014_builder_updates_runtime.sql",
+    "database/postgresql/015_security_auth_hardening.sql",
+    "database/postgresql/016_production_provisioning_bootstrap.sql"
 )
 
 function Invoke-PostgresScalar {
@@ -127,7 +129,9 @@ if ($SchemaExists -eq "t" -and -not $ResetSchema) {
     "database/postgresql/011_discounts_promotions_runtime.sql",
     "database/postgresql/012_inventory_control_hardening.sql",
     "database/postgresql/013_sync_conflict_resolution_runtime.sql",
-    "database/postgresql/014_builder_updates_runtime.sql"
+    "database/postgresql/014_builder_updates_runtime.sql",
+    "database/postgresql/015_security_auth_hardening.sql",
+    "database/postgresql/016_production_provisioning_bootstrap.sql"
     )
 }
 

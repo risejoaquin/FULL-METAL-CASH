@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics;
@@ -28,6 +29,7 @@ using SolidPOS.PosServer.Application.Abstractions.Time;
 using SolidPOS.PosServer.Application.Inventory;
 using SolidPOS.PosServer.Application.Observability;
 using SolidPOS.PosServer.Application.Reports;
+using SolidPOS.PosServer.Application.Provisioning;
 using SolidPOS.PosServer.Application.Receipts;
 using SolidPOS.PosServer.Application.Returns;
 using SolidPOS.PosServer.Application.Security;
@@ -48,6 +50,7 @@ using SolidPOS.PosServer.Infrastructure.Discounts;
 using SolidPOS.PosServer.Infrastructure.Inventory;
 using SolidPOS.PosServer.Infrastructure.Observability;
 using SolidPOS.PosServer.Infrastructure.PostgreSql;
+using SolidPOS.PosServer.Infrastructure.Provisioning;
 using SolidPOS.PosServer.Infrastructure.Reports;
 using SolidPOS.PosServer.Infrastructure.Receipts;
 using SolidPOS.PosServer.Infrastructure.Returns;
@@ -93,7 +96,11 @@ builder.Services.AddScoped<ITenantContext, HttpTenantContext>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 builder.Services.Configure<PasswordHashingOptions>(builder.Configuration.GetSection(PasswordHashingOptions.SectionName));
+builder.Services.Configure<PasswordPolicyOptions>(builder.Configuration.GetSection(PasswordPolicyOptions.SectionName));
+builder.Services.Configure<AccountSecurityOptions>(builder.Configuration.GetSection(AccountSecurityOptions.SectionName));
+builder.Services.Configure<ProductionProvisioningOptions>(builder.Configuration.GetSection(ProductionProvisioningOptions.SectionName));
 builder.Services.AddScoped<IPasswordHasher, BCryptPasswordHasher>();
+builder.Services.AddScoped<IPasswordPolicyValidator, PasswordPolicyValidator>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 builder.Services.AddScoped<IAuthRepository, PostgreSqlAuthRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -103,6 +110,8 @@ builder.Services.AddScoped<IAdminMutationRepository, PostgreSqlAdminMutationRepo
 builder.Services.AddScoped<IAdminMutationService, AdminMutationService>();
 builder.Services.AddScoped<IAdminManagementRepository, PostgreSqlAdminManagementRepository>();
 builder.Services.AddScoped<IAdminManagementService, AdminManagementService>();
+builder.Services.AddScoped<IProductionProvisioningRepository, PostgreSqlProductionProvisioningRepository>();
+builder.Services.AddScoped<IProductionProvisioningService, ProductionProvisioningService>();
 builder.Services.AddScoped<IBuilderUpdatesRepository, PostgreSqlBuilderUpdatesRepository>();
 builder.Services.AddScoped<IBuilderUpdatesService, BuilderUpdatesService>();
 builder.Services.AddSingleton<OperationalMetricsRecorder>();
@@ -192,6 +201,21 @@ builder.Services.AddCors(options =>
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        ProblemDetails problem = new()
+        {
+            Title = "Too many requests",
+            Detail = "The request rate limit was exceeded.",
+            Status = StatusCodes.Status429TooManyRequests,
+            Type = "https://solidpos.local/problems/rate-limit-exceeded",
+            Instance = context.HttpContext.Request.Path
+        };
+        problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+        context.HttpContext.Response.ContentType = "application/problem+json";
+        await context.HttpContext.Response.WriteAsJsonAsync(problem, cancellationToken);
+    };
     options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
     {
         string key = context.User.FindFirst("tenant_id")?.Value
@@ -270,6 +294,40 @@ builder.Services
     .AddJwtBearer(options =>
     {
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
+        options.Events = new JwtBearerEvents
+        {
+            OnChallenge = async context =>
+            {
+                context.HandleResponse();
+                ProblemDetails problem = new()
+                {
+                    Title = "Authentication required",
+                    Detail = "A valid bearer token is required to access this resource.",
+                    Status = StatusCodes.Status401Unauthorized,
+                    Type = "https://solidpos.local/problems/authentication-required",
+                    Instance = context.Request.Path
+                };
+                problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/problem+json";
+                await context.Response.WriteAsJsonAsync(problem);
+            },
+            OnForbidden = async context =>
+            {
+                ProblemDetails problem = new()
+                {
+                    Title = "Forbidden",
+                    Detail = "The authenticated principal does not have permission to access this resource.",
+                    Status = StatusCodes.Status403Forbidden,
+                    Type = "https://solidpos.local/problems/forbidden",
+                    Instance = context.Request.Path
+                };
+                problem.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                context.Response.ContentType = "application/problem+json";
+                await context.Response.WriteAsJsonAsync(problem);
+            }
+        };
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -309,6 +367,7 @@ builder.Services
 WebApplication app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseMiddleware<CorrelationIdMiddleware>();
 
 app.UseSerilogRequestLogging(options =>
@@ -403,6 +462,7 @@ app.MapGet("/health/ready", async (
 
 RouteGroupBuilder api = app.MapGroup("/api/v1");
 api.MapAuthEndpoints();
+api.MapProductionProvisioningEndpoints();
 api.MapTerminalEndpoints();
 api.MapTerminalRuntimeEndpoints();
 api.MapAdminManagementEndpoints();

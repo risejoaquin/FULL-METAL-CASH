@@ -8,4 +8,7 @@ public sealed record AuthenticatedUser(
     string TenantName,
     string TenantStatus,
     string UserStatus,
-    string PasswordHash);
+    string PasswordHash,
+    int FailedLoginCount = 0,
+    DateTimeOffset? LockedUntil = null,
+    bool PasswordResetRequired = false);

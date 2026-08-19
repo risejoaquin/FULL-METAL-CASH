@@ -23,7 +23,8 @@ public sealed class PostgreSqlReadinessProbe
         "pos.sync_inbox_events",
         "pos.audit_events",
         "pos.builder_projects",
-        "pos.update_releases"
+        "pos.update_releases",
+        "pos.production_bootstrap_runs"
     ];
 
     private readonly PostgreSqlConnectionStringResolution _connectionStringResolution;

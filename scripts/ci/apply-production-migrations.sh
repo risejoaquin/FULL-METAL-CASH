@@ -24,7 +24,21 @@ if [[ "${schema_exists}" == "false" ]]; then
   echo "Schema pos does not exist. Applying full PostgreSQL migration chain."
   bash "${ROOT_DIR}/scripts/apply-postgresql-migrations.sh"
 else
-  echo "Schema pos already exists. Skipping non-idempotent baseline migration and validating runtime schema."
+  echo "Schema pos already exists. Applying idempotent runtime migrations and validating runtime schema."
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/002_seed_permissions.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/003_seed_mvp_defaults.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/005_sync_push_runtime.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/006_sync_processing_runtime.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/007_modifier_inventory_semantics.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/008_digital_receipts_runtime.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/009_returns_refunds_runtime.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/010_customers_runtime.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/011_discounts_promotions_runtime.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/012_inventory_control_hardening.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/013_sync_conflict_resolution_runtime.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/014_builder_updates_runtime.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/015_security_auth_hardening.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/016_production_provisioning_bootstrap.sql"
 fi
 
 psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 <<'SQL'
@@ -49,7 +63,8 @@ BEGIN
       ('audit_events'),
       ('builder_projects'),
       ('builder_builds'),
-      ('update_releases')
+      ('update_releases'),
+      ('production_bootstrap_runs')
   ) AS required(required_table)
   WHERE to_regclass('pos.' || required_table) IS NULL;
 

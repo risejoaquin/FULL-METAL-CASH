@@ -17,6 +17,7 @@ public sealed class AdminManagementService : IAdminManagementService
     private readonly ITenantContext _tenantContext;
     private readonly IAdminManagementRepository _repository;
     private readonly IPasswordHasher _passwordHasher;
+    private readonly IPasswordPolicyValidator _passwordPolicyValidator;
     private readonly IAuditEventWriter _auditEventWriter;
     private readonly ILogger<AdminManagementService> _logger;
 
@@ -24,12 +25,14 @@ public sealed class AdminManagementService : IAdminManagementService
         ITenantContext tenantContext,
         IAdminManagementRepository repository,
         IPasswordHasher passwordHasher,
+        IPasswordPolicyValidator passwordPolicyValidator,
         IAuditEventWriter auditEventWriter,
         ILogger<AdminManagementService> logger)
     {
         _tenantContext = tenantContext;
         _repository = repository;
         _passwordHasher = passwordHasher;
+        _passwordPolicyValidator = passwordPolicyValidator;
         _auditEventWriter = auditEventWriter;
         _logger = logger;
     }
@@ -115,10 +118,16 @@ public sealed class AdminManagementService : IAdminManagementService
             || string.IsNullOrWhiteSpace(request.Email)
             || string.IsNullOrWhiteSpace(request.FullName)
             || string.IsNullOrWhiteSpace(request.Password)
-            || request.Password.Length < 8
             || !UserStatuses.Contains(Normalize(request.Status)))
         {
             _logger.LogWarning("User creation rejected for tenant {TenantId}", _tenantContext.TenantId);
+            return null;
+        }
+
+        PasswordPolicyResult passwordPolicy = _passwordPolicyValidator.Validate(request.Password);
+        if (!passwordPolicy.IsValid)
+        {
+            _logger.LogWarning("User creation rejected by password policy for tenant {TenantId}: {PolicyErrors}", _tenantContext.TenantId, string.Join(",", passwordPolicy.Errors));
             return null;
         }
 
@@ -148,11 +157,20 @@ public sealed class AdminManagementService : IAdminManagementService
         if (!TryGetTenantId(out Guid tenantId)
             || (request.Email is not null && string.IsNullOrWhiteSpace(request.Email))
             || (request.FullName is not null && string.IsNullOrWhiteSpace(request.FullName))
-            || (request.Password is not null && request.Password.Length < 8)
             || (request.Status is not null && !UserStatuses.Contains(Normalize(request.Status))))
         {
             _logger.LogWarning("User update rejected for tenant {TenantId} user {UserId}", _tenantContext.TenantId, userId);
             return null;
+        }
+
+        if (request.Password is not null)
+        {
+            PasswordPolicyResult passwordPolicy = _passwordPolicyValidator.Validate(request.Password);
+            if (!passwordPolicy.IsValid)
+            {
+                _logger.LogWarning("User update rejected by password policy for tenant {TenantId} user {UserId}: {PolicyErrors}", _tenantContext.TenantId, userId, string.Join(",", passwordPolicy.Errors));
+                return null;
+            }
         }
 
         string? passwordHash = request.Password is null ? null : _passwordHasher.Hash(request.Password);

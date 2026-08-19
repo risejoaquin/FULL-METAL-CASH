@@ -36,7 +36,9 @@ internal static class PostgreSqlIntegrationTestHelper
             "010_customers_runtime.sql",
             "011_discounts_promotions_runtime.sql",
             "012_inventory_control_hardening.sql",
-            "013_sync_conflict_resolution_runtime.sql"
+            "013_sync_conflict_resolution_runtime.sql",
+            "014_builder_updates_runtime.sql",
+            "015_security_auth_hardening.sql"
         ];
 
         foreach (string file in files)

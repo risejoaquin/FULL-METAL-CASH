@@ -794,3 +794,53 @@ Relevant closure documents:
 MACRO_PHASE_34_CLOSURE.md
 MACRO_PHASE_34_HOTFIX_34_4.md
 ```
+
+## Macro Fase 35 — Security / Secrets / Production Auth Hardening
+
+Security hardening artifacts:
+
+```text
+MACRO_PHASE_35_SECURITY_HARDENING.md
+SECURITY_HARDENING.md
+scripts/security/rotate-production-secrets-checklist.md
+scripts/security/disable-demo-user.sql
+scripts/security/scan-local-secrets.ps1
+.github/dependabot.yml
+.github/workflows/security-scan.yml
+```
+
+Apply the new auth hardening migration:
+
+```powershell
+.\scripts\apply-postgresql-migrations.ps1
+```
+
+Run local quality gates:
+
+```powershell
+dotnet restore solidpos-platform.sln
+
+dotnet build solidpos-platform.sln
+
+dotnet test solidpos-platform.sln
+```
+
+Before production promotion, rotate exposed secrets and disable the demo user after a real administrator has been created and validated.
+
+## SolidPOS Iteration 01 — Production Tenant Provisioning + Admin Bootstrap
+
+Iteration 01 adds production-safe tenant bootstrap endpoints:
+
+```http
+GET  /api/v1/provisioning/status
+POST /api/v1/provisioning/tenants/bootstrap
+```
+
+The bootstrap endpoint is protected with `X-SolidPOS-Provision-Key` and creates a production tenant, initial store, owner admin user, owner role assignments, store access, idempotency record, and audit event. It can also suspend the demo user after the production admin exists.
+
+See:
+
+```text
+SOLIDPOS_ITERATION_01_PRODUCTION_BOOTSTRAP.md
+ITERATION_01_VALIDATION_COMMANDS.md
+```

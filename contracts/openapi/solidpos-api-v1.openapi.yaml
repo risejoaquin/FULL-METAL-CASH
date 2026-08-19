@@ -16,6 +16,7 @@ security:
 - bearerAuth: []
 tags:
 - name: Auth
+- name: Production Provisioning
 - name: Terminals
 - name: Terminal
 - name: Tenant
@@ -36,6 +37,74 @@ tags:
 - name: System
 - name: Health
 paths:
+  /provisioning/status:
+    get:
+      tags:
+      - Production Provisioning
+      summary: Returns production provisioning bootstrap status.
+      operationId: get_provisioning_status
+      security: []
+      responses:
+        '200':
+          description: Provisioning status.
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /provisioning/tenants/bootstrap:
+    post:
+      tags:
+      - Production Provisioning
+      summary: Bootstraps a production tenant with admin user and initial store.
+      operationId: post_provisioning_tenants_bootstrap
+      security: []
+      parameters:
+      - name: X-SolidPOS-Provision-Key
+        in: header
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '201':
+          description: Production tenant created.
+          content:
+            application/json:
+              schema:
+                type: object
+        '200':
+          description: Idempotent bootstrap already completed.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
   /admin/access/roles/{roleId}/permissions:
     put:
       tags:

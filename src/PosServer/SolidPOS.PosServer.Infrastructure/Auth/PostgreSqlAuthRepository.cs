@@ -25,7 +25,10 @@ public sealed class PostgreSqlAuthRepository : IAuthRepository
               u.status,
               u.password_hash,
               t.name,
-              t.status
+              t.status,
+              COALESCE(u.login_failed_count, 0),
+              u.locked_until,
+              COALESCE(u.password_reset_required, false)
             FROM pos.users u
             JOIN pos.tenants t ON t.id = u.tenant_id
             WHERE u.email = @email
@@ -54,7 +57,10 @@ public sealed class PostgreSqlAuthRepository : IAuthRepository
                 reader.GetString(6),
                 reader.GetString(7),
                 reader.GetString(4),
-                reader.GetString(5)));
+                reader.GetString(5),
+                reader.GetInt32(8),
+                reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
+                reader.GetBoolean(10)));
         }
 
         return users.Count == 1 ? users[0] : null;
@@ -106,6 +112,51 @@ public sealed class PostgreSqlAuthRepository : IAuthRepository
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task RecordFailedLoginAsync(Guid tenantId, Guid userId, int maxFailedAttempts, DateTimeOffset lockedUntil, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE pos.users
+            SET
+              login_failed_count = login_failed_count + 1,
+              login_last_failed_at = now(),
+              locked_until = CASE
+                WHEN login_failed_count + 1 >= @max_failed_attempts THEN @locked_until
+                ELSE locked_until
+              END
+            WHERE tenant_id = @tenant_id
+              AND id = @user_id;
+            """;
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("tenant_id", tenantId);
+        command.Parameters.AddWithValue("user_id", userId);
+        command.Parameters.AddWithValue("max_failed_attempts", maxFailedAttempts);
+        command.Parameters.AddWithValue("locked_until", lockedUntil);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task ResetLoginFailuresAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE pos.users
+            SET
+              login_failed_count = 0,
+              login_last_failed_at = NULL,
+              locked_until = NULL
+            WHERE tenant_id = @tenant_id
+              AND id = @user_id;
+            """;
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("tenant_id", tenantId);
+        command.Parameters.AddWithValue("user_id", userId);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task<AuthenticatedUser?> FindUserByRefreshTokenHashAsync(string refreshTokenHash, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -117,7 +168,10 @@ public sealed class PostgreSqlAuthRepository : IAuthRepository
               u.status,
               u.password_hash,
               t.name,
-              t.status
+              t.status,
+              COALESCE(u.login_failed_count, 0),
+              u.locked_until,
+              COALESCE(u.password_reset_required, false)
             FROM pos.refresh_tokens rt
             JOIN pos.users u ON u.id = rt.user_id AND u.tenant_id = rt.tenant_id
             JOIN pos.tenants t ON t.id = u.tenant_id
@@ -148,15 +202,21 @@ public sealed class PostgreSqlAuthRepository : IAuthRepository
             reader.GetString(6),
             reader.GetString(7),
             reader.GetString(4),
-            reader.GetString(5));
+            reader.GetString(5),
+            reader.GetInt32(8),
+            reader.IsDBNull(9) ? null : reader.GetFieldValue<DateTimeOffset>(9),
+            reader.GetBoolean(10));
     }
 
-    public async Task RotateRefreshTokenAsync(string oldRefreshTokenHash, string newRefreshTokenHash, DateTimeOffset newExpiresAt, CancellationToken cancellationToken)
+    public async Task<bool> RotateRefreshTokenAsync(string oldRefreshTokenHash, string newRefreshTokenHash, DateTimeOffset newExpiresAt, CancellationToken cancellationToken)
     {
         const string sql = """
             WITH old_token AS (
               UPDATE pos.refresh_tokens
-              SET revoked_at = now()
+              SET revoked_at = now(),
+                  rotated_at = now(),
+                  last_used_at = now(),
+                  revoked_reason = 'rotated'
               WHERE token_hash = @old_hash
                 AND revoked_at IS NULL
                 AND expires_at > now()
@@ -179,14 +239,16 @@ public sealed class PostgreSqlAuthRepository : IAuthRepository
         command.Parameters.AddWithValue("old_hash", oldRefreshTokenHash);
         command.Parameters.AddWithValue("new_hash", newRefreshTokenHash);
         command.Parameters.AddWithValue("new_expires_at", newExpiresAt);
-        await command.ExecuteNonQueryAsync(cancellationToken);
+        int affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
+        return affectedRows > 0;
     }
 
     public async Task RevokeRefreshTokenAsync(string refreshTokenHash, CancellationToken cancellationToken)
     {
         const string sql = """
             UPDATE pos.refresh_tokens
-            SET revoked_at = now()
+            SET revoked_at = now(),
+                revoked_reason = 'logout'
             WHERE token_hash = @token_hash
               AND revoked_at IS NULL;
             """;

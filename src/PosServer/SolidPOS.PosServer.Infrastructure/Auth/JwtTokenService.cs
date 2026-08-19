@@ -29,6 +29,7 @@ public sealed class JwtTokenService : ITokenService
         List<Claim> claims =
         [
             new(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
             new("user_id", user.UserId.ToString()),
             new("tenant_id", user.TenantId.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email)
@@ -60,6 +61,7 @@ public sealed class JwtTokenService : ITokenService
         List<Claim> claims =
         [
             new(JwtRegisteredClaimNames.Sub, terminal.TerminalId.ToString()),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
             new("terminal_id", terminal.TerminalId.ToString()),
             new("tenant_id", terminal.TenantId.ToString()),
             new("store_id", terminal.StoreId.ToString()),

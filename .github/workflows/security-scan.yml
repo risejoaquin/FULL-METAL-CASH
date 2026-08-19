@@ -1,0 +1,44 @@
+name: PosServer Security Scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "27 9 * * 1"
+
+jobs:
+  dependency-vulnerabilities:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: dotnet restore solidpos-platform.sln
+      - name: List vulnerable packages
+        run: dotnet list solidpos-platform.sln package --vulnerable --include-transitive
+
+  secret-pattern-scan:
+    name: Secret pattern scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan repository text for obvious secret patterns
+        shell: bash
+        run: |
+          set -euo pipefail
+          matches=$(grep -RInE "(postgresql://[[:alnum:]_.%-]+:[[:alnum:]_.%-]+@|Host=.*Password=[^<;[:space:]][^;[:space:]]+|-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----|AKIA[0-9A-Z]{16})" . \
+            --exclude-dir=.git \
+            --exclude-dir=bin \
+            --exclude-dir=obj \
+            --exclude-dir=node_modules || true)
+
+          filtered=$(printf "%s\n" "$matches" | grep -vE "solidpos_dev_password|solidpos:solidpos_dev_password|user:password|USER:PASSWORD|Password=PASSWORD|Password=<password>|password@host|<user>:<password>|Password=\.\.\.|Host=\.\*Password|Host=.*\\.\\*Password|postgresql://\[\^" || true)
+
+          if [[ -n "$filtered" ]]; then
+            printf "%s\n" "$filtered"
+            echo "Potential secret material found. Review repository before production promotion." >&2
+            exit 1
+          fi
+          echo "No obvious non-placeholder secret patterns found."

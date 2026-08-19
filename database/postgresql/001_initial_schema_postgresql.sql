@@ -97,6 +97,11 @@ CREATE TABLE users (
   full_name text NOT NULL,
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'invited')),
   pin_hash text,
+  login_failed_count integer NOT NULL DEFAULT 0,
+  login_last_failed_at timestamptz,
+  locked_until timestamptz,
+  password_changed_at timestamptz NOT NULL DEFAULT now(),
+  password_reset_required boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   deleted_at timestamptz,
@@ -104,6 +109,7 @@ CREATE TABLE users (
 );
 
 CREATE INDEX idx_users_tenant_status ON users (tenant_id, status) WHERE deleted_at IS NULL;
+CREATE INDEX idx_users_lockout ON users (tenant_id, locked_until) WHERE locked_until IS NOT NULL AND deleted_at IS NULL;
 CREATE TRIGGER trg_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION pos.touch_updated_at();
 
 CREATE TABLE roles (
@@ -152,6 +158,9 @@ CREATE TABLE refresh_tokens (
   replaced_by_token_id uuid REFERENCES refresh_tokens(id),
   expires_at timestamptz NOT NULL,
   revoked_at timestamptz,
+  rotated_at timestamptz,
+  last_used_at timestamptz,
+  revoked_reason text,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (tenant_id, token_hash)
 );

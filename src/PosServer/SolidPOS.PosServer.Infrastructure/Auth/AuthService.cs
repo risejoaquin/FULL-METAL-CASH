@@ -13,6 +13,7 @@ public sealed class AuthService : IAuthService
     private readonly ITokenService _tokenService;
     private readonly IClock _clock;
     private readonly JwtOptions _jwtOptions;
+    private readonly AccountSecurityOptions _accountSecurityOptions;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
@@ -21,6 +22,7 @@ public sealed class AuthService : IAuthService
         ITokenService tokenService,
         IClock clock,
         IOptions<JwtOptions> jwtOptions,
+        IOptions<AccountSecurityOptions> accountSecurityOptions,
         ILogger<AuthService> logger)
     {
         _repository = repository;
@@ -28,6 +30,7 @@ public sealed class AuthService : IAuthService
         _tokenService = tokenService;
         _clock = clock;
         _jwtOptions = jwtOptions.Value;
+        _accountSecurityOptions = accountSecurityOptions.Value;
         _logger = logger;
     }
 
@@ -42,6 +45,13 @@ public sealed class AuthService : IAuthService
             return null;
         }
 
+        if (user.LockedUntil is not null && user.LockedUntil > _clock.UtcNow)
+        {
+            _passwordHasher.VerifyDummy(request.Password);
+            _logger.LogWarning("Login rejected for locked account {UserId} tenant {TenantId}", user.UserId, user.TenantId);
+            return null;
+        }
+
         if (user.UserStatus != "active" || user.TenantStatus != "active")
         {
             _passwordHasher.VerifyDummy(request.Password);
@@ -51,9 +61,18 @@ public sealed class AuthService : IAuthService
 
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
-            _logger.LogWarning("Login failed");
+            DateTimeOffset lockoutUntil = _clock.UtcNow.AddMinutes(Math.Max(1, _accountSecurityOptions.LockoutMinutes));
+            await _repository.RecordFailedLoginAsync(
+                user.TenantId,
+                user.UserId,
+                Math.Max(1, _accountSecurityOptions.MaxFailedLoginAttempts),
+                lockoutUntil,
+                cancellationToken);
+            _logger.LogWarning("Login failed for user {UserId} tenant {TenantId}", user.UserId, user.TenantId);
             return null;
         }
+
+        await _repository.ResetLoginFailuresAsync(user.TenantId, user.UserId, cancellationToken);
 
         IReadOnlyCollection<string> roles = await _repository.GetRoleCodesAsync(user.TenantId, user.UserId, cancellationToken);
         IReadOnlyCollection<string> permissions = await _repository.GetPermissionCodesAsync(user.TenantId, user.UserId, cancellationToken);
@@ -74,6 +93,12 @@ public sealed class AuthService : IAuthService
             return null;
         }
 
+        if (user.LockedUntil is not null && user.LockedUntil > _clock.UtcNow)
+        {
+            _logger.LogWarning("Refresh token rejected for locked account {UserId} tenant {TenantId}", user.UserId, user.TenantId);
+            return null;
+        }
+
         IReadOnlyCollection<string> roles = await _repository.GetRoleCodesAsync(user.TenantId, user.UserId, cancellationToken);
         IReadOnlyCollection<string> permissions = await _repository.GetPermissionCodesAsync(user.TenantId, user.UserId, cancellationToken);
 
@@ -81,7 +106,12 @@ public sealed class AuthService : IAuthService
         string newHash = _tokenService.HashToken(refreshToken);
         DateTimeOffset refreshExpiresAt = _clock.UtcNow.AddDays(_jwtOptions.RefreshTokenDays);
 
-        await _repository.RotateRefreshTokenAsync(oldHash, newHash, refreshExpiresAt, cancellationToken);
+        bool rotated = await _repository.RotateRefreshTokenAsync(oldHash, newHash, refreshExpiresAt, cancellationToken);
+        if (!rotated)
+        {
+            _logger.LogWarning("Refresh token reuse or race rejected for user {UserId} tenant {TenantId}", user.UserId, user.TenantId);
+            return null;
+        }
 
         DateTimeOffset accessExpiresAt = _clock.UtcNow.AddMinutes(_jwtOptions.AccessTokenMinutes);
         string accessToken = _tokenService.CreateAccessToken(user, roles, permissions, accessExpiresAt);
