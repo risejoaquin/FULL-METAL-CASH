@@ -1,4 +1,5 @@
 using SolidPOS.PosCore.Application.Abstractions;
+using SolidPOS.PosCore.Application.Catalog;
 using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Application.Sync;
 using SolidPOS.PosCore.Domain;
@@ -15,7 +16,7 @@ static string GetOption(string[] args, string name, string? fallback = null)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sale-offline, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, catalog-status, sale-offline, sale-offline-from-cache, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending");
     return 0;
 }
 
@@ -46,6 +47,41 @@ switch (command)
         return 0;
     }
 
+
+    case "sync-catalog":
+    {
+        var binding = await repository.GetTerminalBindingAsync().ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal must be bound before local catalog sync.");
+        var baseUrl = GetOption(args, "--base-url");
+        var accessToken = GetOption(args, "--access-token", binding.TerminalToken);
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var remoteCatalogClient = new HttpRemoteCatalogClient(httpClient, baseUrl);
+        var service = new CatalogCacheService(repository, remoteCatalogClient, new SystemClock());
+        var result = await service.RefreshAsync(accessToken).ConfigureAwait(false);
+        Console.WriteLine($"Local catalog cache refreshed. products={result.CachedProductCount}; syncedAt={result.SyncedAtUtc:O}");
+        return 0;
+    }
+
+    case "catalog-status":
+    {
+        var count = await repository.CountCatalogProductsAsync().ConfigureAwait(false);
+        Console.WriteLine($"Local catalog products: {count}");
+        var sku = GetOption(args, "--sku", string.Empty);
+        if (!string.IsNullOrWhiteSpace(sku))
+        {
+            var product = await repository.GetCatalogProductBySkuAsync(sku).ConfigureAwait(false);
+            if (product is null)
+            {
+                Console.WriteLine($"SKU not found in local catalog: {sku}");
+                return 2;
+            }
+
+            Console.WriteLine($"Catalog product cached. sku={product.Sku}; productId={product.ProductId}; name={product.Name}; priceCents={product.PriceCents}; currency={product.Currency}; syncedAt={product.SyncedAtUtc:O}");
+        }
+
+        return 0;
+    }
+
     case "sale-offline":
     {
         var binding = await repository.GetTerminalBindingAsync().ConfigureAwait(false)
@@ -72,6 +108,40 @@ switch (command)
         var service = new OfflineSaleService(repository, new SystemClock());
         var outboxEvent = await service.CreateOfflineSaleAsync(sale).ConfigureAwait(false);
         Console.WriteLine($"Offline sale queued. localSaleId={sale.LocalSaleId}; outboxEventId={outboxEvent.Id}; totalCents={sale.TotalCents}");
+        return 0;
+    }
+
+
+    case "sale-offline-from-cache":
+    {
+        var binding = await repository.GetTerminalBindingAsync().ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal must be bound before creating offline sales.");
+        var sku = GetOption(args, "--sku");
+        var product = await repository.GetCatalogProductBySkuAsync(sku).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"SKU {sku} is not available in the local catalog cache. Run sync-catalog before selling offline.");
+        if (!product.IsSellable)
+        {
+            throw new InvalidOperationException($"SKU {sku} is not sellable locally. status={product.Status}; priceCents={product.PriceCents}.");
+        }
+
+        var quantity = int.Parse(GetOption(args, "--quantity", "1"));
+        var cashierUserId = Guid.Parse(GetOption(args, "--cashier-user-id", binding.TerminalId.ToString()));
+        var localSaleId = Guid.Parse(GetOption(args, "--local-sale-id", Guid.NewGuid().ToString()));
+        var localPaymentId = Guid.Parse(GetOption(args, "--local-payment-id", Guid.NewGuid().ToString()));
+        var sale = new OfflineSaleDraft(
+            localSaleId,
+            binding.TenantId,
+            binding.StoreId,
+            binding.TerminalId,
+            DateTimeOffset.UtcNow,
+            new[] { new OfflineSaleLineDraft(product.ProductId, product.VariantId, product.Sku, product.Name, quantity, product.PriceCents) },
+            new[] { new OfflineSalePaymentDraft("cash", quantity * product.PriceCents, localPaymentId) },
+            product.Currency,
+            cashierUserId);
+
+        var service = new OfflineSaleService(repository, new SystemClock());
+        var outboxEvent = await service.CreateOfflineSaleAsync(sale).ConfigureAwait(false);
+        Console.WriteLine($"Offline sale queued from cache. sku={product.Sku}; name={product.Name}; localSaleId={sale.LocalSaleId}; outboxEventId={outboxEvent.Id}; totalCents={sale.TotalCents}; unitPriceCents={product.PriceCents}");
         return 0;
     }
 

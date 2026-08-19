@@ -937,3 +937,18 @@ SOLIDPOS_ITERATION_07_POSCORE_OFFLINE_SALE_SEMANTIC_PROCESSING.md
 ITERATION_07_VALIDATION_COMMANDS.md
 scripts/poscore/validate-poscore-offline-sale-semantic-processing.ps1
 ```
+
+## SolidPOS Iteration 08 — PosCore Local Catalog/Inventory Cache
+
+PosCore ahora puede sincronizar catálogo remoto desde `GET /api/v1/tenant/catalog` hacia SQLite local y vender offline por SKU cacheado mediante:
+
+```powershell
+.\scripts\poscore\validate-poscore-local-catalog-inventory-cache.ps1 `
+  -BaseUrl "https://full-metal-cash-production.up.railway.app" `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -StoreId "8e446c29-e9ad-41ed-a738-125aff7608b6" `
+  -AdminEmail "admin@micafeteria.com" `
+  -AdminPassword "AdminSeguro123!"
+```
+
+La venta offline ya no requiere `ProductId` manual en el script; toma `productId`, `name`, `priceCents` y `currency` desde el cache local.

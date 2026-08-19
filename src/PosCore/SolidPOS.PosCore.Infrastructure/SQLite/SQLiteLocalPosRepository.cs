@@ -63,6 +63,24 @@ CREATE TABLE IF NOT EXISTS local_sync_acknowledgements (
   remote_response_json TEXT NOT NULL,
   acknowledged_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS local_catalog_products (
+  product_id TEXT NOT NULL,
+  variant_id TEXT NULL,
+  sku TEXT NOT NULL,
+  name TEXT NOT NULL,
+  price_cents INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  status TEXT NOT NULL,
+  updated_at_utc TEXT NOT NULL,
+  synced_at_utc TEXT NOT NULL,
+  PRIMARY KEY(product_id, variant_id)
+);
+CREATE TABLE IF NOT EXISTS local_catalog_sync_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  product_count INTEGER NOT NULL,
+  synced_at_utc TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_local_catalog_products_sku ON local_catalog_products(sku);
 CREATE INDEX IF NOT EXISTS idx_local_outbox_pending ON local_outbox_events(status, sequence_number);
 CREATE INDEX IF NOT EXISTS idx_local_sync_ack_event ON local_sync_acknowledgements(outbox_event_id, acknowledged_at_utc);
 """);
@@ -142,6 +160,92 @@ VALUES ($saleId, $tenantId, $storeId, $terminalId, $occurredAtUtc, $currency, $s
         InsertOutboxEvent(connection, transaction, outboxEvent);
         transaction.Commit();
         return Task.CompletedTask;
+    }
+
+
+    public Task SaveCatalogProductsAsync(IReadOnlyCollection<LocalCatalogProduct> products, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var delete = connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM local_catalog_products;";
+            delete.ExecuteNonQuery();
+        }
+
+        foreach (var product in products)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_catalog_products (product_id, variant_id, sku, name, price_cents, currency, status, updated_at_utc, synced_at_utc)
+VALUES ($productId, $variantId, $sku, $name, $priceCents, $currency, $status, $updatedAtUtc, $syncedAtUtc);
+""";
+            command.Parameters.AddWithValue("$productId", product.ProductId.ToString());
+            command.Parameters.AddWithValue("$variantId", product.VariantId?.ToString() ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$sku", product.Sku);
+            command.Parameters.AddWithValue("$name", product.Name);
+            command.Parameters.AddWithValue("$priceCents", product.PriceCents);
+            command.Parameters.AddWithValue("$currency", product.Currency);
+            command.Parameters.AddWithValue("$status", product.Status);
+            command.Parameters.AddWithValue("$updatedAtUtc", product.UpdatedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$syncedAtUtc", product.SyncedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        using (var state = connection.CreateCommand())
+        {
+            state.Transaction = transaction;
+            state.CommandText = """
+INSERT INTO local_catalog_sync_state (id, product_count, synced_at_utc)
+VALUES (1, $productCount, $syncedAtUtc)
+ON CONFLICT(id) DO UPDATE SET
+  product_count = excluded.product_count,
+  synced_at_utc = excluded.synced_at_utc;
+""";
+            state.Parameters.AddWithValue("$productCount", products.Count);
+            state.Parameters.AddWithValue("$syncedAtUtc", syncedAtUtc.ToString("O"));
+            state.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalCatalogProduct?> GetCatalogProductBySkuAsync(string sku, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT product_id, variant_id, sku, name, price_cents, currency, status, updated_at_utc, synced_at_utc
+FROM local_catalog_products
+WHERE sku = $sku
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$sku", sku);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalCatalogProduct?>(null);
+        var product = new LocalCatalogProduct(
+            Guid.Parse(reader.GetString(0)),
+            reader.IsDBNull(1) ? null : Guid.Parse(reader.GetString(1)),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetInt32(4),
+            reader.GetString(5),
+            reader.GetString(6),
+            DateTimeOffset.Parse(reader.GetString(7)),
+            DateTimeOffset.Parse(reader.GetString(8)));
+        return Task.FromResult<LocalCatalogProduct?>(product);
+    }
+
+    public Task<int> CountCatalogProductsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_catalog_products;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
     }
 
     public Task SaveOutboxEventAsync(LocalOutboxEvent outboxEvent, CancellationToken cancellationToken = default)

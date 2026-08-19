@@ -8,6 +8,9 @@ public interface ILocalPosRepository
     Task SaveTerminalBindingAsync(TerminalBinding binding, CancellationToken cancellationToken = default);
     Task<TerminalBinding?> GetTerminalBindingAsync(CancellationToken cancellationToken = default);
     Task SaveOfflineSaleAsync(OfflineSaleDraft sale, LocalOutboxEvent outboxEvent, CancellationToken cancellationToken = default);
+    Task SaveCatalogProductsAsync(IReadOnlyCollection<LocalCatalogProduct> products, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default);
+    Task<LocalCatalogProduct?> GetCatalogProductBySkuAsync(string sku, CancellationToken cancellationToken = default);
+    Task<int> CountCatalogProductsAsync(CancellationToken cancellationToken = default);
     Task SaveOutboxEventAsync(LocalOutboxEvent outboxEvent, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<LocalOutboxEvent>> GetPendingOutboxEventsAsync(int limit, CancellationToken cancellationToken = default);
     Task<LocalOutboxEvent?> GetLatestOutboxEventByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default);
