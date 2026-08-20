@@ -1,10 +1,16 @@
-import { BarChart3, Building2, LogOut, MonitorCheck, Receipt, Settings, ShieldCheck } from 'lucide-react';
+import { BarChart3, Building2, ClipboardList, FileSearch, LogOut, MonitorCheck, Receipt, Settings, ShieldCheck } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
 import type { LoginResponse } from '../api/posServerClient';
 import { Button } from '../components/ui';
+import type { DashboardSection } from '../features/dashboard/DashboardHome';
 
-const nav = [
-  { label: 'Overview', icon: BarChart3 },
+type NavItem = { label: string; icon: typeof BarChart3; section?: DashboardSection };
+
+const nav: NavItem[] = [
+  { label: 'Overview', icon: BarChart3, section: 'Overview' },
+  { label: 'Reports', icon: ClipboardList, section: 'Reports' },
+  { label: 'Operations', icon: MonitorCheck, section: 'Operations' },
+  { label: 'Audit', icon: FileSearch, section: 'Audit' },
   { label: 'Sales', icon: Receipt },
   { label: 'Sync', icon: MonitorCheck },
   { label: 'Tenants', icon: Building2 },
@@ -12,21 +18,40 @@ const nav = [
   { label: 'Settings', icon: Settings }
 ];
 
-export function AdminLayout({ session, onLogout, children }: PropsWithChildren<{ session: LoginResponse; onLogout: () => void }>) {
+export function AdminLayout({ session, activeSection, onSectionChange, onLogout, children }: PropsWithChildren<{
+  session: LoginResponse;
+  activeSection: DashboardSection;
+  onSectionChange: (section: DashboardSection) => void;
+  onLogout: () => void;
+}>) {
   return (
     <div className="min-h-screen bg-solid-surface">
       <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-slate-200 bg-white p-5 lg:block">
         <div className="rounded-2xl bg-solid-ink p-4 text-white">
           <p className="text-xs uppercase tracking-widest text-slate-300">SolidPOS</p>
           <h1 className="mt-1 text-xl font-bold">Admin Dashboard</h1>
+          <p className="mt-2 text-xs text-slate-300">Reports / Audit / Operations</p>
         </div>
         <nav className="mt-6 space-y-1">
-          {nav.map((item) => (
-            <button key={item.label} className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-600 hover:bg-slate-100">
-              <item.icon size={18} />
-              {item.label}
-            </button>
-          ))}
+          {nav.map((item) => {
+            const enabled = item.section !== undefined;
+            const active = item.section === activeSection;
+            return (
+              <button
+                key={item.label}
+                disabled={!enabled}
+                onClick={() => { if (item.section) { onSectionChange(item.section); } }}
+                className={[
+                  'flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm font-medium',
+                  active ? 'bg-solid-blue text-white' : 'text-slate-600 hover:bg-slate-100',
+                  enabled ? '' : 'cursor-not-allowed opacity-50'
+                ].join(' ')}
+              >
+                <item.icon size={18} />
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
       </aside>
       <main className="lg:pl-72">

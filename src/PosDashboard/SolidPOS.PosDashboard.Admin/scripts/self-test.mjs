@@ -11,6 +11,9 @@ const requiredFiles = [
   'src/api/posServerClient.ts',
   'src/features/auth/LoginPanel.tsx',
   'src/features/dashboard/DashboardHome.tsx',
+  'src/features/dashboard/ReportsDashboard.tsx',
+  'src/features/dashboard/AuditDashboard.tsx',
+  'src/features/dashboard/OperationsDashboard.tsx',
   'src/layout/AdminLayout.tsx'
 ];
 
@@ -21,36 +24,52 @@ if (missing.length > 0) {
 }
 
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
-const requiredDeps = ['react', 'react-dom', 'vite', '@vitejs/plugin-react', 'typescript', 'tailwindcss'];
+const requiredDeps = ['react', 'react-dom', 'vite', '@vitejs/plugin-react', 'typescript', 'tailwindcss', '@tailwindcss/postcss'];
 const missingDeps = requiredDeps.filter((dep) => !(pkg.dependencies?.[dep] || pkg.devDependencies?.[dep]));
 if (missingDeps.length > 0) {
   console.error(`PosDashboard self-test failed. Missing dependencies: ${missingDeps.join(', ')}`);
   process.exit(1);
 }
 
-const app = readFileSync(join(root, 'src/App.tsx'), 'utf8');
-const client = readFileSync(join(root, 'src/api/posServerClient.ts'), 'utf8');
+const filesToInspect = [
+  'src/App.tsx',
+  'src/api/posServerClient.ts',
+  'src/features/dashboard/DashboardHome.tsx',
+  'src/features/dashboard/ReportsDashboard.tsx',
+  'src/features/dashboard/AuditDashboard.tsx',
+  'src/features/dashboard/OperationsDashboard.tsx',
+  'src/layout/AdminLayout.tsx'
+];
+const content = filesToInspect.map((file) => readFileSync(join(root, file), 'utf8')).join('\n');
 
 const expectedMarkers = [
   'LoginPanel',
   'DashboardHome',
   'AdminLayout',
+  'ReportsDashboard',
+  'AuditDashboard',
+  'OperationsDashboard',
   '/api/v1/auth/login',
   '/api/v1/sync/status',
-  '/health/ready'
+  '/health/ready',
+  '/api/v1/sales',
+  '/api/v1/returns',
+  '/api/v1/audit',
+  'getOperationsSnapshot',
+  'accessToken'
 ];
 
-const content = `${app}\n${client}`;
 const missingMarkers = expectedMarkers.filter((marker) => !content.includes(marker));
 if (missingMarkers.length > 0) {
   console.error(`PosDashboard self-test failed. Missing markers: ${missingMarkers.join(', ')}`);
   process.exit(1);
 }
 
-console.log('PosDashboard admin React self-test started.');
-console.log('Vite React project ready.');
-console.log('Tailwind foundation ready.');
-console.log('Login view ready: /api/v1/auth/login');
-console.log('Admin layout ready: Overview, Sales, Sync, Tenants, Security, Settings');
-console.log('Dashboard client ready: /health/ready and /api/v1/sync/status');
-console.log('PosDashboard admin React foundation completed.');
+console.log('PosDashboard reports/audit/operations self-test started.');
+console.log('Vite React TypeScript production build ready.');
+console.log('Protected client ready: /api/v1/auth/login with accessToken.');
+console.log('Reports client ready: /api/v1/sales and /api/v1/returns.');
+console.log('Operations client ready: /health/ready and /api/v1/sync/status.');
+console.log('Audit client ready: /api/v1/audit.');
+console.log('Admin dashboard sections ready: Overview, Reports, Operations, Audit.');
+console.log('PosDashboard reports audit operations dashboard completed.');

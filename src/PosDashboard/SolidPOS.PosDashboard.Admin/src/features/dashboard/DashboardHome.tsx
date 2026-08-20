@@ -1,21 +1,17 @@
 import { useEffect, useState } from 'react';
-import type { DashboardMetrics, LoginResponse } from '../../api/posServerClient';
-import { PosServerClient } from '../../api/posServerClient';
+import type { LoginResponse, OperationsSnapshot } from '../../api/posServerClient';
+import { PosServerClient, formatMoney } from '../../api/posServerClient';
 import { Badge, Button, Card } from '../../components/ui';
+import { AuditDashboard } from './AuditDashboard';
+import { OperationsDashboard } from './OperationsDashboard';
+import { ReportsDashboard } from './ReportsDashboard';
 
-const initialMetrics: DashboardMetrics = {
-  health: 'unknown',
-  totalSalesCents: 0,
-  salesCount: 0,
-  refundsCents: 0,
-  pendingSync: 0,
-  deadLetter: 0,
-  lastUpdatedAt: new Date().toISOString()
-};
+export type DashboardSection = 'Overview' | 'Reports' | 'Operations' | 'Audit';
 
-export function DashboardHome({ session }: { session: LoginResponse }) {
-  const [metrics, setMetrics] = useState<DashboardMetrics>(initialMetrics);
+export function DashboardHome({ session, activeSection }: { session: LoginResponse; activeSection: DashboardSection }) {
+  const [snapshot, setSnapshot] = useState<OperationsSnapshot | null>(null);
   const [message, setMessage] = useState('Dashboard listo para consultar PosServer.');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   async function refresh() {
     if (!session.accessToken) {
@@ -23,13 +19,16 @@ export function DashboardHome({ session }: { session: LoginResponse }) {
       return;
     }
 
+    setIsRefreshing(true);
     try {
       const client = new PosServerClient();
-      const snapshot = await client.getOperationalSnapshot(session.accessToken);
-      setMetrics(snapshot);
-      setMessage('Snapshot actualizado desde PosServer.');
+      const nextSnapshot = await client.getOperationsSnapshot(session.accessToken);
+      setSnapshot(nextSnapshot);
+      setMessage('Operations snapshot actualizado desde PosServer.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No se pudo actualizar dashboard.');
+    } finally {
+      setIsRefreshing(false);
     }
   }
 
@@ -41,17 +40,17 @@ export function DashboardHome({ session }: { session: LoginResponse }) {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Overview operativo</h1>
-          <p className="mt-1 text-slate-500">Base React para administración, monitoreo inicial y reportes.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Reports / Audit / Operations Dashboard</h1>
+          <p className="mt-1 text-slate-500">Reportes, auditoría y operación diaria con lectura protegida por token administrativo.</p>
         </div>
-        <Button onClick={refresh}>Actualizar</Button>
+        <Button onClick={refresh} disabled={isRefreshing}>{isRefreshing ? 'Actualizando...' : 'Actualizar'}</Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard title="API ready" value={metrics.health} tone={metrics.health === 'ready' ? 'good' : 'warn'} />
-        <MetricCard title="Ventas" value={metrics.salesCount.toString()} />
-        <MetricCard title="Sync pending" value={metrics.pendingSync.toString()} tone={metrics.pendingSync === 0 ? 'good' : 'warn'} />
-        <MetricCard title="Dead-letter" value={metrics.deadLetter.toString()} tone={metrics.deadLetter === 0 ? 'good' : 'warn'} />
+        <MetricCard title="API ready" value={snapshot?.metrics.health ?? 'unknown'} tone={snapshot?.metrics.health === 'ready' ? 'good' : 'warn'} />
+        <MetricCard title="Ventas" value={snapshot?.metrics.salesCount.toString() ?? '0'} />
+        <MetricCard title="Total ventas" value={formatMoney(snapshot?.metrics.totalSalesCents ?? 0)} />
+        <MetricCard title="Dead-letter" value={snapshot?.metrics.deadLetter.toString() ?? '0'} tone={(snapshot?.metrics.deadLetter ?? 0) === 0 ? 'good' : 'warn'} />
       </div>
 
       <Card>
@@ -60,14 +59,19 @@ export function DashboardHome({ session }: { session: LoginResponse }) {
             <h2 className="text-lg font-semibold">Estado de integración</h2>
             <p className="text-sm text-slate-500">{message}</p>
           </div>
-          <Badge tone="good">Foundation</Badge>
+          <Badge tone="good">Iteration 20</Badge>
         </div>
         <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
-          <p>Auth: /api/v1/auth/login</p>
-          <p>Health: /health/ready</p>
-          <p>Sync: /api/v1/sync/status</p>
+          <p>Reports: /api/v1/sales, /api/v1/returns</p>
+          <p>Operations: /health/ready, /api/v1/sync/status</p>
+          <p>Audit: /api/v1/audit</p>
         </div>
       </Card>
+
+      {activeSection === 'Overview' && <OperationsDashboard snapshot={snapshot} />}
+      {activeSection === 'Reports' && <ReportsDashboard snapshot={snapshot} />}
+      {activeSection === 'Operations' && <OperationsDashboard snapshot={snapshot} />}
+      {activeSection === 'Audit' && <AuditDashboard snapshot={snapshot} />}
     </div>
   );
 }
