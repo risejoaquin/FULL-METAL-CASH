@@ -48,4 +48,11 @@ public interface ILocalPosRepository
     Task LogLocalAuditEventAsync(LocalAuditEvent auditEvent, CancellationToken cancellationToken = default) => Task.CompletedTask;
     Task<LocalAuthSummary> GetLocalAuthSummaryAsync(CancellationToken cancellationToken = default) => Task.FromResult(new LocalAuthSummary(0, 0, 0, 0, null));
 
+
+    Task SaveReceiptPrintJobAsync(LocalReceiptPrintJob job, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task<LocalReceiptPrintJob?> GetNextPendingReceiptPrintJobAsync(CancellationToken cancellationToken = default) => Task.FromResult<LocalReceiptPrintJob?>(null);
+    Task MarkReceiptPrintJobPrintedAsync(Guid jobId, DateTimeOffset printedAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task MarkReceiptPrintJobFailedAsync(Guid jobId, string error, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task SaveHardwareEventAsync(LocalHardwareEvent hardwareEvent, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task<LocalHardwareSummary> GetHardwareSummaryAsync(CancellationToken cancellationToken = default) => Task.FromResult(new LocalHardwareSummary(0, 0, 0, 0, null));
 }

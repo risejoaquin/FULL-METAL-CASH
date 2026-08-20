@@ -236,8 +236,35 @@ CREATE TABLE IF NOT EXISTS local_audit_events (
   message TEXT NOT NULL,
   occurred_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS local_print_jobs (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  sale_id TEXT NOT NULL,
+  receipt_id TEXT NOT NULL,
+  receipt_number TEXT NOT NULL,
+  content TEXT NOT NULL,
+  status TEXT NOT NULL,
+  queued_at_utc TEXT NOT NULL,
+  printed_at_utc TEXT NULL,
+  last_error TEXT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS local_hardware_events (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  device_type TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  occurred_at_utc TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_local_sessions_active ON local_sessions(status, expires_at_utc);
 CREATE INDEX IF NOT EXISTS idx_local_audit_events_time ON local_audit_events(occurred_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_print_jobs_status ON local_print_jobs(status, queued_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_hardware_events_time ON local_hardware_events(occurred_at_utc);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_local_catalog_products_sku ON local_catalog_products(sku);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_recipes_output ON local_inventory_recipes(output_product_id, output_variant_id, status);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_recipe_items_recipe ON local_inventory_recipe_items(recipe_id);
@@ -1302,6 +1329,104 @@ VALUES ($id, $tenantId, $storeId, $userId, $sessionId, $eventType, $message, $oc
         return Task.FromResult(new LocalAuthSummary(users, permissions, sessions, audits, lastSynced));
     }
 
+
+    public Task SaveReceiptPrintJobAsync(LocalReceiptPrintJob job, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_print_jobs (id, tenant_id, store_id, terminal_id, sale_id, receipt_id, receipt_number, content, status, queued_at_utc, printed_at_utc, last_error, attempts)
+VALUES ($id, $tenantId, $storeId, $terminalId, $saleId, $receiptId, $receiptNumber, $content, $status, $queuedAtUtc, $printedAtUtc, $lastError, $attempts)
+ON CONFLICT(id) DO UPDATE SET
+  status = excluded.status,
+  printed_at_utc = excluded.printed_at_utc,
+  last_error = excluded.last_error,
+  attempts = excluded.attempts;
+""";
+        command.Parameters.AddWithValue("$id", job.Id.ToString());
+        command.Parameters.AddWithValue("$tenantId", job.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", job.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", job.TerminalId.ToString());
+        command.Parameters.AddWithValue("$saleId", job.SaleId.ToString());
+        command.Parameters.AddWithValue("$receiptId", job.ReceiptId.ToString());
+        command.Parameters.AddWithValue("$receiptNumber", job.ReceiptNumber);
+        command.Parameters.AddWithValue("$content", job.Content);
+        command.Parameters.AddWithValue("$status", job.Status);
+        command.Parameters.AddWithValue("$queuedAtUtc", job.QueuedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$printedAtUtc", job.PrintedAtUtc?.ToString("O") ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$lastError", job.LastError ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$attempts", job.Attempts);
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalReceiptPrintJob?> GetNextPendingReceiptPrintJobAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, tenant_id, store_id, terminal_id, sale_id, receipt_id, receipt_number, content, status, queued_at_utc, printed_at_utc, last_error, attempts FROM local_print_jobs WHERE status = 'pending' ORDER BY queued_at_utc LIMIT 1;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalReceiptPrintJob?>(null);
+        return Task.FromResult<LocalReceiptPrintJob?>(ReadReceiptPrintJob(reader));
+    }
+
+    public Task MarkReceiptPrintJobPrintedAsync(Guid jobId, DateTimeOffset printedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_print_jobs SET status = 'printed', printed_at_utc = $printedAtUtc, last_error = NULL, attempts = attempts + 1 WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", jobId.ToString());
+        command.Parameters.AddWithValue("$printedAtUtc", printedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task MarkReceiptPrintJobFailedAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_print_jobs SET status = 'failed', last_error = $error, attempts = attempts + 1 WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", jobId.ToString());
+        command.Parameters.AddWithValue("$error", error);
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task SaveHardwareEventAsync(LocalHardwareEvent hardwareEvent, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_hardware_events (id, tenant_id, store_id, terminal_id, device_type, event_type, message, occurred_at_utc)
+VALUES ($id, $tenantId, $storeId, $terminalId, $deviceType, $eventType, $message, $occurredAtUtc);
+""";
+        command.Parameters.AddWithValue("$id", hardwareEvent.Id.ToString());
+        command.Parameters.AddWithValue("$tenantId", hardwareEvent.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", hardwareEvent.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", hardwareEvent.TerminalId.ToString());
+        command.Parameters.AddWithValue("$deviceType", hardwareEvent.DeviceType);
+        command.Parameters.AddWithValue("$eventType", hardwareEvent.EventType);
+        command.Parameters.AddWithValue("$message", hardwareEvent.Message);
+        command.Parameters.AddWithValue("$occurredAtUtc", hardwareEvent.OccurredAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalHardwareSummary> GetHardwareSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        int pending = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'pending';");
+        int printed = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'printed';");
+        int failed = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'failed';");
+        int events = ScalarInt(connection, "SELECT COUNT(1) FROM local_hardware_events;");
+        LocalHardwareEvent? latest = null;
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, tenant_id, store_id, terminal_id, device_type, event_type, message, occurred_at_utc FROM local_hardware_events ORDER BY occurred_at_utc DESC LIMIT 1;";
+        using var reader = command.ExecuteReader();
+        if (reader.Read()) latest = ReadHardwareEvent(reader);
+        return Task.FromResult(new LocalHardwareSummary(pending, printed, failed, events, latest));
+    }
+
     private static void InsertOutboxEvent(SqliteConnection connection, SqliteTransaction transaction, LocalOutboxEvent outboxEvent)
     {
         using var command = connection.CreateCommand();
@@ -1408,6 +1533,32 @@ VALUES ($id, $shiftId, $tenantId, $storeId, $terminalId, $movementType, $amountC
         reader.IsDBNull(3) ? null : reader.GetString(3),
         reader.GetString(4),
         DateTimeOffset.Parse(reader.GetString(5)));
+
+
+    private static LocalReceiptPrintJob ReadReceiptPrintJob(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        Guid.Parse(reader.GetString(4)),
+        Guid.Parse(reader.GetString(5)),
+        reader.GetString(6),
+        reader.GetString(7),
+        reader.GetString(8),
+        DateTimeOffset.Parse(reader.GetString(9)),
+        reader.IsDBNull(10) ? null : DateTimeOffset.Parse(reader.GetString(10)),
+        reader.IsDBNull(11) ? null : reader.GetString(11),
+        reader.GetInt32(12));
+
+    private static LocalHardwareEvent ReadHardwareEvent(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        reader.GetString(4),
+        reader.GetString(5),
+        reader.GetString(6),
+        DateTimeOffset.Parse(reader.GetString(7)));
 
     private static LocalOutboxEvent ReadOutboxEvent(SqliteDataReader reader) => new(
         Guid.Parse(reader.GetString(0)),

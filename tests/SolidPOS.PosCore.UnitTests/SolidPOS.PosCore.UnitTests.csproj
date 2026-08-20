@@ -11,5 +11,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Application\SolidPOS.PosCore.Application.csproj" />
     <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Domain\SolidPOS.PosCore.Domain.csproj" />
+    <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Infrastructure\SolidPOS.PosCore.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

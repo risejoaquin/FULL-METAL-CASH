@@ -1002,3 +1002,16 @@ Iteration 11 agrega pull sync local, cursor idempotente y read models locales de
 Adds local auth cache, local sessions, local RBAC checks, offline window enforcement and audit events for PosCore SQLite runtime.
 
 Validation: `scripts/poscore/validate-poscore-offline-auth-rbac.ps1`.
+
+## SolidPOS Iteration 13 — PosCore Hardware Abstraction Runtime
+
+Adds local hardware abstractions and fake adapters for receipt printer, cash drawer, barcode scanner, and payment terminal.
+Validation script:
+
+```powershell
+.\scripts\poscore\validate-poscore-hardware-abstraction.ps1 `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -StoreId "8e446c29-e9ad-41ed-a738-125aff7608b6" `
+  -TerminalId "AUTO" `
+  -TerminalToken "AUTO"
+```

@@ -126,6 +126,78 @@
         }
       }
     },
+    "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Infrastructure\\SolidPOS.PosCore.Infrastructure.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Infrastructure\\SolidPOS.PosCore.Infrastructure.csproj",
+        "projectName": "SolidPOS.PosCore.Infrastructure",
+        "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Infrastructure\\SolidPOS.PosCore.Infrastructure.csproj",
+        "packagesPath": "C:\\Users\\Lucilfer\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Infrastructure\\obj\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\Lucilfer\\AppData\\Roaming\\NuGet\\NuGet.Config"
+        ],
+        "originalTargetFrameworks": [
+          "net8.0"
+        ],
+        "sources": {
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net8.0": {
+            "targetAlias": "net8.0",
+            "projectReferences": {
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Application\\SolidPOS.PosCore.Application.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Application\\SolidPOS.PosCore.Application.csproj"
+              },
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Domain\\SolidPOS.PosCore.Domain.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Domain\\SolidPOS.PosCore.Domain.csproj"
+              }
+            }
+          }
+        },
+        "warningProperties": {
+          "allWarningsAsErrors": true,
+          "warnAsError": [
+            "NU1605"
+          ]
+        },
+        "restoreAuditProperties": {
+          "enableAudit": "true",
+          "auditLevel": "low",
+          "auditMode": "direct"
+        }
+      },
+      "frameworks": {
+        "net8.0": {
+          "targetAlias": "net8.0",
+          "dependencies": {
+            "Microsoft.Data.Sqlite": {
+              "target": "Package",
+              "version": "[8.0.10, )"
+            }
+          },
+          "imports": [
+            "net461",
+            "net462",
+            "net47",
+            "net471",
+            "net472",
+            "net48",
+            "net481"
+          ],
+          "assetTargetFallback": true,
+          "warn": true,
+          "frameworkReferences": {
+            "Microsoft.NETCore.App": {
+              "privateAssets": "all"
+            }
+          },
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\8.0.423/PortableRuntimeIdentifierGraph.json"
+        }
+      }
+    },
     "C:\\Users\\Lucilfer\\Documents\\SolidPos\\tests\\SolidPOS.PosCore.UnitTests\\SolidPOS.PosCore.UnitTests.csproj": {
       "version": "1.0.0",
       "restore": {
@@ -153,6 +225,9 @@
               },
               "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Domain\\SolidPOS.PosCore.Domain.csproj": {
                 "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Domain\\SolidPOS.PosCore.Domain.csproj"
+              },
+              "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Infrastructure\\SolidPOS.PosCore.Infrastructure.csproj": {
+                "projectPath": "C:\\Users\\Lucilfer\\Documents\\SolidPos\\src\\PosCore\\SolidPOS.PosCore.Infrastructure\\SolidPOS.PosCore.Infrastructure.csproj"
               }
             }
           }

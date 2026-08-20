@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.Cash;
+using SolidPOS.PosCore.Application.Hardware;
 using SolidPOS.PosCore.Application.Auth;
 using SolidPOS.PosCore.Application.Catalog;
 using SolidPOS.PosCore.Application.OfflineSales;
@@ -8,6 +9,7 @@ using SolidPOS.PosCore.Application.Sync;
 using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Infrastructure.SQLite;
 using SolidPOS.PosCore.Infrastructure.Sync;
+using SolidPOS.PosCore.Infrastructure.Hardware;
 
 static string GetOption(string[] args, string name, string? fallback = null)
 {
@@ -67,7 +69,7 @@ static DateTimeOffset? ReadNullableDateTimeOffset(JsonElement root, string name)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status, queue-receipt-print, process-print-jobs, open-cash-drawer-hardware, scan-barcode, authorize-payment-terminal, hardware-status");
     return 0;
 }
 
@@ -636,6 +638,68 @@ switch (command)
 
         var localTotal = movements.Sum(x => x.QuantityDelta);
         Console.WriteLine($"Inventory reconciliation matched. localSaleId={localSaleId}; movementCount={movements.Count}; localTotalQuantityDelta={localTotal.ToString(System.Globalization.CultureInfo.InvariantCulture)}; remoteMovementCount={expectedRemoteMovementCount}");
+        return 0;
+    }
+
+
+    case "queue-receipt-print":
+    {
+        var saleId = Guid.Parse(GetOption(args, "--sale-id"));
+        var receiptId = Guid.Parse(GetOption(args, "--receipt-id"));
+        var receiptNumber = GetOption(args, "--receipt-number");
+        var content = GetOption(args, "--content", $"SolidPOS receipt {receiptNumber}");
+        var service = new HardwareRuntimeService(repository, new FakeReceiptPrinter(), new FakeCashDrawerDevice(), new FakeBarcodeScannerDevice(), new FakePaymentTerminalDevice(), new SystemClock());
+        var job = await service.QueueReceiptAsync(saleId, receiptId, receiptNumber, content, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Receipt print job queued. jobId={job.Id}; saleId={job.SaleId}; receiptId={job.ReceiptId}; receiptNumber={job.ReceiptNumber}; status={job.Status}");
+        return 0;
+    }
+
+    case "process-print-jobs":
+    {
+        var service = new HardwareRuntimeService(repository, new FakeReceiptPrinter(), new FakeCashDrawerDevice(), new FakeBarcodeScannerDevice(), new FakePaymentTerminalDevice(), new SystemClock());
+        var processed = await service.ProcessNextReceiptPrintJobAsync(CancellationToken.None).ConfigureAwait(false);
+        if (processed is null)
+        {
+            Console.WriteLine("No pending receipt print jobs.");
+            return 0;
+        }
+
+        Console.WriteLine($"Receipt print job processed. jobId={processed.Id}; receiptNumber={processed.ReceiptNumber}; status={processed.Status}");
+        return 0;
+    }
+
+    case "open-cash-drawer-hardware":
+    {
+        var reason = GetOption(args, "--reason", "manual_validation");
+        var service = new HardwareRuntimeService(repository, new FakeReceiptPrinter(), new FakeCashDrawerDevice(), new FakeBarcodeScannerDevice(), new FakePaymentTerminalDevice(), new SystemClock());
+        var result = await service.OpenCashDrawerAsync(reason, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Cash drawer command executed. accepted={result.Accepted}; commandId={result.CommandId}; message={result.Message}");
+        return 0;
+    }
+
+    case "scan-barcode":
+    {
+        var barcode = GetOption(args, "--barcode", "QSR-AMERICANO");
+        var service = new HardwareRuntimeService(repository, new FakeReceiptPrinter(), new FakeCashDrawerDevice(), new FakeBarcodeScannerDevice(barcode), new FakePaymentTerminalDevice(), new SystemClock());
+        var result = await service.ScanBarcodeAsync(CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Barcode scanned. barcode={result.Barcode}; scannedAt={result.ScannedAtUtc:O}");
+        return 0;
+    }
+
+    case "authorize-payment-terminal":
+    {
+        var amountCents = int.Parse(GetOption(args, "--amount-cents"));
+        var currency = GetOption(args, "--currency", "MXN");
+        var service = new HardwareRuntimeService(repository, new FakeReceiptPrinter(), new FakeCashDrawerDevice(), new FakeBarcodeScannerDevice(), new FakePaymentTerminalDevice(), new SystemClock());
+        var result = await service.AuthorizePaymentAsync(amountCents, currency, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Payment terminal authorization completed. approved={result.Approved}; authorizationCode={result.AuthorizationCode}; amountCents={result.AmountCents}; message={result.Message}");
+        return 0;
+    }
+
+    case "hardware-status":
+    {
+        var summary = await repository.GetHardwareSummaryAsync(CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local hardware status. pendingPrintJobs={summary.PendingPrintJobs}; printedPrintJobs={summary.PrintedPrintJobs}; failedPrintJobs={summary.FailedPrintJobs}; hardwareEvents={summary.HardwareEventCount}; latestDevice={summary.LatestEvent?.DeviceType}; latestEvent={summary.LatestEvent?.EventType}");
         return 0;
     }
 
