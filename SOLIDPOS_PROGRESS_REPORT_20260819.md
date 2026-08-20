@@ -89,3 +89,24 @@ SolidPOS Iteration 22 — Production Pilot Readiness = PASS REAL PRODUCTION
 - PILOT-08 Backup / Restore / Rollback Drill
 - PILOT-09 Pilot Incident Runbook Validation
 - PILOT-10 Pilot Closure Report + Production Expansion Decision
+
+## SolidPOS PILOT-02 — Real POS Transaction Validation
+
+Status: PENDING USER VALIDATION
+
+Scope:
+- real controlled sale in production
+- terminal enrollment and register
+- cash shift open/close
+- cash payment with change
+- sale detail/read model
+- inventory movement confirmation
+- protected digital receipt
+- public digital receipt
+- audit trail confirmation
+- SQL persistence assertion
+- pilot transaction log generation
+
+Validation artifact:
+- `scripts/pilot/validate-real-pos-transaction.ps1`
+- `scripts/pilot/pilot-02-transaction-check.sql`
