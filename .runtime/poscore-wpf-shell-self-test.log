@@ -2,6 +2,7 @@ PosCore WPF self-test started.
 WPF shell initialized.
 Branding package applied: tenantName=Mi Cafeteria; appName=Mi Cafeteria POS; primaryColor=#20242A; accentColor=#2F80ED
 Receipt branding ready: header=Mi Cafeteria; footer=Gracias por su compra.
+Update manifest ready: releaseVersion=1.0.0; channel=stable; packageFile=solidpos-poscore-1.0.0-stable.pkg
 Local login view model ready: admin@micafeteria.com
 Terminal status view model ready: TerminalStatusViewModel listo para leer binding local.
 Sales view model ready: Catalogo local QSR disponible: QSR-AMERICANO - Americano 12oz - 4500 cents.

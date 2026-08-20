@@ -1,0 +1,16 @@
+{
+  "tenantId": "0ce5bbd0-528b-4aee-9fe3-93df001a4fde",
+  "tenantName": "Mi Cafeteria",
+  "appName": "Mi Cafeteria POS",
+  "releaseVersion": "1.0.0",
+  "channel": "stable",
+  "packageKind": "local-poscore-package",
+  "packageFileName": "solidpos-poscore-1.0.0-stable.pkg",
+  "packageSizeBytes": 182,
+  "sha256": "22038da2b65387d28c1e02a9777279fd957a5981595f09bb223abe00dff24bd5",
+  "minimumPosCoreVersion": "1.0.0",
+  "minimumPosBuilderVersion": "1.0.0",
+  "brandingPackageVersion": "1.0",
+  "generatedAtUtc": "2026-08-20T06:28:14.6897822+00:00",
+  "notes": "PosBuilder self-test update package."
+}
