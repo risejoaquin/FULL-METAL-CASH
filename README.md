@@ -1015,3 +1015,9 @@ Validation script:
   -TerminalId "AUTO" `
   -TerminalToken "AUTO"
 ```
+
+## SolidPOS Iteration 14 — PosCore WPF Shell + MVVM Foundation
+
+Adds the first real WPF PosCore shell: MVVM foundation, login, terminal status, sales, sync status, and cash shift screens. The UI is intentionally thin and depends on the already validated PosCore runtime instead of owning business logic.
+
+Validation: `ITERATION_14_VALIDATION_COMMANDS.md`.

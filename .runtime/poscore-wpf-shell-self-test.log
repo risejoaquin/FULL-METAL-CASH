@@ -1,0 +1,8 @@
+PosCore WPF self-test started.
+WPF shell initialized.
+Local login view model ready: admin@micafeteria.com
+Terminal status view model ready: TerminalStatusViewModel listo para leer binding local.
+Sales view model ready: Catálogo local listo para ser leído desde SQLite.
+Sync status view model ready: SyncStatusViewModel listo para outbox/pull state.
+Cash shift view model ready: CashShiftViewModel listo para caja local.
+PosCore WPF shell validation completed.

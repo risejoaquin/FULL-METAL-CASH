@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SolidPOS.PosCore.Wpf</RootNamespace>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <AssemblyName>SolidPOS.PosCore.Wpf</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SolidPOS.PosCore.Application\SolidPOS.PosCore.Application.csproj" />
+    <ProjectReference Include="..\SolidPOS.PosCore.Domain\SolidPOS.PosCore.Domain.csproj" />
+    <ProjectReference Include="..\SolidPOS.PosCore.Infrastructure\SolidPOS.PosCore.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

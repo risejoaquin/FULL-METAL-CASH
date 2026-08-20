@@ -28,6 +28,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosCore.Cli", "src
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosCore.UnitTests", "tests\SolidPOS.PosCore.UnitTests\SolidPOS.PosCore.UnitTests.csproj", "{9D45D1D5-42F3-41A5-9897-001000000013}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolidPOS.PosCore.Wpf", "src\PosCore\SolidPOS.PosCore.Wpf\SolidPOS.PosCore.Wpf.csproj", "{9D45D1D5-42F3-41A5-9897-001000000014}"
+EndProject
 Global
   GlobalSection(SolutionConfigurationPlatforms) = preSolution
     Debug|Any CPU = Debug|Any CPU
@@ -86,5 +88,9 @@ Global
     {9D45D1D5-42F3-41A5-9897-001000000013}.Debug|Any CPU.Build.0 = Debug|Any CPU
     {9D45D1D5-42F3-41A5-9897-001000000013}.Release|Any CPU.ActiveCfg = Release|Any CPU
     {9D45D1D5-42F3-41A5-9897-001000000013}.Release|Any CPU.Build.0 = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000014}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000014}.Debug|Any CPU.Build.0 = Debug|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000014}.Release|Any CPU.ActiveCfg = Release|Any CPU
+    {9D45D1D5-42F3-41A5-9897-001000000014}.Release|Any CPU.Build.0 = Release|Any CPU
   EndGlobalSection
 EndGlobal

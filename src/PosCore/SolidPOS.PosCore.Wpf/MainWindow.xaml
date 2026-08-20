@@ -1,0 +1,71 @@
+<Window x:Class="SolidPOS.PosCore.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SolidPOS PosCore" Height="720" Width="1080" MinHeight="600" MinWidth="900">
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Padding="16" Background="#20242A">
+      <StackPanel>
+        <TextBlock Text="SolidPOS PosCore" FontSize="24" FontWeight="Bold" Foreground="White" />
+        <TextBlock Text="WPF Shell + MVVM Foundation" Foreground="#D7DCE2" />
+      </StackPanel>
+    </Border>
+
+    <Grid Margin="16">
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="*" />
+      </Grid.RowDefinitions>
+
+      <Border Grid.Row="0" Padding="12" BorderBrush="#DDD" BorderThickness="1" CornerRadius="6">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock Text="Runtime DB:" FontWeight="Bold" />
+          <TextBlock Text="{Binding DatabasePath}" />
+          <TextBlock Text=" | Shell:" FontWeight="Bold" Margin="16,4,4,4" />
+          <TextBlock Text="{Binding ShellStatus}" />
+        </StackPanel>
+      </Border>
+
+      <TabControl Grid.Row="1" Margin="0,16,0,0">
+        <TabItem Header="Login">
+          <StackPanel Margin="20">
+            <TextBlock Text="Login local offline" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="Email" FontWeight="Bold" />
+            <TextBox Text="{Binding Login.Email, UpdateSourceTrigger=PropertyChanged}" Width="340" HorizontalAlignment="Left" />
+            <TextBlock Text="Estado" FontWeight="Bold" />
+            <TextBlock Text="{Binding Login.Status}" />
+            <Button Content="Validar shell de login" Command="{Binding Login.ValidateCommand}" Width="180" HorizontalAlignment="Left" />
+          </StackPanel>
+        </TabItem>
+        <TabItem Header="Terminal">
+          <StackPanel Margin="20">
+            <TextBlock Text="Estado de terminal" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="{Binding TerminalStatus.Status}" />
+            <TextBlock Text="{Binding TerminalStatus.BindingSummary}" />
+          </StackPanel>
+        </TabItem>
+        <TabItem Header="Venta">
+          <StackPanel Margin="20">
+            <TextBlock Text="Venta táctil básica" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="{Binding Sales.CatalogSummary}" />
+            <TextBlock Text="{Binding Sales.CartSummary}" />
+            <Button Content="Crear venta offline demo" Command="{Binding Sales.CreateOfflineSaleCommand}" Width="190" HorizontalAlignment="Left" />
+          </StackPanel>
+        </TabItem>
+        <TabItem Header="Sync">
+          <StackPanel Margin="20">
+            <TextBlock Text="Sync status" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="{Binding SyncStatus.Status}" />
+            <TextBlock Text="{Binding SyncStatus.QueueSummary}" />
+          </StackPanel>
+        </TabItem>
+        <TabItem Header="Caja">
+          <StackPanel Margin="20">
+            <TextBlock Text="Caja local" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="{Binding CashShift.Status}" />
+            <TextBlock Text="{Binding CashShift.ExpectedCashSummary}" />
+          </StackPanel>
+        </TabItem>
+      </TabControl>
+    </Grid>
+  </DockPanel>
+</Window>
