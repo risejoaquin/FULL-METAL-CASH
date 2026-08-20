@@ -27,4 +27,14 @@ public interface ILocalPosRepository
     Task<int> RetryFailedOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default);
     Task SaveSyncAcknowledgementsAsync(IEnumerable<LocalSyncAcknowledgement> acknowledgements, CancellationToken cancellationToken = default);
     Task<int> CountOutboxByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default);
+
+    Task<LocalSyncPullState> GetSyncPullStateAsync(CancellationToken cancellationToken = default) => Task.FromResult(new LocalSyncPullState(null, null, 0, 0));
+    Task<int> ApplySyncPullChangesAsync(IReadOnlyCollection<LocalAppliedSyncChange> changes, string nextCursor, DateTimeOffset pulledAtUtc, CancellationToken cancellationToken = default) => Task.FromResult(changes.Count);
+    Task<int> CountAppliedSyncChangesAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
+    Task SaveRemoteSaleReadModelAsync(LocalRemoteSaleReadModel sale, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task SaveRemoteReceiptReadModelAsync(LocalRemoteReceiptReadModel receipt, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task<int> CountRemoteSalesAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
+    Task<int> CountRemoteReceiptsAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
+    Task<LocalRemoteSaleReadModel?> GetRemoteSaleByLocalSaleIdAsync(Guid localSaleId, CancellationToken cancellationToken = default) => Task.FromResult<LocalRemoteSaleReadModel?>(null);
+    Task<LocalRemoteReceiptReadModel?> GetRemoteReceiptBySaleIdAsync(Guid saleId, CancellationToken cancellationToken = default) => Task.FromResult<LocalRemoteReceiptReadModel?>(null);
 }

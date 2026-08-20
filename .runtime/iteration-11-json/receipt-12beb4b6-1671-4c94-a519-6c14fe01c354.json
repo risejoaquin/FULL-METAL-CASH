@@ -1,0 +1,69 @@
+﻿{
+    "id":  "12beb4b6-1671-4c94-a519-6c14fe01c354",
+    "tenantId":  "0ce5bbd0-528b-4aee-9fe3-93df001a4fde",
+    "saleId":  "6f710f6c-5b52-4aa6-9fa4-7a349b6ef43e",
+    "receiptNumber":  "SP-20260820-6F710F6C",
+    "publicToken":  "my_v3zdnQoe1xsFlSozLmeKHbpcK3xuLLiYBxN-DlYg",
+    "publicUrl":  "https://full-metal-cash-production.up.railway.app/api/v1/receipts/public/my_v3zdnQoe1xsFlSozLmeKHbpcK3xuLLiYBxN-DlYg",
+    "status":  "active",
+    "expiresAt":  null,
+    "issuedAt":  "2026-08-20T04:50:20.423994+00:00",
+    "createdAt":  "2026-08-20T04:50:20.423994+00:00",
+    "revokedAt":  null,
+    "lastSentAt":  null,
+    "lastSentEmail":  null,
+    "sendCount":  0,
+    "receipt":  {
+                    "saleId":  "6f710f6c-5b52-4aa6-9fa4-7a349b6ef43e",
+                    "tenantId":  "0ce5bbd0-528b-4aee-9fe3-93df001a4fde",
+                    "storeId":  "8e446c29-e9ad-41ed-a738-125aff7608b6",
+                    "tenantName":  "Mi Cafeteria",
+                    "storeName":  "Sucursal Principal",
+                    "storeAddress":  null,
+                    "storePhone":  null,
+                    "terminalId":  "cfb1cffd-4c0b-4108-8e9e-34523fecd8c0",
+                    "terminalName":  "Iteration 11 PosCore Pull ReadModels Terminal",
+                    "cashierUserId":  "dd304a2f-d1e1-4c53-8cc3-1978d6c2aabe",
+                    "cashierName":  "Admin Principal",
+                    "localSaleId":  "a4b01669-460b-449d-98cd-c12db4c6e2c2",
+                    "status":  "completed",
+                    "currency":  "MXN",
+                    "occurredAt":  "2026-08-20T04:50:11.64228+00:00",
+                    "createdAt":  "2026-08-20T04:50:17.427384+00:00",
+                    "subtotalCents":  4500,
+                    "discountCents":  0,
+                    "taxCents":  0,
+                    "tipCents":  0,
+                    "totalCents":  4500,
+                    "paidCents":  4500,
+                    "changeCents":  0,
+                    "lines":  [
+                                  {
+                                      "id":  "7a78d0fc-a1a2-4d52-9944-40eb60a5e5ac",
+                                      "lineNumber":  1,
+                                      "description":  "Americano 12oz",
+                                      "quantity":  "1.0000",
+                                      "unitPriceCents":  4500,
+                                      "discountCents":  0,
+                                      "taxCents":  0,
+                                      "totalCents":  4500,
+                                      "preparationNote":  null,
+                                      "modifiers":  [
+
+                                                    ]
+                                  }
+                              ],
+                    "payments":  [
+                                     {
+                                         "id":  "a697dc48-ad1e-4d82-8b5c-88685a12c827",
+                                         "methodCode":  "cash",
+                                         "methodType":  "cash",
+                                         "amountCents":  4500,
+                                         "currency":  "MXN",
+                                         "status":  "approved",
+                                         "reference":  "tendered=5000;change=500;localCashShiftId=eebda7a9-f57f-458d-870e-b9755c43d0c6",
+                                         "createdAt":  "2026-08-20T04:50:17.427384+00:00"
+                                     }
+                                 ]
+                }
+}

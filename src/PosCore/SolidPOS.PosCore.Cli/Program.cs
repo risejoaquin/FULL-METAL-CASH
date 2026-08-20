@@ -1,3 +1,4 @@
+using System.Text.Json;
 using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.Cash;
 using SolidPOS.PosCore.Application.Catalog;
@@ -15,9 +16,57 @@ static string GetOption(string[] args, string name, string? fallback = null)
     throw new InvalidOperationException($"Missing option {name}.");
 }
 
+
+static Guid ReadGuid(JsonElement root, string name)
+{
+    if (!root.TryGetProperty(name, out JsonElement property) || property.ValueKind != JsonValueKind.String || !Guid.TryParse(property.GetString(), out Guid value))
+    {
+        throw new InvalidOperationException($"JSON property '{name}' must be a GUID string.");
+    }
+
+    return value;
+}
+
+static Guid? ReadNullableGuid(JsonElement root, string name)
+{
+    if (!root.TryGetProperty(name, out JsonElement property) || property.ValueKind == JsonValueKind.Null) return null;
+    if (property.ValueKind != JsonValueKind.String) return null;
+    return Guid.TryParse(property.GetString(), out Guid value) ? value : null;
+}
+
+static string ReadString(JsonElement root, string name, string fallback)
+{
+    return root.TryGetProperty(name, out JsonElement property) && property.ValueKind == JsonValueKind.String
+        ? property.GetString() ?? fallback
+        : fallback;
+}
+
+static string? ReadNullableString(JsonElement root, string name)
+{
+    return root.TryGetProperty(name, out JsonElement property) && property.ValueKind == JsonValueKind.String
+        ? property.GetString()
+        : null;
+}
+
+static int ReadInt(JsonElement root, string name)
+{
+    if (!root.TryGetProperty(name, out JsonElement property) || property.ValueKind != JsonValueKind.Number || !property.TryGetInt32(out int value))
+    {
+        throw new InvalidOperationException($"JSON property '{name}' must be an integer.");
+    }
+
+    return value;
+}
+
+static DateTimeOffset? ReadNullableDateTimeOffset(JsonElement root, string name)
+{
+    if (!root.TryGetProperty(name, out JsonElement property) || property.ValueKind != JsonValueKind.String) return null;
+    return DateTimeOffset.TryParse(property.GetString(), out DateTimeOffset value) ? value : null;
+}
+
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status");
     return 0;
 }
 
@@ -370,6 +419,89 @@ switch (command)
         }
 
         Console.WriteLine($"Remote sync push completed. batchId={result.BatchId}; attempted={result.AttemptedCount}; accepted={result.AcceptedCount}; duplicate={result.DuplicateCount}; failed={result.FailedCount}; acknowledged={result.AcknowledgedEventIds.Count}");
+        return 0;
+    }
+
+
+    case "sync-pull":
+    {
+        var binding = await repository.GetTerminalBindingAsync().ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal must be bound before remote sync pull.");
+        var baseUrl = GetOption(args, "--base-url");
+        var limit = int.Parse(GetOption(args, "--limit", "100"));
+        var accessToken = GetOption(args, "--terminal-access-token", binding.TerminalToken);
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var remoteClient = new HttpRemoteSyncClient(httpClient, baseUrl);
+        var service = new LocalSyncPullService(repository, remoteClient, new SystemClock());
+        var result = await service.PullAndApplyAsync(limit, accessToken).ConfigureAwait(false);
+        Console.WriteLine($"Remote sync pull applied. previousCursor={result.PreviousCursor}; nextCursor={result.NextCursor}; received={result.ReceivedChangeCount}; applied={result.AppliedChangeCount}; skippedDuplicates={result.SkippedDuplicateCount}; hasMore={result.HasMore}");
+        return 0;
+    }
+
+    case "pull-status":
+    {
+        LocalSyncPullState state = await repository.GetSyncPullStateAsync().ConfigureAwait(false);
+        int applied = await repository.CountAppliedSyncChangesAsync().ConfigureAwait(false);
+        Console.WriteLine($"Local pull state. cursor={state.Cursor}; lastPulledAt={state.LastPulledAtUtc:O}; lastChangeCount={state.LastChangeCount}; appliedChanges={applied}; totalApplied={state.TotalAppliedChangeCount}");
+        return 0;
+    }
+
+    case "save-remote-sale":
+    {
+        var jsonFile = GetOption(args, "--json-file");
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(jsonFile).ConfigureAwait(false));
+        JsonElement root = document.RootElement;
+        Guid remoteSaleId = ReadGuid(root, "id");
+        Guid? localSaleId = ReadNullableGuid(root, "localSaleId");
+        var sale = new LocalRemoteSaleReadModel(
+            remoteSaleId,
+            localSaleId,
+            ReadGuid(root, "tenantId"),
+            ReadGuid(root, "storeId"),
+            ReadGuid(root, "terminalId"),
+            ReadString(root, "status", "completed"),
+            ReadInt(root, "totalCents"),
+            ReadNullableDateTimeOffset(root, "occurredAt"),
+            root.GetRawText(),
+            DateTimeOffset.UtcNow);
+        await repository.SaveRemoteSaleReadModelAsync(sale).ConfigureAwait(false);
+        Console.WriteLine($"Remote sale read model saved locally. remoteSaleId={sale.RemoteSaleId}; localSaleId={sale.LocalSaleId}; totalCents={sale.TotalCents}; status={sale.Status}");
+        return 0;
+    }
+
+    case "save-remote-receipt":
+    {
+        var jsonFile = GetOption(args, "--json-file");
+        using var document = JsonDocument.Parse(await File.ReadAllTextAsync(jsonFile).ConfigureAwait(false));
+        JsonElement root = document.RootElement;
+        var receipt = new LocalRemoteReceiptReadModel(
+            ReadGuid(root, "id"),
+            ReadGuid(root, "saleId"),
+            ReadString(root, "receiptNumber", string.Empty),
+            ReadNullableString(root, "publicToken"),
+            root.GetRawText(),
+            DateTimeOffset.UtcNow);
+        await repository.SaveRemoteReceiptReadModelAsync(receipt).ConfigureAwait(false);
+        Console.WriteLine($"Remote receipt read model saved locally. receiptId={receipt.ReceiptId}; saleId={receipt.SaleId}; receiptNumber={receipt.ReceiptNumber}");
+        return 0;
+    }
+
+    case "readmodel-status":
+    {
+        int sales = await repository.CountRemoteSalesAsync().ConfigureAwait(false);
+        int receipts = await repository.CountRemoteReceiptsAsync().ConfigureAwait(false);
+        int changes = await repository.CountAppliedSyncChangesAsync().ConfigureAwait(false);
+        var localSaleIdText = GetOption(args, "--local-sale-id", string.Empty);
+        if (!string.IsNullOrWhiteSpace(localSaleIdText))
+        {
+            var sale = await repository.GetRemoteSaleByLocalSaleIdAsync(Guid.Parse(localSaleIdText)).ConfigureAwait(false)
+                ?? throw new InvalidOperationException($"No local remote-sale read model exists for localSaleId={localSaleIdText}.");
+            var receipt = await repository.GetRemoteReceiptBySaleIdAsync(sale.RemoteSaleId).ConfigureAwait(false);
+            Console.WriteLine($"Local read models. remoteSales={sales}; remoteReceipts={receipts}; appliedChanges={changes}; localSaleId={sale.LocalSaleId}; remoteSaleId={sale.RemoteSaleId}; saleTotalCents={sale.TotalCents}; saleStatus={sale.Status}; receiptNumber={receipt?.ReceiptNumber}");
+            return 0;
+        }
+
+        Console.WriteLine($"Local read models. remoteSales={sales}; remoteReceipts={receipts}; appliedChanges={changes}");
         return 0;
     }
 

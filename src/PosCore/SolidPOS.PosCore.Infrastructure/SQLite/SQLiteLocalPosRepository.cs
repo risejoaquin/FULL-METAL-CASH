@@ -159,6 +159,43 @@ CREATE TABLE IF NOT EXISTS local_sale_payments (
   change_cents INTEGER NOT NULL,
   created_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS local_sync_pull_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  cursor TEXT NULL,
+  last_pulled_at_utc TEXT NULL,
+  last_change_count INTEGER NOT NULL DEFAULT 0,
+  total_applied_change_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS local_applied_changes (
+  change_id TEXT PRIMARY KEY,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  entity_version INTEGER NOT NULL,
+  changed_at_utc TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  applied_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_remote_sales (
+  remote_sale_id TEXT PRIMARY KEY,
+  local_sale_id TEXT NULL,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  total_cents INTEGER NOT NULL,
+  occurred_at_utc TEXT NULL,
+  raw_json TEXT NOT NULL,
+  applied_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_remote_receipts (
+  receipt_id TEXT PRIMARY KEY,
+  sale_id TEXT NOT NULL,
+  receipt_number TEXT NOT NULL,
+  public_token TEXT NULL,
+  raw_json TEXT NOT NULL,
+  applied_at_utc TEXT NOT NULL
+);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_local_catalog_products_sku ON local_catalog_products(sku);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_recipes_output ON local_inventory_recipes(output_product_id, output_variant_id, status);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_recipe_items_recipe ON local_inventory_recipe_items(recipe_id);
@@ -166,6 +203,9 @@ CREATE INDEX IF NOT EXISTS idx_local_inventory_movements_sale ON local_inventory
 CREATE INDEX IF NOT EXISTS idx_local_cash_shifts_open ON local_cash_shifts(status, opened_at_utc);
 CREATE INDEX IF NOT EXISTS idx_local_cash_movements_shift ON local_cash_movements(shift_id, occurred_at_utc);
 CREATE INDEX IF NOT EXISTS idx_local_sale_payments_shift ON local_sale_payments(shift_id);
+CREATE INDEX IF NOT EXISTS idx_local_applied_changes_entity ON local_applied_changes(entity_type, entity_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_local_remote_sales_local_sale ON local_remote_sales(local_sale_id) WHERE local_sale_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_local_remote_receipts_sale ON local_remote_receipts(sale_id);
 CREATE INDEX IF NOT EXISTS idx_local_outbox_pending ON local_outbox_events(status, sequence_number);
 CREATE INDEX IF NOT EXISTS idx_local_sync_ack_event ON local_sync_acknowledgements(outbox_event_id, acknowledged_at_utc);
 """);
@@ -681,6 +721,166 @@ VALUES ($id, $batchId, $outboxEventId, $remoteStatus, $remoteResponseJson, $ackn
         return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
     }
 
+    public Task<LocalSyncPullState> GetSyncPullStateAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT cursor, last_pulled_at_utc, last_change_count, total_applied_change_count FROM local_sync_pull_state WHERE id = 1;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+        {
+            return Task.FromResult(new LocalSyncPullState(null, null, 0, 0));
+        }
+
+        return Task.FromResult(new LocalSyncPullState(
+            reader.IsDBNull(0) ? null : reader.GetString(0),
+            reader.IsDBNull(1) ? null : DateTimeOffset.Parse(reader.GetString(1)),
+            reader.GetInt32(2),
+            reader.GetInt32(3)));
+    }
+
+    public Task<int> ApplySyncPullChangesAsync(IReadOnlyCollection<LocalAppliedSyncChange> changes, string nextCursor, DateTimeOffset pulledAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        int appliedCount = 0;
+        foreach (LocalAppliedSyncChange change in changes)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT OR IGNORE INTO local_applied_changes (change_id, entity_type, entity_id, operation, entity_version, changed_at_utc, payload_json, applied_at_utc)
+VALUES ($changeId, $entityType, $entityId, $operation, $entityVersion, $changedAtUtc, $payloadJson, $appliedAtUtc);
+""";
+            command.Parameters.AddWithValue("$changeId", change.ChangeId.ToString());
+            command.Parameters.AddWithValue("$entityType", change.EntityType);
+            command.Parameters.AddWithValue("$entityId", change.EntityId.ToString());
+            command.Parameters.AddWithValue("$operation", change.Operation);
+            command.Parameters.AddWithValue("$entityVersion", change.EntityVersion);
+            command.Parameters.AddWithValue("$changedAtUtc", change.ChangedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$payloadJson", change.PayloadJson);
+            command.Parameters.AddWithValue("$appliedAtUtc", change.AppliedAtUtc.ToString("O"));
+            appliedCount += command.ExecuteNonQuery();
+        }
+
+        using (var stateCommand = connection.CreateCommand())
+        {
+            stateCommand.Transaction = transaction;
+            stateCommand.CommandText = """
+INSERT INTO local_sync_pull_state (id, cursor, last_pulled_at_utc, last_change_count, total_applied_change_count)
+VALUES (1, $cursor, $lastPulledAtUtc, $lastChangeCount, $appliedCount)
+ON CONFLICT(id) DO UPDATE SET
+  cursor = excluded.cursor,
+  last_pulled_at_utc = excluded.last_pulled_at_utc,
+  last_change_count = excluded.last_change_count,
+  total_applied_change_count = local_sync_pull_state.total_applied_change_count + $appliedCount;
+""";
+            stateCommand.Parameters.AddWithValue("$cursor", nextCursor);
+            stateCommand.Parameters.AddWithValue("$lastPulledAtUtc", pulledAtUtc.ToString("O"));
+            stateCommand.Parameters.AddWithValue("$lastChangeCount", changes.Count);
+            stateCommand.Parameters.AddWithValue("$appliedCount", appliedCount);
+            stateCommand.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.FromResult(appliedCount);
+    }
+
+    public Task<int> CountAppliedSyncChangesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_applied_changes;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task SaveRemoteSaleReadModelAsync(LocalRemoteSaleReadModel sale, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_remote_sales (remote_sale_id, local_sale_id, tenant_id, store_id, terminal_id, status, total_cents, occurred_at_utc, raw_json, applied_at_utc)
+VALUES ($remoteSaleId, $localSaleId, $tenantId, $storeId, $terminalId, $status, $totalCents, $occurredAtUtc, $rawJson, $appliedAtUtc)
+ON CONFLICT(remote_sale_id) DO UPDATE SET
+  local_sale_id = excluded.local_sale_id,
+  status = excluded.status,
+  total_cents = excluded.total_cents,
+  occurred_at_utc = excluded.occurred_at_utc,
+  raw_json = excluded.raw_json,
+  applied_at_utc = excluded.applied_at_utc;
+""";
+        command.Parameters.AddWithValue("$remoteSaleId", sale.RemoteSaleId.ToString());
+        command.Parameters.AddWithValue("$localSaleId", sale.LocalSaleId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$tenantId", sale.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", sale.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", sale.TerminalId.ToString());
+        command.Parameters.AddWithValue("$status", sale.Status);
+        command.Parameters.AddWithValue("$totalCents", sale.TotalCents);
+        command.Parameters.AddWithValue("$occurredAtUtc", sale.OccurredAtUtc?.ToString("O") ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$rawJson", sale.RawJson);
+        command.Parameters.AddWithValue("$appliedAtUtc", sale.AppliedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task SaveRemoteReceiptReadModelAsync(LocalRemoteReceiptReadModel receipt, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_remote_receipts (receipt_id, sale_id, receipt_number, public_token, raw_json, applied_at_utc)
+VALUES ($receiptId, $saleId, $receiptNumber, $publicToken, $rawJson, $appliedAtUtc)
+ON CONFLICT(receipt_id) DO UPDATE SET
+  receipt_number = excluded.receipt_number,
+  public_token = excluded.public_token,
+  raw_json = excluded.raw_json,
+  applied_at_utc = excluded.applied_at_utc;
+""";
+        command.Parameters.AddWithValue("$receiptId", receipt.ReceiptId.ToString());
+        command.Parameters.AddWithValue("$saleId", receipt.SaleId.ToString());
+        command.Parameters.AddWithValue("$receiptNumber", receipt.ReceiptNumber);
+        command.Parameters.AddWithValue("$publicToken", receipt.PublicToken ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$rawJson", receipt.RawJson);
+        command.Parameters.AddWithValue("$appliedAtUtc", receipt.AppliedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountRemoteSalesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_remote_sales;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<int> CountRemoteReceiptsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_remote_receipts;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<LocalRemoteSaleReadModel?> GetRemoteSaleByLocalSaleIdAsync(Guid localSaleId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT remote_sale_id, local_sale_id, tenant_id, store_id, terminal_id, status, total_cents, occurred_at_utc, raw_json, applied_at_utc FROM local_remote_sales WHERE local_sale_id = $localSaleId LIMIT 1;";
+        command.Parameters.AddWithValue("$localSaleId", localSaleId.ToString());
+        using var reader = command.ExecuteReader();
+        return Task.FromResult<LocalRemoteSaleReadModel?>(reader.Read() ? ReadRemoteSale(reader) : null);
+    }
+
+    public Task<LocalRemoteReceiptReadModel?> GetRemoteReceiptBySaleIdAsync(Guid saleId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT receipt_id, sale_id, receipt_number, public_token, raw_json, applied_at_utc FROM local_remote_receipts WHERE sale_id = $saleId LIMIT 1;";
+        command.Parameters.AddWithValue("$saleId", saleId.ToString());
+        using var reader = command.ExecuteReader();
+        return Task.FromResult<LocalRemoteReceiptReadModel?>(reader.Read() ? ReadRemoteReceipt(reader) : null);
+    }
 
 
     public Task OpenLocalCashShiftAsync(LocalCashShift shift, CancellationToken cancellationToken = default)
@@ -981,6 +1181,27 @@ VALUES ($id, $shiftId, $tenantId, $storeId, $terminalId, $movementType, $amountC
         DateTimeOffset.Parse(reader.GetString(10)),
         reader.GetString(11),
         DateTimeOffset.Parse(reader.GetString(12)));
+
+
+    private static LocalRemoteSaleReadModel ReadRemoteSale(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        reader.IsDBNull(1) ? null : Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        Guid.Parse(reader.GetString(4)),
+        reader.GetString(5),
+        reader.GetInt32(6),
+        reader.IsDBNull(7) ? null : DateTimeOffset.Parse(reader.GetString(7)),
+        reader.GetString(8),
+        DateTimeOffset.Parse(reader.GetString(9)));
+
+    private static LocalRemoteReceiptReadModel ReadRemoteReceipt(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        reader.GetString(2),
+        reader.IsDBNull(3) ? null : reader.GetString(3),
+        reader.GetString(4),
+        DateTimeOffset.Parse(reader.GetString(5)));
 
     private static LocalOutboxEvent ReadOutboxEvent(SqliteDataReader reader) => new(
         Guid.Parse(reader.GetString(0)),

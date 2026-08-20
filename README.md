@@ -983,3 +983,16 @@ Validation script:
   -AdminEmail "admin@micafeteria.com" `
   -AdminPassword "AdminSeguro123!"
 ```
+
+## SolidPOS Iteration 11 — PosCore Pull Sync + Local Read Models
+
+Iteration 11 agrega pull sync local, cursor idempotente y read models locales de ventas/remotos/recibos materializados. Validación principal:
+
+```powershell
+.\scripts\poscore\validate-poscore-pull-sync-readmodels.ps1 `
+  -BaseUrl "https://full-metal-cash-production.up.railway.app" `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -StoreId "8e446c29-e9ad-41ed-a738-125aff7608b6" `
+  -AdminEmail "admin@micafeteria.com" `
+  -AdminPassword "AdminSeguro123!"
+```

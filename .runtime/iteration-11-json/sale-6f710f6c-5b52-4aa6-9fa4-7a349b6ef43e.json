@@ -1,0 +1,81 @@
+﻿{
+    "id":  "6f710f6c-5b52-4aa6-9fa4-7a349b6ef43e",
+    "tenantId":  "0ce5bbd0-528b-4aee-9fe3-93df001a4fde",
+    "storeId":  "8e446c29-e9ad-41ed-a738-125aff7608b6",
+    "terminalId":  "cfb1cffd-4c0b-4108-8e9e-34523fecd8c0",
+    "cashShiftId":  "a9a0df5e-104c-40cd-a398-b7da8534e9c1",
+    "customerId":  null,
+    "cashierUserId":  "dd304a2f-d1e1-4c53-8cc3-1978d6c2aabe",
+    "localSaleId":  "a4b01669-460b-449d-98cd-c12db4c6e2c2",
+    "status":  "completed",
+    "subtotalCents":  4500,
+    "discountCents":  0,
+    "taxCents":  0,
+    "tipCents":  0,
+    "totalCents":  4500,
+    "paidCents":  4500,
+    "changeCents":  0,
+    "currency":  "MXN",
+    "occurredAt":  "2026-08-20T04:50:11.64228+00:00",
+    "localCreatedAt":  "2026-08-20T04:50:11.64228+00:00",
+    "version":  1,
+    "createdAt":  "2026-08-20T04:50:17.427384+00:00",
+    "lines":  [
+                  {
+                      "id":  "7a78d0fc-a1a2-4d52-9944-40eb60a5e5ac",
+                      "productId":  "dd272b64-d450-4dd5-ace2-b17fc04ecc62",
+                      "variantId":  null,
+                      "lineNumber":  1,
+                      "description":  "Americano 12oz",
+                      "quantity":  "1.0000",
+                      "unitId":  "970ce297-1071-4c65-9806-b8c1ebc5071d",
+                      "unitPriceCents":  4500,
+                      "discountCents":  0,
+                      "taxCents":  0,
+                      "totalCents":  4500,
+                      "recipeId":  "71000000-0000-0000-0000-000000000002",
+                      "preparationNote":  null,
+                      "modifierIds":  [
+
+                                      ],
+                      "modifiers":  [
+
+                                    ]
+                  }
+              ],
+    "payments":  [
+                     {
+                         "id":  "a697dc48-ad1e-4d82-8b5c-88685a12c827",
+                         "paymentMethodId":  "aff2187a-ce5c-4d13-ad46-fd61c6bb9d9e",
+                         "localPaymentId":  "392d5ac0-bfaf-4e04-847c-53537d492bb4",
+                         "methodCode":  "cash",
+                         "methodType":  "cash",
+                         "amountCents":  4500,
+                         "currency":  "MXN",
+                         "status":  "approved",
+                         "reference":  "tendered=5000;change=500;localCashShiftId=eebda7a9-f57f-458d-870e-b9755c43d0c6",
+                         "createdAt":  "2026-08-20T04:50:17.427384+00:00"
+                     }
+                 ],
+    "inventoryMovements":  [
+                               {
+                                   "id":  "d7557fc8-ca4e-4f42-b133-626609df9d12",
+                                   "storeId":  "8e446c29-e9ad-41ed-a738-125aff7608b6",
+                                   "terminalId":  "cfb1cffd-4c0b-4108-8e9e-34523fecd8c0",
+                                   "productId":  "71000000-0000-0000-0000-000000000001",
+                                   "variantId":  null,
+                                   "sku":  "ING-CAFE-G",
+                                   "name":  "Café grano/molido",
+                                   "movementType":  "sale_recipe_component",
+                                   "quantityDelta":  "-18.0000",
+                                   "unitId":  "f8105c47-867c-45c9-a541-05c168d7f42d",
+                                   "unitCode":  "g",
+                                   "effect":  "recipe_component",
+                                   "recipeId":  "71000000-0000-0000-0000-000000000002",
+                                   "modifierId":  null,
+                                   "modifierBehavior":  null,
+                                   "localOccurredAt":  "2026-08-20T04:50:11.64228+00:00",
+                                   "createdAt":  "2026-08-20T04:50:17.427384+00:00"
+                               }
+                           ]
+}

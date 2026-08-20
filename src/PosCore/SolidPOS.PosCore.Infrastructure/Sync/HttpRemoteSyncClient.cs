@@ -5,7 +5,7 @@ using SolidPOS.PosCore.Application.Sync;
 
 namespace SolidPOS.PosCore.Infrastructure.Sync;
 
-public sealed class HttpRemoteSyncClient : IRemoteSyncClient
+public sealed class HttpRemoteSyncClient : IRemoteSyncClient, IRemoteSyncPullClient
 {
     private readonly HttpClient _httpClient;
     private readonly Uri _baseUri;
@@ -56,6 +56,54 @@ public sealed class HttpRemoteSyncClient : IRemoteSyncClient
             acknowledged);
     }
 
+
+    public async Task<RemoteSyncPullResponse> PullAsync(string? cursor, int limit, string terminalAccessToken, CancellationToken cancellationToken = default)
+    {
+        string query = string.IsNullOrWhiteSpace(cursor)
+            ? $"api/v1/sync/pull?cursor=&limit={limit}"
+            : $"api/v1/sync/pull?cursor={Uri.EscapeDataString(cursor)}&limit={limit}";
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, new Uri(_baseUri, query));
+        httpRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", terminalAccessToken);
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken).ConfigureAwait(false);
+        var raw = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Remote sync pull failed with HTTP {(int)response.StatusCode}: {raw}");
+        }
+
+        using var document = JsonDocument.Parse(string.IsNullOrWhiteSpace(raw) ? "{}" : raw);
+        var root = document.RootElement;
+        var changes = new List<RemoteSyncPullChange>();
+        if (root.TryGetProperty("changes", out JsonElement changesElement) && changesElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement change in changesElement.EnumerateArray())
+            {
+                changes.Add(new RemoteSyncPullChange(
+                    Guid.Parse(change.GetProperty("id").GetString()!),
+                    change.GetProperty("entityType").GetString()!,
+                    Guid.Parse(change.GetProperty("entityId").GetString()!),
+                    change.GetProperty("operation").GetString()!,
+                    change.GetProperty("entityVersion").GetInt64(),
+                    change.GetProperty("changedAt").GetDateTimeOffset(),
+                    change.GetProperty("payload").Clone(),
+                    TryGetGuid(change, "storeId"),
+                    TryGetGuid(change, "sourceTerminalId")));
+            }
+        }
+
+        return new RemoteSyncPullResponse(
+            Guid.Parse(root.GetProperty("tenantId").GetString()!),
+            Guid.Parse(root.GetProperty("storeId").GetString()!),
+            Guid.Parse(root.GetProperty("terminalId").GetString()!),
+            root.GetProperty("serverTime").GetDateTimeOffset(),
+            root.TryGetProperty("previousCursor", out JsonElement previousCursor) && previousCursor.ValueKind == JsonValueKind.String ? previousCursor.GetString() : null,
+            root.GetProperty("nextCursor").GetString()!,
+            root.TryGetProperty("hasMore", out JsonElement hasMore) && hasMore.ValueKind == JsonValueKind.True,
+            changes,
+            raw);
+    }
+
     private static object ToWireRequest(RemoteSyncPushRequest request) => new
     {
         batchId = request.BatchId,
@@ -99,6 +147,12 @@ public sealed class HttpRemoteSyncClient : IRemoteSyncClient
         }
 
         return acknowledged.ToArray();
+    }
+
+    private static Guid? TryGetGuid(JsonElement root, string name)
+    {
+        if (!root.TryGetProperty(name, out JsonElement property) || property.ValueKind != JsonValueKind.String) return null;
+        return Guid.TryParse(property.GetString(), out Guid value) ? value : null;
     }
 
     private static int GetInt(JsonElement root, string name)
