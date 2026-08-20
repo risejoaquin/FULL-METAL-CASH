@@ -5,6 +5,7 @@ using SolidPOS.PosCore.Application.Hardware;
 using SolidPOS.PosCore.Application.Auth;
 using SolidPOS.PosCore.Application.Catalog;
 using SolidPOS.PosCore.Application.OfflineSales;
+using SolidPOS.PosCore.Application.Resilience;
 using SolidPOS.PosCore.Application.Sync;
 using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Infrastructure.SQLite;
@@ -69,7 +70,7 @@ static DateTimeOffset? ReadNullableDateTimeOffset(JsonElement root, string name)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status, queue-receipt-print, process-print-jobs, open-cash-drawer-hardware, scan-barcode, authorize-payment-terminal, hardware-status");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status, queue-receipt-print, process-print-jobs, open-cash-drawer-hardware, scan-barcode, authorize-payment-terminal, hardware-status, verify-local-integrity, repair-local-runtime, backup-local-db, recovery-journal, seed-resilience-fixture");
     return 0;
 }
 
@@ -700,6 +701,63 @@ switch (command)
     {
         var summary = await repository.GetHardwareSummaryAsync(CancellationToken.None).ConfigureAwait(false);
         Console.WriteLine($"Local hardware status. pendingPrintJobs={summary.PendingPrintJobs}; printedPrintJobs={summary.PrintedPrintJobs}; failedPrintJobs={summary.FailedPrintJobs}; hardwareEvents={summary.HardwareEventCount}; latestDevice={summary.LatestEvent?.DeviceType}; latestEvent={summary.LatestEvent?.EventType}");
+        return 0;
+    }
+
+
+
+    case "seed-resilience-fixture":
+    {
+        var fixture = await repository.CreateResilienceValidationFixtureAsync(CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local resilience validation fixture created. outboxEventId={fixture.OutboxEventId}; printJobId={fixture.PrintJobId}; sessionId={fixture.SessionId}");
+        return 0;
+    }
+
+    case "verify-local-integrity":
+    {
+        var service = new LocalResilienceService(repository);
+        var report = await service.VerifyAsync(CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local integrity check. databasePath={report.DatabasePath}; sqlite={report.SQLiteIntegrityCheck}; ok={report.IsOk}; pendingOutbox={report.PendingOutboxEvents}; failedOutbox={report.FailedOutboxEvents}; deadLetterOutbox={report.DeadLetterOutboxEvents}; pendingPrintJobs={report.PendingPrintJobs}; failedPrintJobs={report.FailedPrintJobs}; openCashShifts={report.OpenCashShifts}; activeSessions={report.ActiveSessions}; recoveryJournalEntries={report.RecoveryJournalEntries}");
+        foreach (var issue in report.Issues)
+        {
+            Console.WriteLine($"Integrity issue. code={issue.Code}; severity={issue.Severity}; count={issue.Count}; message={issue.Message}");
+        }
+        if (!report.IsOk && GetOption(args, "--strict", "false").Equals("true", StringComparison.OrdinalIgnoreCase))
+        {
+            return 2;
+        }
+        return 0;
+    }
+
+    case "backup-local-db":
+    {
+        var directory = GetOption(args, "--backup-dir", Path.Combine(Path.GetDirectoryName(dbPath) ?? Environment.CurrentDirectory, "backups"));
+        var service = new LocalResilienceService(repository);
+        var backup = await service.BackupAsync(directory, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local database backup created. backupPath={backup.BackupPath}; bytes={backup.Bytes}; createdAt={backup.CreatedAtUtc:O}");
+        return 0;
+    }
+
+    case "repair-local-runtime":
+    {
+        var reason = GetOption(args, "--reason", "manual_recovery");
+        var createBackup = GetOption(args, "--backup", "true").Equals("true", StringComparison.OrdinalIgnoreCase);
+        var service = new LocalResilienceService(repository);
+        var result = await service.RepairAsync(reason, createBackup, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local runtime recovery completed. journalId={result.JournalId}; outboxRepaired={result.OutboxEventsRepaired}; printJobsRepaired={result.PrintJobsRepaired}; sessionsClosed={result.SessionsClosed}; cashShiftsFlagged={result.CashShiftsFlagged}; backupCreated={result.BackupCreated}; backupPath={result.BackupPath}; message={result.Message}");
+        return 0;
+    }
+
+    case "recovery-journal":
+    {
+        var limit = int.Parse(GetOption(args, "--limit", "10"));
+        var service = new LocalResilienceService(repository);
+        var entries = await service.JournalAsync(limit, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local recovery journal. entries={entries.Count}");
+        foreach (var entry in entries)
+        {
+            Console.WriteLine($"Recovery journal entry. id={entry.Id}; operation={entry.Operation}; status={entry.Status}; startedAt={entry.StartedAtUtc:O}; completedAt={entry.CompletedAtUtc:O}; message={entry.Message}");
+        }
         return 0;
     }
 

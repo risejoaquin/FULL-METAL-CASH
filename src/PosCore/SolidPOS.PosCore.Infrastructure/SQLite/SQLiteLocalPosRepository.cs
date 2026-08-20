@@ -4,7 +4,7 @@ using SolidPOS.PosCore.Domain;
 
 namespace SolidPOS.PosCore.Infrastructure.SQLite;
 
-public sealed class SQLiteLocalPosRepository : ILocalPosRepository
+public sealed class SQLiteLocalPosRepository : ILocalPosRepository, ILocalResilienceRepository
 {
     private readonly SQLiteLocalDatabase _database;
 
@@ -261,6 +261,15 @@ CREATE TABLE IF NOT EXISTS local_hardware_events (
   message TEXT NOT NULL,
   occurred_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS local_recovery_journal (
+  id TEXT PRIMARY KEY,
+  operation TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message TEXT NOT NULL,
+  started_at_utc TEXT NOT NULL,
+  completed_at_utc TEXT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_local_recovery_journal_time ON local_recovery_journal(started_at_utc);
 CREATE INDEX IF NOT EXISTS idx_local_sessions_active ON local_sessions(status, expires_at_utc);
 CREATE INDEX IF NOT EXISTS idx_local_audit_events_time ON local_audit_events(occurred_at_utc);
 CREATE INDEX IF NOT EXISTS idx_local_print_jobs_status ON local_print_jobs(status, queued_at_utc);
@@ -1427,6 +1436,179 @@ VALUES ($id, $tenantId, $storeId, $terminalId, $deviceType, $eventType, $message
         return Task.FromResult(new LocalHardwareSummary(pending, printed, failed, events, latest));
     }
 
+
+
+    public Task<(Guid OutboxEventId, Guid PrintJobId, Guid SessionId)> CreateResilienceValidationFixtureAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        var tenantId = Guid.Parse("0ce5bbd0-528b-4aee-9fe3-93df001a4fde");
+        var storeId = Guid.Parse("8e446c29-e9ad-41ed-a738-125aff7608b6");
+        var terminalId = Guid.NewGuid();
+        using (var binding = connection.CreateCommand())
+        {
+            binding.CommandText = "SELECT tenant_id, store_id, terminal_id FROM terminal_binding WHERE id = 1;";
+            using var reader = binding.ExecuteReader();
+            if (reader.Read())
+            {
+                tenantId = Guid.Parse(reader.GetString(0));
+                storeId = Guid.Parse(reader.GetString(1));
+                terminalId = Guid.Parse(reader.GetString(2));
+            }
+        }
+
+        var outboxEventId = Guid.NewGuid();
+        var printJobId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        using var transaction = connection.BeginTransaction();
+        using (var outbox = connection.CreateCommand())
+        {
+            outbox.Transaction = transaction;
+            outbox.CommandText = "INSERT INTO local_outbox_events (id, tenant_id, store_id, terminal_id, event_type, schema_version, sequence_number, payload_json, status, created_at_utc, synced_at_utc, last_error, attempts) VALUES ($id, $tenantId, $storeId, $terminalId, 'pos.validation_recovery', 4, $sequence, '{}', 3, $createdAt, NULL, 'fixture_failed_outbox', 0);";
+            outbox.Parameters.AddWithValue("$id", outboxEventId.ToString());
+            outbox.Parameters.AddWithValue("$tenantId", tenantId.ToString());
+            outbox.Parameters.AddWithValue("$storeId", storeId.ToString());
+            outbox.Parameters.AddWithValue("$terminalId", terminalId.ToString());
+            outbox.Parameters.AddWithValue("$sequence", now.ToUnixTimeMilliseconds());
+            outbox.Parameters.AddWithValue("$createdAt", now.ToString("O"));
+            outbox.ExecuteNonQuery();
+        }
+        using (var print = connection.CreateCommand())
+        {
+            print.Transaction = transaction;
+            print.CommandText = "INSERT INTO local_print_jobs (id, tenant_id, store_id, terminal_id, sale_id, receipt_id, receipt_number, content, status, queued_at_utc, printed_at_utc, last_error, attempts) VALUES ($id, $tenantId, $storeId, $terminalId, $saleId, $receiptId, 'SP-RECOVERY-FIXTURE', 'Recovery fixture receipt', 'failed', $queuedAt, NULL, 'fixture_failed_print', 0);";
+            print.Parameters.AddWithValue("$id", printJobId.ToString());
+            print.Parameters.AddWithValue("$tenantId", tenantId.ToString());
+            print.Parameters.AddWithValue("$storeId", storeId.ToString());
+            print.Parameters.AddWithValue("$terminalId", terminalId.ToString());
+            print.Parameters.AddWithValue("$saleId", Guid.NewGuid().ToString());
+            print.Parameters.AddWithValue("$receiptId", Guid.NewGuid().ToString());
+            print.Parameters.AddWithValue("$queuedAt", now.ToString("O"));
+            print.ExecuteNonQuery();
+        }
+        using (var session = connection.CreateCommand())
+        {
+            session.Transaction = transaction;
+            session.CommandText = "INSERT INTO local_sessions (session_id, user_id, tenant_id, store_id, email, display_name, role_code, created_at_utc, expires_at_utc, status) VALUES ($sessionId, $userId, $tenantId, $storeId, 'recovery.fixture@solidpos.local', 'Recovery Fixture', 'cashier', $createdAt, $expiresAt, 'active');";
+            session.Parameters.AddWithValue("$sessionId", sessionId.ToString());
+            session.Parameters.AddWithValue("$userId", Guid.NewGuid().ToString());
+            session.Parameters.AddWithValue("$tenantId", tenantId.ToString());
+            session.Parameters.AddWithValue("$storeId", storeId.ToString());
+            session.Parameters.AddWithValue("$createdAt", now.AddHours(-2).ToString("O"));
+            session.Parameters.AddWithValue("$expiresAt", now.AddHours(-1).ToString("O"));
+            session.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return Task.FromResult((outboxEventId, printJobId, sessionId));
+    }
+
+    public Task<LocalIntegrityReport> VerifyIntegrityAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        var sqliteIntegrity = "unknown";
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "PRAGMA integrity_check;";
+            sqliteIntegrity = Convert.ToString(command.ExecuteScalar()) ?? "unknown";
+        }
+
+        int pendingOutbox = ScalarInt(connection, "SELECT COUNT(1) FROM local_outbox_events WHERE status = 0;");
+        int failedOutbox = ScalarInt(connection, "SELECT COUNT(1) FROM local_outbox_events WHERE status = 3;");
+        int deadLetterOutbox = ScalarInt(connection, "SELECT COUNT(1) FROM local_outbox_events WHERE status = 4;");
+        int pendingPrintJobs = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'pending';");
+        int failedPrintJobs = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'failed';");
+        int openCashShifts = ScalarInt(connection, "SELECT COUNT(1) FROM local_cash_shifts WHERE status = 'open';");
+        int activeSessions = ScalarInt(connection, "SELECT COUNT(1) FROM local_sessions WHERE status = 'active';");
+        int journalEntries = ScalarInt(connection, "SELECT COUNT(1) FROM local_recovery_journal;");
+
+        var issues = new List<LocalIntegrityIssue>();
+        if (!string.Equals(sqliteIntegrity, "ok", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(new LocalIntegrityIssue("sqlite.integrity", "critical", $"SQLite integrity_check returned {sqliteIntegrity}.", 1));
+        }
+        if (deadLetterOutbox > 0)
+        {
+            issues.Add(new LocalIntegrityIssue("outbox.dead_letter", "critical", "Local outbox has dead-letter events that require operator review.", deadLetterOutbox));
+        }
+        if (failedOutbox > 0)
+        {
+            issues.Add(new LocalIntegrityIssue("outbox.failed", "warning", "Local outbox has failed events eligible for controlled retry.", failedOutbox));
+        }
+        if (failedPrintJobs > 0)
+        {
+            issues.Add(new LocalIntegrityIssue("print.failed", "warning", "Local print queue has failed jobs eligible for controlled retry.", failedPrintJobs));
+        }
+        if (openCashShifts > 1)
+        {
+            issues.Add(new LocalIntegrityIssue("cash_shift.multiple_open", "critical", "More than one local cash shift is open for this terminal database.", openCashShifts));
+        }
+
+        bool ok = !issues.Any(x => x.Severity == "critical");
+        var report = new LocalIntegrityReport(_database.DatabasePath, ok, sqliteIntegrity, pendingOutbox, failedOutbox, deadLetterOutbox, pendingPrintJobs, failedPrintJobs, openCashShifts, activeSessions, journalEntries, issues);
+        return Task.FromResult(report);
+    }
+
+    public Task<LocalRecoveryResult> RepairRuntimeAsync(string reason, bool createBackup, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        var journalId = Guid.NewGuid();
+        var startedAt = DateTimeOffset.UtcNow;
+        InsertRecoveryJournal(connection, journalId, "repair", "running", reason, startedAt, null);
+
+        string? backupPath = null;
+        bool backupCreated = false;
+        if (createBackup)
+        {
+            var backup = CreateBackupFile(Path.Combine(Path.GetDirectoryName(_database.DatabasePath) ?? Environment.CurrentDirectory, "backups"));
+            backupPath = backup.BackupPath;
+            backupCreated = true;
+        }
+
+        int outboxRepaired;
+        int printRepaired;
+        int sessionsClosed;
+        int cashFlagged = Math.Max(0, ScalarInt(connection, "SELECT COUNT(1) FROM local_cash_shifts WHERE status = 'open';") - 1);
+        using (var transaction = connection.BeginTransaction())
+        {
+            outboxRepaired = ExecuteNonQuery(connection, transaction, "UPDATE local_outbox_events SET status = 0, last_error = 'recovered_for_retry', attempts = attempts + 1 WHERE status = 3 AND attempts < 5;");
+            printRepaired = ExecuteNonQuery(connection, transaction, "UPDATE local_print_jobs SET status = 'pending', last_error = NULL, attempts = attempts + 1 WHERE status = 'failed' AND attempts < 5;");
+            sessionsClosed = ExecuteNonQuery(connection, transaction, "UPDATE local_sessions SET status = 'closed' WHERE status = 'active' AND expires_at_utc <= strftime('%Y-%m-%dT%H:%M:%f+00:00','now');");
+            transaction.Commit();
+        }
+
+        var completedAt = DateTimeOffset.UtcNow;
+        var message = $"Local recovery completed. outboxRepaired={outboxRepaired}; printJobsRepaired={printRepaired}; sessionsClosed={sessionsClosed}; cashShiftsFlagged={cashFlagged}";
+        UpdateRecoveryJournal(connection, journalId, "completed", message, completedAt);
+        return Task.FromResult(new LocalRecoveryResult(journalId, outboxRepaired, printRepaired, sessionsClosed, cashFlagged, backupCreated, backupPath, message));
+    }
+
+    public Task<LocalBackupResult> CreateBackupAsync(string destinationDirectory, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(CreateBackupFile(destinationDirectory));
+    }
+
+    public Task<IReadOnlyList<LocalRecoveryJournalEntry>> GetRecoveryJournalAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, operation, status, message, started_at_utc, completed_at_utc FROM local_recovery_journal ORDER BY started_at_utc DESC LIMIT $limit;";
+        command.Parameters.AddWithValue("$limit", limit);
+        using var reader = command.ExecuteReader();
+        var entries = new List<LocalRecoveryJournalEntry>();
+        while (reader.Read())
+        {
+            entries.Add(new LocalRecoveryJournalEntry(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                DateTimeOffset.Parse(reader.GetString(4)),
+                reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5))));
+        }
+
+        return Task.FromResult<IReadOnlyList<LocalRecoveryJournalEntry>>(entries);
+    }
+
     private static void InsertOutboxEvent(SqliteConnection connection, SqliteTransaction transaction, LocalOutboxEvent outboxEvent)
     {
         using var command = connection.CreateCommand();
@@ -1576,8 +1758,51 @@ VALUES ($id, $shiftId, $tenantId, $storeId, $terminalId, $movementType, $amountC
         reader.GetInt32(12));
 
 
-    private static int ScalarInt(SqliteConnection connection, string sql)
+
+    private LocalBackupResult CreateBackupFile(string destinationDirectory)
     {
+        Directory.CreateDirectory(destinationDirectory);
+        var source = _database.DatabasePath;
+        var timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmss");
+        var backupPath = Path.Combine(destinationDirectory, $"solidpos-poscore-{timestamp}.sqlite.bak");
+        File.Copy(source, backupPath, overwrite: false);
+        var file = new FileInfo(backupPath);
+        return new LocalBackupResult(backupPath, file.Length, DateTimeOffset.UtcNow);
+    }
+
+    private static int ExecuteNonQuery(SqliteConnection connection, SqliteTransaction transaction, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        return command.ExecuteNonQuery();
+    }
+
+    private static void InsertRecoveryJournal(SqliteConnection connection, Guid id, string operation, string status, string message, DateTimeOffset startedAtUtc, DateTimeOffset? completedAtUtc)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO local_recovery_journal (id, operation, status, message, started_at_utc, completed_at_utc) VALUES ($id, $operation, $status, $message, $startedAtUtc, $completedAtUtc);";
+        command.Parameters.AddWithValue("$id", id.ToString());
+        command.Parameters.AddWithValue("$operation", operation);
+        command.Parameters.AddWithValue("$status", status);
+        command.Parameters.AddWithValue("$message", message);
+        command.Parameters.AddWithValue("$startedAtUtc", startedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$completedAtUtc", completedAtUtc?.ToString("O") ?? (object)DBNull.Value);
+        command.ExecuteNonQuery();
+    }
+
+    private static void UpdateRecoveryJournal(SqliteConnection connection, Guid id, string status, string message, DateTimeOffset completedAtUtc)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_recovery_journal SET status = $status, message = $message, completed_at_utc = $completedAtUtc WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+        command.Parameters.AddWithValue("$status", status);
+        command.Parameters.AddWithValue("$message", message);
+        command.Parameters.AddWithValue("$completedAtUtc", completedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+    }
+
+    private static int ScalarInt(SqliteConnection connection, string sql)    {
         using var command = connection.CreateCommand();
         command.CommandText = sql;
         return Convert.ToInt32(command.ExecuteScalar());
