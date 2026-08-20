@@ -61,7 +61,7 @@ Write-Host ""
   health     = "/health/ready"
   sync       = "/api/v1/sync/status"
   reports    = "/api/v1/sales, /api/v1/returns"
-  audit      = "/api/v1/audit"
+  audit      = "/api/v1/audit/events"
   sections   = "Overview, Reports, Operations, Audit"
   message    = "PosDashboard reports audit operations dashboard completed."
 } | Format-List

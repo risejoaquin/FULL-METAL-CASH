@@ -21,7 +21,7 @@ export function AuditDashboard({ snapshot }: { snapshot: OperationsSnapshot | nu
           </thead>
           <tbody>
             {audit.length === 0 ? (
-              <tr><td className="p-3 text-slate-500" colSpan={4}>Sin eventos cargados todavía. Cliente listo para /api/v1/audit.</td></tr>
+              <tr><td className="p-3 text-slate-500" colSpan={4}>Sin eventos cargados todavía. Cliente listo para /api/v1/audit/events.</td></tr>
             ) : audit.map((entry, index) => (
               <tr key={entry.auditId ?? entry.id ?? index} className="border-t border-slate-100">
                 <td className="p-3 font-medium">{entry.action ?? 'unknown'}</td>

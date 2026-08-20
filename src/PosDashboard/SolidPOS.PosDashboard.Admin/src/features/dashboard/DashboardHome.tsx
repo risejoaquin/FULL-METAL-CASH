@@ -64,7 +64,7 @@ export function DashboardHome({ session, activeSection }: { session: LoginRespon
         <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
           <p>Reports: /api/v1/sales, /api/v1/returns</p>
           <p>Operations: /health/ready, /api/v1/sync/status</p>
-          <p>Audit: /api/v1/audit</p>
+          <p>Audit: /api/v1/audit/events</p>
         </div>
       </Card>
 

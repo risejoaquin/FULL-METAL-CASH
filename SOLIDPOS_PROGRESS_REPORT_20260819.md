@@ -56,3 +56,22 @@ Objetivo: cachear recetas/BOM desde PosServer, descontar inventario local estima
 ## Iteration 21 — Production Security Closure
 
 Prepared: security closure scripts, secret generation helpers, stronger local secret scan, refresh token revocation SQL, production validation script, and operational checklist. Pending user validation after rotating production secrets in Railway/Supabase.
+
+## SolidPOS Iteration 22 — Production Pilot Readiness
+
+Status: Prepared for validation.
+
+Scope:
+
+- Production pilot readiness validator.
+- Pilot GO/NO-GO checklist.
+- Pilot runbook.
+- Pilot checklist.
+- Dashboard audit route alignment to `/api/v1/audit/events`.
+- Validation of liveness, readiness, login, metrics, sync, provisioning, sales, returns and audit.
+
+Closure target:
+
+```text
+SolidPOS Iteration 22 — Production Pilot Readiness = PASS REAL PRODUCTION
+```

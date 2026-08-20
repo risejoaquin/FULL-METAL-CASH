@@ -200,7 +200,7 @@ export class PosServerClient {
 
   async getAuditLog(accessToken: string, limit = 10): Promise<AuditEntryDto[]> {
     try {
-      const response = await fetch(`${this.baseUrl}/api/v1/audit?limit=${limit}`, {
+      const response = await fetch(`${this.baseUrl}/api/v1/audit/events?limit=${limit}`, {
         headers: authHeaders(accessToken)
       });
       const payload = await safeJson<AuditEntryDto[] | { items?: AuditEntryDto[]; auditEvents?: AuditEntryDto[] }>(response);
