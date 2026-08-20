@@ -1,12 +1,12 @@
 <Window x:Class="SolidPOS.PosCore.Wpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SolidPOS PosCore" Height="720" Width="1080" MinHeight="600" MinWidth="900">
+        Title="SolidPOS PosCore" Height="760" Width="1180" MinHeight="650" MinWidth="980">
   <DockPanel>
     <Border DockPanel.Dock="Top" Padding="16" Background="#20242A">
       <StackPanel>
         <TextBlock Text="SolidPOS PosCore" FontSize="24" FontWeight="Bold" Foreground="White" />
-        <TextBlock Text="WPF Shell + MVVM Foundation" Foreground="#D7DCE2" />
+        <TextBlock Text="WPF Sales Flow QSR" Foreground="#D7DCE2" />
       </StackPanel>
     </Border>
 
@@ -19,8 +19,8 @@
       <Border Grid.Row="0" Padding="12" BorderBrush="#DDD" BorderThickness="1" CornerRadius="6">
         <StackPanel Orientation="Horizontal">
           <TextBlock Text="Runtime DB:" FontWeight="Bold" />
-          <TextBlock Text="{Binding DatabasePath}" />
-          <TextBlock Text=" | Shell:" FontWeight="Bold" Margin="16,4,4,4" />
+          <TextBlock Text="{Binding DatabasePath}" Margin="4,0,0,0" />
+          <TextBlock Text=" | Shell:" FontWeight="Bold" Margin="16,0,4,0" />
           <TextBlock Text="{Binding ShellStatus}" />
         </StackPanel>
       </Border>
@@ -29,40 +29,95 @@
         <TabItem Header="Login">
           <StackPanel Margin="20">
             <TextBlock Text="Login local offline" FontSize="20" FontWeight="Bold" />
-            <TextBlock Text="Email" FontWeight="Bold" />
+            <TextBlock Text="Email" FontWeight="Bold" Margin="0,12,0,2" />
             <TextBox Text="{Binding Login.Email, UpdateSourceTrigger=PropertyChanged}" Width="340" HorizontalAlignment="Left" />
-            <TextBlock Text="Estado" FontWeight="Bold" />
+            <TextBlock Text="Estado" FontWeight="Bold" Margin="0,12,0,2" />
             <TextBlock Text="{Binding Login.Status}" />
-            <Button Content="Validar shell de login" Command="{Binding Login.ValidateCommand}" Width="180" HorizontalAlignment="Left" />
+            <Button Content="Validar shell de login" Command="{Binding Login.ValidateCommand}" Width="180" HorizontalAlignment="Left" Margin="0,12,0,0" />
           </StackPanel>
         </TabItem>
+
         <TabItem Header="Terminal">
           <StackPanel Margin="20">
             <TextBlock Text="Estado de terminal" FontSize="20" FontWeight="Bold" />
-            <TextBlock Text="{Binding TerminalStatus.Status}" />
+            <TextBlock Text="{Binding TerminalStatus.Status}" Margin="0,12,0,0" />
             <TextBlock Text="{Binding TerminalStatus.BindingSummary}" />
           </StackPanel>
         </TabItem>
-        <TabItem Header="Venta">
-          <StackPanel Margin="20">
-            <TextBlock Text="Venta táctil básica" FontSize="20" FontWeight="Bold" />
-            <TextBlock Text="{Binding Sales.CatalogSummary}" />
-            <TextBlock Text="{Binding Sales.CartSummary}" />
-            <Button Content="Crear venta offline demo" Command="{Binding Sales.CreateOfflineSaleCommand}" Width="190" HorizontalAlignment="Left" />
-          </StackPanel>
+
+        <TabItem Header="Venta QSR">
+          <Grid Margin="20">
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="2*" />
+              <ColumnDefinition Width="3*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0">
+              <TextBlock Text="Catalogo local" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="{Binding Sales.CatalogSummary}" TextWrapping="Wrap" Margin="0,8,0,12" />
+              <Button Content="Americano 12oz" Command="{Binding Sales.AddAmericanoCommand}" Height="64" FontSize="18" />
+              <Button Content="+ Cantidad" Command="{Binding Sales.IncreaseQuantityCommand}" Height="44" Margin="0,8,0,0" />
+              <Button Content="Limpiar carrito" Command="{Binding Sales.ClearCartCommand}" Height="44" Margin="0,8,0,0" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Margin="24,0,0,0">
+              <TextBlock Text="Carrito" FontSize="20" FontWeight="Bold" />
+              <TextBlock Text="{Binding Sales.CartSummary}" TextWrapping="Wrap" Margin="0,8,0,12" />
+              <UniformGrid Columns="2" Rows="4" Margin="0,0,0,12">
+                <TextBlock Text="SKU" FontWeight="Bold" />
+                <TextBlock Text="{Binding Sales.SelectedSku}" />
+                <TextBlock Text="Cantidad" FontWeight="Bold" />
+                <TextBlock Text="{Binding Sales.Quantity}" />
+                <TextBlock Text="Total cents" FontWeight="Bold" />
+                <TextBlock Text="{Binding Sales.TotalCents}" />
+                <TextBlock Text="Cambio cents" FontWeight="Bold" />
+                <TextBlock Text="{Binding Sales.ChangeCents}" />
+              </UniformGrid>
+              <TextBlock Text="Efectivo recibido cents" FontWeight="Bold" />
+              <TextBox Text="{Binding Sales.TenderedCents, UpdateSourceTrigger=PropertyChanged}" Width="180" HorizontalAlignment="Left" />
+              <TextBlock Text="{Binding Sales.PaymentSummary}" TextWrapping="Wrap" Margin="0,8,0,0" />
+              <Button Content="Cobrar efectivo" Command="{Binding Sales.TakeCashPaymentCommand}" Height="44" Margin="0,12,0,0" />
+              <Button Content="Encolar recibo fake" Command="{Binding Sales.QueueFakeReceiptCommand}" Height="44" Margin="0,8,0,0" />
+              <Button Content="Actualizar sync visual" Command="{Binding Sales.MarkSyncedCommand}" Height="44" Margin="0,8,0,0" />
+              <TextBlock Text="{Binding Sales.SaleStatus}" TextWrapping="Wrap" Margin="0,12,0,0" />
+              <TextBlock Text="{Binding Sales.ReceiptStatus}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Sales.PrintStatus}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Sales.SyncVisualStatus}" TextWrapping="Wrap" />
+            </StackPanel>
+          </Grid>
         </TabItem>
+
         <TabItem Header="Sync">
           <StackPanel Margin="20">
             <TextBlock Text="Sync status" FontSize="20" FontWeight="Bold" />
-            <TextBlock Text="{Binding SyncStatus.Status}" />
+            <TextBlock Text="{Binding SyncStatus.Status}" Margin="0,12,0,0" />
             <TextBlock Text="{Binding SyncStatus.QueueSummary}" />
+            <Button Content="Marcar venta pendiente" Command="{Binding SyncStatus.MarkPendingSaleCommand}" Width="190" HorizontalAlignment="Left" Margin="0,12,0,0" />
+            <Button Content="Marcar venta sincronizada" Command="{Binding SyncStatus.MarkSaleSyncedCommand}" Width="210" HorizontalAlignment="Left" Margin="0,8,0,0" />
           </StackPanel>
         </TabItem>
+
         <TabItem Header="Caja">
           <StackPanel Margin="20">
             <TextBlock Text="Caja local" FontSize="20" FontWeight="Bold" />
-            <TextBlock Text="{Binding CashShift.Status}" />
-            <TextBlock Text="{Binding CashShift.ExpectedCashSummary}" />
+            <TextBlock Text="{Binding CashShift.Status}" Margin="0,12,0,0" />
+            <TextBlock Text="{Binding CashShift.ExpectedCashSummary}" TextWrapping="Wrap" />
+            <UniformGrid Columns="2" Rows="5" Width="420" HorizontalAlignment="Left" Margin="0,12,0,12">
+              <TextBlock Text="Apertura" FontWeight="Bold" />
+              <TextBox Text="{Binding CashShift.OpeningAmountCents, UpdateSourceTrigger=PropertyChanged}" />
+              <TextBlock Text="Cash sales" FontWeight="Bold" />
+              <TextBlock Text="{Binding CashShift.CashSalesCents}" />
+              <TextBlock Text="Cash in" FontWeight="Bold" />
+              <TextBlock Text="{Binding CashShift.CashInCents}" />
+              <TextBlock Text="Cash out" FontWeight="Bold" />
+              <TextBlock Text="{Binding CashShift.CashOutCents}" />
+              <TextBlock Text="Expected" FontWeight="Bold" />
+              <TextBlock Text="{Binding CashShift.ExpectedCashCents}" />
+            </UniformGrid>
+            <Button Content="Abrir caja local" Command="{Binding CashShift.OpenLocalShiftCommand}" Width="170" HorizontalAlignment="Left" />
+            <Button Content="Cash in +1000" Command="{Binding CashShift.AddCashInCommand}" Width="170" HorizontalAlignment="Left" Margin="0,8,0,0" />
+            <Button Content="Cash out +500" Command="{Binding CashShift.AddCashOutCommand}" Width="170" HorizontalAlignment="Left" Margin="0,8,0,0" />
+            <Button Content="Cerrar caja local" Command="{Binding CashShift.CloseLocalShiftCommand}" Width="170" HorizontalAlignment="Left" Margin="0,8,0,0" />
           </StackPanel>
         </TabItem>
       </TabControl>

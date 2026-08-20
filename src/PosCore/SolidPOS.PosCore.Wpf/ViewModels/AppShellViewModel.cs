@@ -34,13 +34,22 @@ public sealed class AppShellViewModel : ViewModelBase
 
     public void InitializeForShell()
     {
-        ShellStatus = "Shell MVVM listo.";
+        ShellStatus = "Shell MVVM listo para flujo QSR.";
         TerminalStatus.Status = "TerminalStatusViewModel listo para leer binding local.";
-        TerminalStatus.BindingSummary = "Binding local será provisto por PosCore.Infrastructure.SQLite.";
-        Sales.CatalogSummary = "Catálogo local listo para ser leído desde SQLite.";
-        SyncStatus.Status = "SyncStatusViewModel listo para outbox/pull state.";
+        TerminalStatus.BindingSummary = "Binding local sera provisto por PosCore.Infrastructure.SQLite.";
+        Sales.LoadLocalCatalogSummary();
+        SyncStatus.Status = "SyncStatusViewModel listo para estado visual de outbox/pull state.";
         SyncStatus.QueueSummary = "Outbox local disponible desde runtime PosCore.";
-        CashShift.Status = "CashShiftViewModel listo para caja local.";
-        CashShift.ExpectedCashSummary = "Expected cash será calculado por servicios de aplicación.";
+        CashShift.Status = "CashShiftViewModel listo para apertura/cierre de caja local.";
+        CashShift.ExpectedCashSummary = "Expected cash sera calculado por servicios de aplicacion.";
+    }
+
+    public void ExecuteQsrSelfTest()
+    {
+        InitializeForShell();
+        Sales.ExecuteQsrSelfTest();
+        CashShift.ExecuteQsrSelfTest(Sales.TotalCents);
+        SyncStatus.ExecuteQsrSelfTest();
+        ShellStatus = "Flujo WPF QSR validado sobre MVVM.";
     }
 }

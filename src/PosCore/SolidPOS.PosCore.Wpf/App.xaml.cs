@@ -16,10 +16,27 @@ public partial class App : System.Windows.Application
         if (e.Args.Any(arg => string.Equals(arg, "--self-test", StringComparison.OrdinalIgnoreCase)))
         {
             Directory.CreateDirectory(".\\.runtime");
-            var viewModel = PosCoreWpfCompositionRoot.CreateShellViewModel(".\\.runtime\\poscore-wpf-shell-self-test.sqlite");
-            viewModel.InitializeForShell();
+            var viewModel = PosCoreWpfCompositionRoot.CreateShellViewModel(".\\.runtime\\poscore-wpf-sales-flow-self-test.sqlite");
+            viewModel.ExecuteQsrSelfTest();
 
             var lines = new List<string>
+            {
+                "PosCore WPF QSR self-test started.",
+                "WPF shell initialized.",
+                $"Local login view model ready: {viewModel.Login.Email}",
+                $"Terminal status view model ready: {viewModel.TerminalStatus.Status}",
+                $"Catalog view ready: {viewModel.Sales.CatalogSummary}",
+                $"QSR cart ready: {viewModel.Sales.CartSummary}",
+                $"Cash payment ready: {viewModel.Sales.PaymentSummary}",
+                $"Receipt print flow ready: {viewModel.Sales.ReceiptStatus}; {viewModel.Sales.PrintStatus}",
+                $"Sync visual state ready: {viewModel.SyncStatus.QueueSummary}",
+                $"Cash shift view model ready: {viewModel.CashShift.ExpectedCashSummary}",
+                $"QSR totals: totalCents={viewModel.Sales.TotalCents}; tenderedCents={viewModel.Sales.TenderedCents}; changeCents={viewModel.Sales.ChangeCents}; expectedCashCents={viewModel.CashShift.ExpectedCashCents}",
+                "PosCore WPF sales flow QSR validation completed."
+            };
+
+            File.WriteAllLines(".\\.runtime\\poscore-wpf-sales-flow-qsr-self-test.log", lines);
+            var shellCompatibilityLines = new List<string>
             {
                 "PosCore WPF self-test started.",
                 "WPF shell initialized.",
@@ -30,8 +47,7 @@ public partial class App : System.Windows.Application
                 $"Cash shift view model ready: {viewModel.CashShift.Status}",
                 "PosCore WPF shell validation completed."
             };
-
-            File.WriteAllLines(".\\.runtime\\poscore-wpf-shell-self-test.log", lines);
+            File.WriteAllLines(".\\.runtime\\poscore-wpf-shell-self-test.log", shellCompatibilityLines);
             foreach (var line in lines)
             {
                 Console.WriteLine(line);

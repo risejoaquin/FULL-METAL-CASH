@@ -1,0 +1,12 @@
+PosCore WPF QSR self-test started.
+WPF shell initialized.
+Local login view model ready: admin@micafeteria.com
+Terminal status view model ready: TerminalStatusViewModel listo para leer binding local.
+Catalog view ready: Catalogo local QSR disponible: QSR-AMERICANO - Americano 12oz - 4500 cents.
+QSR cart ready: Carrito QSR: 1 x Americano 12oz (QSR-AMERICANO) = 4500 cents.
+Cash payment ready: Pago efectivo capturado. totalCents=4500; tenderedCents=5000; changeCents=500.
+Receipt print flow ready: Recibo fake QSR encolado localmente.; Print job fake listo para procesarse.
+Sync visual state ready: Outbox local visual: pending=0; synced=1; deadLetter=0.
+Cash shift view model ready: Expected cash local: opening=10000; cashSales=4500; cashIn=0; cashOut=0; expected=14500.
+QSR totals: totalCents=4500; tenderedCents=5000; changeCents=500; expectedCashCents=14500
+PosCore WPF sales flow QSR validation completed.
