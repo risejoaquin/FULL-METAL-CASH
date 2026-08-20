@@ -37,4 +37,15 @@ public interface ILocalPosRepository
     Task<int> CountRemoteReceiptsAsync(CancellationToken cancellationToken = default) => Task.FromResult(0);
     Task<LocalRemoteSaleReadModel?> GetRemoteSaleByLocalSaleIdAsync(Guid localSaleId, CancellationToken cancellationToken = default) => Task.FromResult<LocalRemoteSaleReadModel?>(null);
     Task<LocalRemoteReceiptReadModel?> GetRemoteReceiptBySaleIdAsync(Guid saleId, CancellationToken cancellationToken = default) => Task.FromResult<LocalRemoteReceiptReadModel?>(null);
+
+    Task SaveLocalUserAsync(LocalUser user, IReadOnlyCollection<string> permissions, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task<LocalUser?> GetLocalUserByEmailAsync(string email, CancellationToken cancellationToken = default) => Task.FromResult<LocalUser?>(null);
+    Task CreateLocalSessionAsync(LocalSession session, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task<LocalSession?> GetLocalSessionAsync(Guid sessionId, CancellationToken cancellationToken = default) => Task.FromResult<LocalSession?>(null);
+    Task<LocalSession?> GetLatestActiveLocalSessionAsync(CancellationToken cancellationToken = default) => Task.FromResult<LocalSession?>(null);
+    Task CloseLocalSessionAsync(Guid sessionId, DateTimeOffset closedAtUtc, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task<bool> LocalUserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken = default) => Task.FromResult(false);
+    Task LogLocalAuditEventAsync(LocalAuditEvent auditEvent, CancellationToken cancellationToken = default) => Task.CompletedTask;
+    Task<LocalAuthSummary> GetLocalAuthSummaryAsync(CancellationToken cancellationToken = default) => Task.FromResult(new LocalAuthSummary(0, 0, 0, 0, null));
+
 }

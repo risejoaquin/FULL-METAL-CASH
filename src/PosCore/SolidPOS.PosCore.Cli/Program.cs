@@ -1,6 +1,7 @@
 using System.Text.Json;
 using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.Cash;
+using SolidPOS.PosCore.Application.Auth;
 using SolidPOS.PosCore.Application.Catalog;
 using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Application.Sync;
@@ -66,7 +67,7 @@ static DateTimeOffset? ReadNullableDateTimeOffset(JsonElement root, string name)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status");
     return 0;
 }
 
@@ -97,6 +98,88 @@ switch (command)
         return 0;
     }
 
+
+
+    case "sync-local-user":
+    {
+        var tenantId = Guid.Parse(GetOption(args, "--tenant-id"));
+        var storeId = Guid.Parse(GetOption(args, "--store-id"));
+        var userId = Guid.Parse(GetOption(args, "--user-id"));
+        var email = GetOption(args, "--email");
+        var displayName = GetOption(args, "--display-name", email);
+        var password = GetOption(args, "--password");
+        var roleCode = GetOption(args, "--role", "cashier");
+        var maxOfflineHours = int.Parse(GetOption(args, "--max-offline-hours", "72"));
+        var lastSyncHoursAgo = int.Parse(GetOption(args, "--last-sync-hours-ago", "0"));
+        var permissions = GetOption(args, "--permissions", "sales.create,sync.push,sync.pull,cash.shift.open,cash.shift.close,receipts.issue")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var syncedAt = DateTimeOffset.UtcNow.AddHours(-lastSyncHoursAgo);
+        var user = new LocalUser(userId, tenantId, storeId, email, displayName, LocalPasswordHasher.Hash(password), roleCode, true, syncedAt, maxOfflineHours);
+        await repository.SaveLocalUserAsync(user, permissions, CancellationToken.None).ConfigureAwait(false);
+        await repository.LogLocalAuditEventAsync(new LocalAuditEvent(Guid.NewGuid(), tenantId, storeId, userId, null, "local.auth.user_synced", $"Local auth user cache refreshed for {email}.", DateTimeOffset.UtcNow)).ConfigureAwait(false);
+        Console.WriteLine($"Local auth user cached. userId={user.UserId}; email={user.Email}; role={user.RoleCode}; permissions={permissions.Length}; maxOfflineHours={user.MaxOfflineHours}; lastSyncedAt={user.LastSyncedAtUtc:O}");
+        return 0;
+    }
+
+    case "login-local":
+    {
+        var email = GetOption(args, "--email");
+        var password = GetOption(args, "--password");
+        var service = new LocalAuthService(repository, new SystemClock());
+        var session = await service.LoginAsync(email, password, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local login succeeded. sessionId={session.SessionId}; userId={session.UserId}; email={session.Email}; role={session.RoleCode}; expiresAt={session.ExpiresAtUtc:O}");
+        return 0;
+    }
+
+    case "require-permission-local":
+    {
+        var sessionIdText = GetOption(args, "--session-id", string.Empty);
+        var session = string.IsNullOrWhiteSpace(sessionIdText)
+            ? await repository.GetLatestActiveLocalSessionAsync().ConfigureAwait(false)
+            : await repository.GetLocalSessionAsync(Guid.Parse(sessionIdText)).ConfigureAwait(false);
+        if (session is null) throw new InvalidOperationException("An active local session is required.");
+        var permission = GetOption(args, "--permission");
+        var service = new LocalAuthService(repository, new SystemClock());
+        await service.RequirePermissionAsync(session.SessionId, permission, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local permission granted. sessionId={session.SessionId}; userId={session.UserId}; permission={permission}");
+        return 0;
+    }
+
+    case "whoami-local":
+    {
+        var sessionIdText = GetOption(args, "--session-id", string.Empty);
+        var session = string.IsNullOrWhiteSpace(sessionIdText)
+            ? await repository.GetLatestActiveLocalSessionAsync().ConfigureAwait(false)
+            : await repository.GetLocalSessionAsync(Guid.Parse(sessionIdText)).ConfigureAwait(false);
+        if (session is null)
+        {
+            Console.WriteLine("No active local session found.");
+            return 2;
+        }
+        Console.WriteLine($"Local session. sessionId={session.SessionId}; userId={session.UserId}; email={session.Email}; displayName={session.DisplayName}; role={session.RoleCode}; status={session.Status}; expiresAt={session.ExpiresAtUtc:O}");
+        return 0;
+    }
+
+    case "logout-local":
+    {
+        var sessionIdText = GetOption(args, "--session-id", string.Empty);
+        var session = string.IsNullOrWhiteSpace(sessionIdText)
+            ? await repository.GetLatestActiveLocalSessionAsync().ConfigureAwait(false)
+            : await repository.GetLocalSessionAsync(Guid.Parse(sessionIdText)).ConfigureAwait(false);
+        if (session is null) throw new InvalidOperationException("An active local session is required for logout.");
+        var service = new LocalAuthService(repository, new SystemClock());
+        await service.LogoutAsync(session.SessionId, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Local logout completed. sessionId={session.SessionId}; userId={session.UserId}");
+        return 0;
+    }
+
+    case "auth-status":
+    {
+        var summary = await repository.GetLocalAuthSummaryAsync().ConfigureAwait(false);
+        var lastSyncedAt = summary.LastSyncedAtUtc?.ToString("O") ?? string.Empty;
+        Console.WriteLine($"Local auth cache. users={summary.UserCount}; permissions={summary.PermissionCount}; activeSessions={summary.ActiveSessionCount}; auditEvents={summary.AuditEventCount}; lastSyncedAt={lastSyncedAt}");
+        return 0;
+    }
 
     case "sync-catalog":
     {

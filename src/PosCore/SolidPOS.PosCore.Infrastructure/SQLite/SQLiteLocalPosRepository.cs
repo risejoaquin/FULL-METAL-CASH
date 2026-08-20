@@ -196,6 +196,48 @@ CREATE TABLE IF NOT EXISTS local_remote_receipts (
   raw_json TEXT NOT NULL,
   applied_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS local_users (
+  user_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  role_code TEXT NOT NULL,
+  is_active INTEGER NOT NULL,
+  last_synced_at_utc TEXT NOT NULL,
+  max_offline_hours INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_user_permissions (
+  user_id TEXT NOT NULL,
+  permission_code TEXT NOT NULL,
+  synced_at_utc TEXT NOT NULL,
+  PRIMARY KEY(user_id, permission_code)
+);
+CREATE TABLE IF NOT EXISTS local_sessions (
+  session_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  role_code TEXT NOT NULL,
+  created_at_utc TEXT NOT NULL,
+  expires_at_utc TEXT NOT NULL,
+  status TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_audit_events (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  user_id TEXT NULL,
+  session_id TEXT NULL,
+  event_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  occurred_at_utc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_local_sessions_active ON local_sessions(status, expires_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_audit_events_time ON local_audit_events(occurred_at_utc);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_local_catalog_products_sku ON local_catalog_products(sku);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_recipes_output ON local_inventory_recipes(output_product_id, output_variant_id, status);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_recipe_items_recipe ON local_inventory_recipe_items(recipe_id);
@@ -1096,6 +1138,170 @@ VALUES ($id, $localSaleId, $tenantId, $storeId, $terminalId, $productId, $varian
         command.ExecuteNonQuery();
     }
 
+
+    public Task SaveLocalUserAsync(LocalUser user, IReadOnlyCollection<string> permissions, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_users (user_id, tenant_id, store_id, email, display_name, password_hash, role_code, is_active, last_synced_at_utc, max_offline_hours)
+VALUES ($userId, $tenantId, $storeId, $email, $displayName, $passwordHash, $roleCode, $isActive, $lastSyncedAtUtc, $maxOfflineHours)
+ON CONFLICT(user_id) DO UPDATE SET
+  tenant_id = excluded.tenant_id,
+  store_id = excluded.store_id,
+  email = excluded.email,
+  display_name = excluded.display_name,
+  password_hash = excluded.password_hash,
+  role_code = excluded.role_code,
+  is_active = excluded.is_active,
+  last_synced_at_utc = excluded.last_synced_at_utc,
+  max_offline_hours = excluded.max_offline_hours;
+""";
+            command.Parameters.AddWithValue("$userId", user.UserId.ToString());
+            command.Parameters.AddWithValue("$tenantId", user.TenantId.ToString());
+            command.Parameters.AddWithValue("$storeId", user.StoreId.ToString());
+            command.Parameters.AddWithValue("$email", user.Email.ToLowerInvariant());
+            command.Parameters.AddWithValue("$displayName", user.DisplayName);
+            command.Parameters.AddWithValue("$passwordHash", user.PasswordHash);
+            command.Parameters.AddWithValue("$roleCode", user.RoleCode);
+            command.Parameters.AddWithValue("$isActive", user.IsActive ? 1 : 0);
+            command.Parameters.AddWithValue("$lastSyncedAtUtc", user.LastSyncedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$maxOfflineHours", user.MaxOfflineHours);
+            command.ExecuteNonQuery();
+        }
+        using (var delete = connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM local_user_permissions WHERE user_id = $userId;";
+            delete.Parameters.AddWithValue("$userId", user.UserId.ToString());
+            delete.ExecuteNonQuery();
+        }
+        foreach (var permission in permissions.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "INSERT INTO local_user_permissions (user_id, permission_code, synced_at_utc) VALUES ($userId, $permissionCode, $syncedAtUtc);";
+            command.Parameters.AddWithValue("$userId", user.UserId.ToString());
+            command.Parameters.AddWithValue("$permissionCode", permission);
+            command.Parameters.AddWithValue("$syncedAtUtc", user.LastSyncedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalUser?> GetLocalUserByEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT user_id, tenant_id, store_id, email, display_name, password_hash, role_code, is_active, last_synced_at_utc, max_offline_hours FROM local_users WHERE lower(email) = lower($email);";
+        command.Parameters.AddWithValue("$email", email);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalUser?>(null);
+        var user = new LocalUser(Guid.Parse(reader.GetString(0)), Guid.Parse(reader.GetString(1)), Guid.Parse(reader.GetString(2)), reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetInt32(7) == 1, DateTimeOffset.Parse(reader.GetString(8)), reader.GetInt32(9));
+        return Task.FromResult<LocalUser?>(user);
+    }
+
+    public Task CreateLocalSessionAsync(LocalSession session, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_sessions (session_id, user_id, tenant_id, store_id, email, display_name, role_code, created_at_utc, expires_at_utc, status)
+VALUES ($sessionId, $userId, $tenantId, $storeId, $email, $displayName, $roleCode, $createdAtUtc, $expiresAtUtc, $status);
+""";
+        command.Parameters.AddWithValue("$sessionId", session.SessionId.ToString());
+        command.Parameters.AddWithValue("$userId", session.UserId.ToString());
+        command.Parameters.AddWithValue("$tenantId", session.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", session.StoreId.ToString());
+        command.Parameters.AddWithValue("$email", session.Email);
+        command.Parameters.AddWithValue("$displayName", session.DisplayName);
+        command.Parameters.AddWithValue("$roleCode", session.RoleCode);
+        command.Parameters.AddWithValue("$createdAtUtc", session.CreatedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$expiresAtUtc", session.ExpiresAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$status", session.Status);
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalSession?> GetLocalSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT session_id, user_id, tenant_id, store_id, email, display_name, role_code, created_at_utc, expires_at_utc, status FROM local_sessions WHERE session_id = $sessionId;";
+        command.Parameters.AddWithValue("$sessionId", sessionId.ToString());
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalSession?>(null);
+        return Task.FromResult<LocalSession?>(ReadLocalSession(reader));
+    }
+
+    public Task<LocalSession?> GetLatestActiveLocalSessionAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT session_id, user_id, tenant_id, store_id, email, display_name, role_code, created_at_utc, expires_at_utc, status FROM local_sessions WHERE status = 'active' ORDER BY created_at_utc DESC LIMIT 1;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalSession?>(null);
+        return Task.FromResult<LocalSession?>(ReadLocalSession(reader));
+    }
+
+    public Task CloseLocalSessionAsync(Guid sessionId, DateTimeOffset closedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_sessions SET status = 'closed' WHERE session_id = $sessionId;";
+        command.Parameters.AddWithValue("$sessionId", sessionId.ToString());
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> LocalUserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(1) FROM local_user_permissions WHERE user_id = $userId AND permission_code = $permissionCode;";
+        command.Parameters.AddWithValue("$userId", userId.ToString());
+        command.Parameters.AddWithValue("$permissionCode", permissionCode);
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()) > 0);
+    }
+
+    public Task LogLocalAuditEventAsync(LocalAuditEvent auditEvent, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_audit_events (id, tenant_id, store_id, user_id, session_id, event_type, message, occurred_at_utc)
+VALUES ($id, $tenantId, $storeId, $userId, $sessionId, $eventType, $message, $occurredAtUtc);
+""";
+        command.Parameters.AddWithValue("$id", auditEvent.Id.ToString());
+        command.Parameters.AddWithValue("$tenantId", auditEvent.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", auditEvent.StoreId.ToString());
+        command.Parameters.AddWithValue("$userId", auditEvent.UserId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$sessionId", auditEvent.SessionId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$eventType", auditEvent.EventType);
+        command.Parameters.AddWithValue("$message", auditEvent.Message);
+        command.Parameters.AddWithValue("$occurredAtUtc", auditEvent.OccurredAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalAuthSummary> GetLocalAuthSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        int users = ScalarInt(connection, "SELECT COUNT(1) FROM local_users;");
+        int permissions = ScalarInt(connection, "SELECT COUNT(1) FROM local_user_permissions;");
+        int sessions = ScalarInt(connection, "SELECT COUNT(1) FROM local_sessions WHERE status = 'active';");
+        int audits = ScalarInt(connection, "SELECT COUNT(1) FROM local_audit_events;");
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT max(last_synced_at_utc) FROM local_users;";
+        var scalar = command.ExecuteScalar();
+        DateTimeOffset? lastSynced = scalar is string text && !string.IsNullOrWhiteSpace(text) ? DateTimeOffset.Parse(text) : null;
+        return Task.FromResult(new LocalAuthSummary(users, permissions, sessions, audits, lastSynced));
+    }
+
     private static void InsertOutboxEvent(SqliteConnection connection, SqliteTransaction transaction, LocalOutboxEvent outboxEvent)
     {
         using var command = connection.CreateCommand();
@@ -1217,6 +1423,26 @@ VALUES ($id, $shiftId, $tenantId, $storeId, $terminalId, $movementType, $amountC
         reader.IsDBNull(10) ? null : DateTimeOffset.Parse(reader.GetString(10)),
         reader.IsDBNull(11) ? null : reader.GetString(11),
         reader.GetInt32(12));
+
+
+    private static int ScalarInt(SqliteConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private static LocalSession ReadLocalSession(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        reader.GetString(4),
+        reader.GetString(5),
+        reader.GetString(6),
+        DateTimeOffset.Parse(reader.GetString(7)),
+        DateTimeOffset.Parse(reader.GetString(8)),
+        reader.GetString(9));
 
     private static void Execute(SqliteConnection connection, string sql)
     {

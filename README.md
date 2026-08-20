@@ -996,3 +996,9 @@ Iteration 11 agrega pull sync local, cursor idempotente y read models locales de
   -AdminEmail "admin@micafeteria.com" `
   -AdminPassword "AdminSeguro123!"
 ```
+
+## SolidPOS Iteration 12 — PosCore Offline Login / Session / RBAC Local
+
+Adds local auth cache, local sessions, local RBAC checks, offline window enforcement and audit events for PosCore SQLite runtime.
+
+Validation: `scripts/poscore/validate-poscore-offline-auth-rbac.ps1`.
