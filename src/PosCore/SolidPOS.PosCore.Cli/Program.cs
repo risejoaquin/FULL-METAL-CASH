@@ -1,4 +1,5 @@
 using SolidPOS.PosCore.Application.Abstractions;
+using SolidPOS.PosCore.Application.Cash;
 using SolidPOS.PosCore.Application.Catalog;
 using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Application.Sync;
@@ -16,7 +17,7 @@ static string GetOption(string[] args, string name, string? fallback = null)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash");
     return 0;
 }
 
@@ -215,6 +216,111 @@ switch (command)
         var outboxEvent = await saleService.CreateOfflineSaleWithInventoryAsync(sale, movements, CancellationToken.None).ConfigureAwait(false);
         var totalQuantityDelta = movements.Sum(x => x.QuantityDelta);
         Console.WriteLine($"Offline sale queued from cache with inventory. sku={product.Sku}; name={product.Name}; localSaleId={sale.LocalSaleId}; outboxEventId={outboxEvent.Id}; totalCents={sale.TotalCents}; unitPriceCents={product.PriceCents}; localInventoryMovements={movements.Count}; localInventoryTotalDelta={totalQuantityDelta.ToString(System.Globalization.CultureInfo.InvariantCulture)}");
+        return 0;
+    }
+
+
+    case "open-local-shift":
+    {
+        var binding = await repository.GetTerminalBindingAsync().ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal must be bound before opening a local cash shift.");
+        var shiftId = Guid.Parse(GetOption(args, "--shift-id", Guid.NewGuid().ToString()));
+        var openedByUserId = Guid.Parse(GetOption(args, "--opened-by-user-id"));
+        var openingAmountCents = int.Parse(GetOption(args, "--opening-amount-cents", "0"));
+        if (openingAmountCents < 0) throw new InvalidOperationException("Opening amount cannot be negative.");
+        var shift = new LocalCashShift(shiftId, binding.TenantId, binding.StoreId, binding.TerminalId, openedByUserId, DateTimeOffset.UtcNow, openingAmountCents, "open");
+        await repository.OpenLocalCashShiftAsync(shift).ConfigureAwait(false);
+        Console.WriteLine($"Local cash shift opened. shiftId={shift.Id}; openingAmountCents={shift.OpeningAmountCents}; status={shift.Status}");
+        return 0;
+    }
+
+    case "cash-in":
+    case "cash-out":
+    {
+        var binding = await repository.GetTerminalBindingAsync().ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal must be bound before local cash movements.");
+        var shiftIdText = GetOption(args, "--shift-id", string.Empty);
+        var shift = string.IsNullOrWhiteSpace(shiftIdText)
+            ? await repository.GetOpenLocalCashShiftAsync().ConfigureAwait(false)
+            : await repository.GetLocalCashShiftAsync(Guid.Parse(shiftIdText)).ConfigureAwait(false);
+        if (shift is null || shift.Status != "open") throw new InvalidOperationException("An open local cash shift is required for cash movements.");
+        var amountCents = int.Parse(GetOption(args, "--amount-cents"));
+        if (amountCents <= 0) throw new InvalidOperationException("Cash movement amount must be greater than zero.");
+        var movementType = command == "cash-in" ? "cash_in" : "cash_out";
+        var note = GetOption(args, "--note", command);
+        await repository.AddLocalCashMovementAsync(new LocalCashMovement(Guid.NewGuid(), shift.Id, binding.TenantId, binding.StoreId, binding.TerminalId, movementType, amountCents, DateTimeOffset.UtcNow, "manual", null, note)).ConfigureAwait(false);
+        Console.WriteLine($"Local cash movement recorded. shiftId={shift.Id}; movementType={movementType}; amountCents={amountCents}");
+        return 0;
+    }
+
+    case "cash-status":
+    {
+        var shiftIdText = GetOption(args, "--shift-id", string.Empty);
+        LocalCashShift? shift = string.IsNullOrWhiteSpace(shiftIdText)
+            ? await repository.GetOpenLocalCashShiftAsync().ConfigureAwait(false)
+            : await repository.GetLocalCashShiftAsync(Guid.Parse(shiftIdText)).ConfigureAwait(false);
+        if (shift is null)
+        {
+            Console.WriteLine("No local cash shift found.");
+            return 2;
+        }
+
+        var summary = await repository.GetLocalCashShiftSummaryAsync(shift.Id).ConfigureAwait(false);
+        Console.WriteLine($"Local cash shift summary. shiftId={summary.ShiftId}; status={summary.Status}; openingAmountCents={summary.OpeningAmountCents}; cashSalesCents={summary.CashSalesCents}; cashInCents={summary.CashInCents}; cashOutCents={summary.CashOutCents}; expectedCashCents={summary.ExpectedCashCents}; countedCashCents={summary.CountedCashCents}; differenceCents={summary.DifferenceCents}; paymentCount={summary.PaymentCount}; movementCount={summary.MovementCount}");
+        return 0;
+    }
+
+    case "close-local-shift":
+    {
+        var shiftIdText = GetOption(args, "--shift-id", string.Empty);
+        var shift = string.IsNullOrWhiteSpace(shiftIdText)
+            ? await repository.GetOpenLocalCashShiftAsync().ConfigureAwait(false)
+            : await repository.GetLocalCashShiftAsync(Guid.Parse(shiftIdText)).ConfigureAwait(false);
+        if (shift is null || shift.Status != "open") throw new InvalidOperationException("An open local cash shift is required before closing.");
+        var closedByUserId = Guid.Parse(GetOption(args, "--closed-by-user-id"));
+        var countedCashCents = int.Parse(GetOption(args, "--counted-cash-cents"));
+        await repository.CloseLocalCashShiftAsync(shift.Id, closedByUserId, countedCashCents, DateTimeOffset.UtcNow).ConfigureAwait(false);
+        var summary = await repository.GetLocalCashShiftSummaryAsync(shift.Id).ConfigureAwait(false);
+        Console.WriteLine($"Local cash shift closed. shiftId={summary.ShiftId}; status={summary.Status}; expectedCashCents={summary.ExpectedCashCents}; countedCashCents={summary.CountedCashCents}; differenceCents={summary.DifferenceCents}; cashSalesCents={summary.CashSalesCents}");
+        return 0;
+    }
+
+    case "sale-offline-from-cache-cash":
+    {
+        var binding = await repository.GetTerminalBindingAsync().ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal must be bound before creating offline cash sales.");
+        var shift = await repository.GetOpenLocalCashShiftAsync().ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Open local cash shift is required before creating offline cash sales.");
+        var sku = GetOption(args, "--sku");
+        var product = await repository.GetCatalogProductBySkuAsync(sku).ConfigureAwait(false)
+            ?? throw new InvalidOperationException($"SKU {sku} is not available in the local catalog cache. Run sync-catalog before selling offline.");
+        if (!product.IsSellable)
+        {
+            throw new InvalidOperationException($"SKU {sku} is not sellable locally. status={product.Status}; priceCents={product.PriceCents}.");
+        }
+
+        var quantity = int.Parse(GetOption(args, "--quantity", "1"));
+        var cashierUserId = Guid.Parse(GetOption(args, "--cashier-user-id", binding.TerminalId.ToString()));
+        var localSaleId = Guid.Parse(GetOption(args, "--local-sale-id", Guid.NewGuid().ToString()));
+        var localPaymentId = Guid.Parse(GetOption(args, "--local-payment-id", Guid.NewGuid().ToString()));
+        var totalCents = quantity * product.PriceCents;
+        var tenderedCents = int.Parse(GetOption(args, "--tendered-cents", totalCents.ToString()));
+        var changeCents = LocalCashCalculator.CalculateChangeCents(totalCents, tenderedCents);
+        var sale = new OfflineSaleDraft(
+            localSaleId,
+            binding.TenantId,
+            binding.StoreId,
+            binding.TerminalId,
+            DateTimeOffset.UtcNow,
+            new[] { new OfflineSaleLineDraft(product.ProductId, product.VariantId, product.Sku, product.Name, quantity, product.PriceCents) },
+            new[] { new OfflineSalePaymentDraft("cash", totalCents, localPaymentId, $"tendered={tenderedCents};change={changeCents};localCashShiftId={shift.Id}") },
+            product.Currency,
+            cashierUserId);
+
+        var saleService = new OfflineSaleService(repository, new SystemClock());
+        var outboxEvent = await saleService.CreateOfflineSaleAsync(sale).ConfigureAwait(false);
+        await repository.RecordLocalCashSaleAsync(shift.Id, sale, tenderedCents, changeCents).ConfigureAwait(false);
+        Console.WriteLine($"Offline cash sale queued from cache. sku={product.Sku}; name={product.Name}; localSaleId={sale.LocalSaleId}; outboxEventId={outboxEvent.Id}; localCashShiftId={shift.Id}; totalCents={sale.TotalCents}; tenderedCents={tenderedCents}; changeCents={changeCents}; unitPriceCents={product.PriceCents}");
         return 0;
     }
 

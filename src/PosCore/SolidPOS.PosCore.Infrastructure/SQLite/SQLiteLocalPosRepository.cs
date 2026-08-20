@@ -121,10 +121,51 @@ CREATE TABLE IF NOT EXISTS local_inventory_movements (
   source TEXT NOT NULL,
   created_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS local_cash_shifts (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  opened_by_user_id TEXT NOT NULL,
+  opened_at_utc TEXT NOT NULL,
+  opening_amount_cents INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  closed_by_user_id TEXT NULL,
+  closed_at_utc TEXT NULL,
+  counted_cash_cents INTEGER NULL,
+  expected_cash_cents INTEGER NULL,
+  difference_cents INTEGER NULL
+);
+CREATE TABLE IF NOT EXISTS local_cash_movements (
+  id TEXT PRIMARY KEY,
+  shift_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  movement_type TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  occurred_at_utc TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_id TEXT NULL,
+  note TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS local_sale_payments (
+  local_payment_id TEXT PRIMARY KEY,
+  local_sale_id TEXT NOT NULL,
+  shift_id TEXT NOT NULL,
+  method_code TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  tendered_cents INTEGER NOT NULL,
+  change_cents INTEGER NOT NULL,
+  created_at_utc TEXT NOT NULL
+);
 CREATE UNIQUE INDEX IF NOT EXISTS ux_local_catalog_products_sku ON local_catalog_products(sku);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_recipes_output ON local_inventory_recipes(output_product_id, output_variant_id, status);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_recipe_items_recipe ON local_inventory_recipe_items(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_local_inventory_movements_sale ON local_inventory_movements(local_sale_id);
+CREATE INDEX IF NOT EXISTS idx_local_cash_shifts_open ON local_cash_shifts(status, opened_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_cash_movements_shift ON local_cash_movements(shift_id, occurred_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_sale_payments_shift ON local_sale_payments(shift_id);
 CREATE INDEX IF NOT EXISTS idx_local_outbox_pending ON local_outbox_events(status, sequence_number);
 CREATE INDEX IF NOT EXISTS idx_local_sync_ack_event ON local_sync_acknowledgements(outbox_event_id, acknowledged_at_utc);
 """);
@@ -641,6 +682,196 @@ VALUES ($id, $batchId, $outboxEventId, $remoteStatus, $remoteResponseJson, $ackn
     }
 
 
+
+    public Task OpenLocalCashShiftAsync(LocalCashShift shift, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var check = connection.CreateCommand())
+        {
+            check.Transaction = transaction;
+            check.CommandText = "SELECT COUNT(*) FROM local_cash_shifts WHERE status = 'open';";
+            if (Convert.ToInt32(check.ExecuteScalar()) > 0)
+            {
+                throw new InvalidOperationException("A local cash shift is already open for this terminal.");
+            }
+        }
+
+        using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_cash_shifts (id, tenant_id, store_id, terminal_id, opened_by_user_id, opened_at_utc, opening_amount_cents, status)
+VALUES ($id, $tenantId, $storeId, $terminalId, $openedByUserId, $openedAtUtc, $openingAmountCents, $status);
+""";
+            command.Parameters.AddWithValue("$id", shift.Id.ToString());
+            command.Parameters.AddWithValue("$tenantId", shift.TenantId.ToString());
+            command.Parameters.AddWithValue("$storeId", shift.StoreId.ToString());
+            command.Parameters.AddWithValue("$terminalId", shift.TerminalId.ToString());
+            command.Parameters.AddWithValue("$openedByUserId", shift.OpenedByUserId.ToString());
+            command.Parameters.AddWithValue("$openedAtUtc", shift.OpenedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$openingAmountCents", shift.OpeningAmountCents);
+            command.Parameters.AddWithValue("$status", shift.Status);
+            command.ExecuteNonQuery();
+        }
+
+        InsertCashMovement(connection, transaction, new LocalCashMovement(
+            Guid.NewGuid(),
+            shift.Id,
+            shift.TenantId,
+            shift.StoreId,
+            shift.TerminalId,
+            "opening",
+            shift.OpeningAmountCents,
+            shift.OpenedAtUtc,
+            "local_cash_shift",
+            shift.Id,
+            "opening_amount"));
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalCashShift?> GetOpenLocalCashShiftAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, opened_by_user_id, opened_at_utc, opening_amount_cents, status, closed_by_user_id, closed_at_utc, counted_cash_cents, expected_cash_cents, difference_cents
+FROM local_cash_shifts
+WHERE status = 'open'
+ORDER BY opened_at_utc DESC
+LIMIT 1;
+""";
+        using var reader = command.ExecuteReader();
+        return Task.FromResult<LocalCashShift?>(reader.Read() ? ReadCashShift(reader) : null);
+    }
+
+    public Task<LocalCashShift?> GetLocalCashShiftAsync(Guid shiftId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, opened_by_user_id, opened_at_utc, opening_amount_cents, status, closed_by_user_id, closed_at_utc, counted_cash_cents, expected_cash_cents, difference_cents
+FROM local_cash_shifts
+WHERE id = $shiftId
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+        using var reader = command.ExecuteReader();
+        return Task.FromResult<LocalCashShift?>(reader.Read() ? ReadCashShift(reader) : null);
+    }
+
+    public Task AddLocalCashMovementAsync(LocalCashMovement movement, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        InsertCashMovement(connection, transaction, movement);
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task RecordLocalCashSaleAsync(Guid shiftId, OfflineSaleDraft sale, int tenderedCents, int changeCents, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        var payment = sale.Payments.FirstOrDefault(payment => string.Equals(payment.MethodCode, "cash", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("Offline sale does not contain a cash payment.");
+        var localPaymentId = payment.LocalPaymentId ?? Guid.NewGuid();
+
+        using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_sale_payments (local_payment_id, local_sale_id, shift_id, method_code, amount_cents, tendered_cents, change_cents, created_at_utc)
+VALUES ($localPaymentId, $localSaleId, $shiftId, $methodCode, $amountCents, $tenderedCents, $changeCents, $createdAtUtc);
+""";
+            command.Parameters.AddWithValue("$localPaymentId", localPaymentId.ToString());
+            command.Parameters.AddWithValue("$localSaleId", sale.LocalSaleId.ToString());
+            command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+            command.Parameters.AddWithValue("$methodCode", payment.MethodCode);
+            command.Parameters.AddWithValue("$amountCents", payment.AmountCents);
+            command.Parameters.AddWithValue("$tenderedCents", tenderedCents);
+            command.Parameters.AddWithValue("$changeCents", changeCents);
+            command.Parameters.AddWithValue("$createdAtUtc", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        InsertCashMovement(connection, transaction, new LocalCashMovement(
+            Guid.NewGuid(),
+            shiftId,
+            sale.TenantId,
+            sale.StoreId,
+            sale.TerminalId,
+            "sale_cash",
+            sale.TotalCents,
+            sale.OccurredAtUtc,
+            "offline_sale",
+            sale.LocalSaleId,
+            $"tendered={tenderedCents};change={changeCents}"));
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public async Task CloseLocalCashShiftAsync(Guid shiftId, Guid closedByUserId, int countedCashCents, DateTimeOffset closedAtUtc, CancellationToken cancellationToken = default)
+    {
+        LocalCashShiftSummary summary = await GetLocalCashShiftSummaryAsync(shiftId, cancellationToken).ConfigureAwait(false);
+        int differenceCents = countedCashCents - summary.ExpectedCashCents;
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+UPDATE local_cash_shifts
+SET status = 'closed',
+    closed_by_user_id = $closedByUserId,
+    closed_at_utc = $closedAtUtc,
+    counted_cash_cents = $countedCashCents,
+    expected_cash_cents = $expectedCashCents,
+    difference_cents = $differenceCents
+WHERE id = $shiftId AND status = 'open';
+""";
+        command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+        command.Parameters.AddWithValue("$closedByUserId", closedByUserId.ToString());
+        command.Parameters.AddWithValue("$closedAtUtc", closedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$countedCashCents", countedCashCents);
+        command.Parameters.AddWithValue("$expectedCashCents", summary.ExpectedCashCents);
+        command.Parameters.AddWithValue("$differenceCents", differenceCents);
+        if (command.ExecuteNonQuery() == 0)
+        {
+            throw new InvalidOperationException($"Open local cash shift not found: {shiftId}.");
+        }
+    }
+
+    public Task<LocalCashShiftSummary> GetLocalCashShiftSummaryAsync(Guid shiftId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        LocalCashShift shift;
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, opened_by_user_id, opened_at_utc, opening_amount_cents, status, closed_by_user_id, closed_at_utc, counted_cash_cents, expected_cash_cents, difference_cents
+FROM local_cash_shifts
+WHERE id = $shiftId
+LIMIT 1;
+""";
+            command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+            using var reader = command.ExecuteReader();
+            if (!reader.Read()) throw new InvalidOperationException($"Local cash shift not found: {shiftId}.");
+            shift = ReadCashShift(reader);
+        }
+
+        int cashSales = ScalarInt(connection, "SELECT COALESCE(SUM(amount_cents), 0) FROM local_cash_movements WHERE shift_id = $shiftId AND movement_type = 'sale_cash';", shiftId);
+        int cashIn = ScalarInt(connection, "SELECT COALESCE(SUM(amount_cents), 0) FROM local_cash_movements WHERE shift_id = $shiftId AND movement_type = 'cash_in';", shiftId);
+        int cashOut = ScalarInt(connection, "SELECT COALESCE(SUM(amount_cents), 0) FROM local_cash_movements WHERE shift_id = $shiftId AND movement_type = 'cash_out';", shiftId);
+        int movementCount = ScalarInt(connection, "SELECT COUNT(*) FROM local_cash_movements WHERE shift_id = $shiftId;", shiftId);
+        int paymentCount = ScalarInt(connection, "SELECT COUNT(*) FROM local_sale_payments WHERE shift_id = $shiftId;", shiftId);
+        int expectedCash = shift.OpeningAmountCents + cashSales + cashIn - cashOut;
+        int? countedCash = shift.CountedCashCents;
+        int? difference = shift.DifferenceCents ?? (countedCash.HasValue ? countedCash.Value - expectedCash : null);
+
+        return Task.FromResult(new LocalCashShiftSummary(shift.Id, shift.Status, shift.OpeningAmountCents, cashSales, cashIn, cashOut, expectedCash, countedCash, difference, paymentCount, movementCount));
+    }
+
     private static void InsertInventoryMovement(SqliteConnection connection, SqliteTransaction transaction, LocalInventoryMovement movement)
     {
         using var command = connection.CreateCommand();
@@ -689,6 +920,52 @@ VALUES ($id, $tenantId, $storeId, $terminalId, $eventType, $schemaVersion, $sequ
         command.ExecuteNonQuery();
     }
 
+
+
+    private static void InsertCashMovement(SqliteConnection connection, SqliteTransaction transaction, LocalCashMovement movement)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+INSERT INTO local_cash_movements (id, shift_id, tenant_id, store_id, terminal_id, movement_type, amount_cents, occurred_at_utc, source_type, source_id, note)
+VALUES ($id, $shiftId, $tenantId, $storeId, $terminalId, $movementType, $amountCents, $occurredAtUtc, $sourceType, $sourceId, $note);
+""";
+        command.Parameters.AddWithValue("$id", movement.Id.ToString());
+        command.Parameters.AddWithValue("$shiftId", movement.ShiftId.ToString());
+        command.Parameters.AddWithValue("$tenantId", movement.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", movement.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", movement.TerminalId.ToString());
+        command.Parameters.AddWithValue("$movementType", movement.MovementType);
+        command.Parameters.AddWithValue("$amountCents", movement.AmountCents);
+        command.Parameters.AddWithValue("$occurredAtUtc", movement.OccurredAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$sourceType", movement.SourceType);
+        command.Parameters.AddWithValue("$sourceId", movement.SourceId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$note", movement.Note ?? (object)DBNull.Value);
+        command.ExecuteNonQuery();
+    }
+
+    private static int ScalarInt(SqliteConnection connection, string sql, Guid shiftId)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private static LocalCashShift ReadCashShift(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        Guid.Parse(reader.GetString(4)),
+        DateTimeOffset.Parse(reader.GetString(5)),
+        reader.GetInt32(6),
+        reader.GetString(7),
+        reader.IsDBNull(8) ? null : Guid.Parse(reader.GetString(8)),
+        reader.IsDBNull(9) ? null : DateTimeOffset.Parse(reader.GetString(9)),
+        reader.IsDBNull(10) ? null : reader.GetInt32(10),
+        reader.IsDBNull(11) ? null : reader.GetInt32(11),
+        reader.IsDBNull(12) ? null : reader.GetInt32(12));
 
     private static LocalInventoryMovement ReadInventoryMovement(SqliteDataReader reader) => new(
         Guid.Parse(reader.GetString(0)),

@@ -967,3 +967,19 @@ Validation script:
   -AdminEmail "admin@micafeteria.com" `
   -AdminPassword "AdminSeguro123!"
 ```
+
+
+## SolidPOS Iteration 10 — PosCore Offline Payment/Cash Drawer Runtime
+
+Adds local SQLite cash drawer runtime for PosCore: local cash shifts, cash in/out, offline cash payments, change calculation, local expected cash, remote sync processing, and local/remote cash shift reconciliation.
+
+Validation script:
+
+```powershell
+.\scripts\poscore\validate-poscore-offline-cash-runtime.ps1 `
+  -BaseUrl "https://full-metal-cash-production.up.railway.app" `
+  -TenantId "0ce5bbd0-528b-4aee-9fe3-93df001a4fde" `
+  -StoreId "8e446c29-e9ad-41ed-a738-125aff7608b6" `
+  -AdminEmail "admin@micafeteria.com" `
+  -AdminPassword "AdminSeguro123!"
+```
