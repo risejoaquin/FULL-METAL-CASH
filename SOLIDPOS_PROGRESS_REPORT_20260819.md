@@ -52,3 +52,7 @@ SolidPOS ya tiene backend productivo desplegado, tenant productivo provisionado,
 SolidPOS Iteration 09 — PosCore Local Inventory Consumption Cache.
 
 Objetivo: cachear recetas/BOM desde PosServer, descontar inventario local estimado al vender offline, sincronizar venta y reconciliar movimientos locales contra `pos.inventory_ledger` remoto.
+
+## Iteration 21 — Production Security Closure
+
+Prepared: security closure scripts, secret generation helpers, stronger local secret scan, refresh token revocation SQL, production validation script, and operational checklist. Pending user validation after rotating production secrets in Railway/Supabase.
