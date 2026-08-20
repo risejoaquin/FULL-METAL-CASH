@@ -75,3 +75,17 @@ Closure target:
 ```text
 SolidPOS Iteration 22 — Production Pilot Readiness = PASS REAL PRODUCTION
 ```
+
+
+## SolidPOS Pilot Roadmap
+
+- PILOT-01 Controlled Store Pilot Setup — PENDING USER VALIDATION
+- PILOT-02 Real POS Transaction Validation — NEXT
+- PILOT-03 Cash Drawer / Shift Operations Validation
+- PILOT-04 Receipts / Returns / Refunds Validation
+- PILOT-05 Offline Mode Field Test
+- PILOT-06 Sync Recovery / Conflict Field Test
+- PILOT-07 Dashboard Operations Monitoring
+- PILOT-08 Backup / Restore / Rollback Drill
+- PILOT-09 Pilot Incident Runbook Validation
+- PILOT-10 Pilot Closure Report + Production Expansion Decision
