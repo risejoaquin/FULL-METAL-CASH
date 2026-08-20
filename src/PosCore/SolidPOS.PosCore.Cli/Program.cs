@@ -11,6 +11,8 @@ using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Infrastructure.SQLite;
 using SolidPOS.PosCore.Infrastructure.Sync;
 using SolidPOS.PosCore.Infrastructure.Hardware;
+using SolidPOS.PosCore.Application.Branding;
+using SolidPOS.PosCore.Infrastructure.Branding;
 
 static string GetOption(string[] args, string name, string? fallback = null)
 {
@@ -70,7 +72,7 @@ static DateTimeOffset? ReadNullableDateTimeOffset(JsonElement root, string name)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status, queue-receipt-print, process-print-jobs, open-cash-drawer-hardware, scan-barcode, authorize-payment-terminal, hardware-status, verify-local-integrity, repair-local-runtime, backup-local-db, recovery-journal, seed-resilience-fixture");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status, queue-receipt-print, process-print-jobs, open-cash-drawer-hardware, scan-barcode, authorize-payment-terminal, hardware-status, verify-local-integrity, repair-local-runtime, backup-local-db, recovery-journal, seed-resilience-fixture, create-branding-package, validate-branding-package, show-branding-package");
     return 0;
 }
 
@@ -82,6 +84,47 @@ await repository.InitializeAsync().ConfigureAwait(false);
 
 switch (command)
 {
+
+    case "create-branding-package":
+    {
+        var output = GetOption(args, "--output");
+        var service = new TenantBrandingPackageService(new JsonTenantBrandingPackageStore());
+        var package = service.Create(
+            Guid.Parse(GetOption(args, "--tenant-id")),
+            GetOption(args, "--tenant-name"),
+            GetOption(args, "--app-name", "SolidPOS"),
+            GetOption(args, "--primary-color", "#20242A"),
+            GetOption(args, "--accent-color", "#2F80ED"),
+            GetOption(args, "--logo-path", string.Empty),
+            GetOption(args, "--receipt-header", GetOption(args, "--tenant-name")),
+            GetOption(args, "--receipt-footer", "Gracias por su compra."),
+            DateTimeOffset.UtcNow);
+        await service.SaveValidatedAsync(package, output).ConfigureAwait(false);
+        Console.WriteLine($"Tenant branding package created. tenantId={package.TenantId}; tenantName={package.TenantName}; appName={package.AppName}; primaryColor={package.PrimaryColorHex}; accentColor={package.AccentColorHex}; packageVersion={package.PackageVersion}; output={output}");
+        return 0;
+    }
+
+    case "validate-branding-package":
+    {
+        var packagePath = GetOption(args, "--package");
+        var store = new JsonTenantBrandingPackageStore();
+        var service = new TenantBrandingPackageService(store);
+        var package = await store.LoadAsync(packagePath).ConfigureAwait(false);
+        var validation = service.Validate(package);
+        Console.WriteLine($"Tenant branding package validation. isValid={validation.IsValid}; errors={validation.Errors.Count}; warnings={validation.Warnings.Count}; tenantName={package.TenantName}; appName={package.AppName}; packageVersion={package.PackageVersion}");
+        foreach (var error in validation.Errors) Console.WriteLine($"Branding validation error. message={error}");
+        foreach (var warning in validation.Warnings) Console.WriteLine($"Branding validation warning. message={warning}");
+        return validation.IsValid ? 0 : 2;
+    }
+
+    case "show-branding-package":
+    {
+        var packagePath = GetOption(args, "--package");
+        var service = new TenantBrandingPackageService(new JsonTenantBrandingPackageStore());
+        var package = await service.LoadValidatedAsync(packagePath).ConfigureAwait(false);
+        Console.WriteLine($"Tenant branding package. tenantId={package.TenantId}; tenantName={package.TenantName}; appName={package.AppName}; primaryColor={package.PrimaryColorHex}; accentColor={package.AccentColorHex}; receiptHeader={package.ReceiptHeader}; receiptFooter={package.ReceiptFooter}; packageVersion={package.PackageVersion}");
+        return 0;
+    }
     case "init":
         Console.WriteLine($"PosCore local SQLite initialized: {dbPath}");
         return 0;

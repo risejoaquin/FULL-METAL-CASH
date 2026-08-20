@@ -1,3 +1,5 @@
+using SolidPOS.PosCore.Domain;
+
 namespace SolidPOS.PosCore.Wpf.ViewModels;
 
 public sealed class AppShellViewModel : ViewModelBase
@@ -12,6 +14,7 @@ public sealed class AppShellViewModel : ViewModelBase
         Sales = new SalesViewModel();
         SyncStatus = new SyncStatusViewModel();
         CashShift = new CashShiftViewModel();
+        Branding = new BrandingViewModel();
     }
 
     public string DatabasePath { get; }
@@ -32,9 +35,11 @@ public sealed class AppShellViewModel : ViewModelBase
 
     public CashShiftViewModel CashShift { get; }
 
+    public BrandingViewModel Branding { get; }
+
     public void InitializeForShell()
     {
-        ShellStatus = "Shell MVVM listo para flujo QSR.";
+        ShellStatus = $"Shell MVVM listo para flujo QSR con branding {Branding.AppName}.";
         TerminalStatus.Status = "TerminalStatusViewModel listo para leer binding local.";
         TerminalStatus.BindingSummary = "Binding local sera provisto por PosCore.Infrastructure.SQLite.";
         Sales.LoadLocalCatalogSummary();
@@ -42,6 +47,12 @@ public sealed class AppShellViewModel : ViewModelBase
         SyncStatus.QueueSummary = "Outbox local disponible desde runtime PosCore.";
         CashShift.Status = "CashShiftViewModel listo para apertura/cierre de caja local.";
         CashShift.ExpectedCashSummary = "Expected cash sera calculado por servicios de aplicacion.";
+    }
+
+    public void ApplyBranding(TenantBrandingPackage package)
+    {
+        Branding.Apply(package);
+        ShellStatus = $"Shell MVVM listo para tenant {Branding.TenantName}.";
     }
 
     public void ExecuteQsrSelfTest()

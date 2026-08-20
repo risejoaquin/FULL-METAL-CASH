@@ -1,0 +1,6 @@
+PosBuilder branding self-test started.
+Builder shell initialized: Branding package valido para Mi Cafeteria POS.
+Tenant branding package generated: tenantName=Mi Cafeteria; appName=Mi Cafeteria POS; output=.\.runtime\tenant-branding-package-iteration-17.json
+Branding colors: primary=#20242A; accent=#2F80ED
+Branding validation: isValid=True; errors=0; warnings=0
+PosBuilder tenant branding package validation completed.

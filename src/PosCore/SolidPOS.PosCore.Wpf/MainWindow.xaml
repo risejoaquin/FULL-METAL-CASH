@@ -5,8 +5,8 @@
   <DockPanel>
     <Border DockPanel.Dock="Top" Padding="16" Background="#20242A">
       <StackPanel>
-        <TextBlock Text="SolidPOS PosCore" FontSize="24" FontWeight="Bold" Foreground="White" />
-        <TextBlock Text="WPF Sales Flow QSR" Foreground="#D7DCE2" />
+        <TextBlock Text="{Binding Branding.AppName}" FontSize="24" FontWeight="Bold" Foreground="White" />
+        <TextBlock Text="{Binding Branding.TenantName}" Foreground="#D7DCE2" />
       </StackPanel>
     </Border>
 
@@ -26,6 +26,25 @@
       </Border>
 
       <TabControl Grid.Row="1" Margin="0,16,0,0">
+        <TabItem Header="Branding">
+          <StackPanel Margin="20">
+            <TextBlock Text="Tenant branding" FontSize="20" FontWeight="Bold" />
+            <TextBlock Text="{Binding Branding.Status}" Margin="0,12,0,0" />
+            <TextBlock Text="{Binding Branding.HeaderSummary}" FontWeight="Bold" Margin="0,8,0,0" />
+            <TextBlock Text="{Binding Branding.ReceiptSummary}" />
+            <UniformGrid Columns="2" Rows="4" Width="520" HorizontalAlignment="Left" Margin="0,12,0,0">
+              <TextBlock Text="Primary" FontWeight="Bold" />
+              <TextBlock Text="{Binding Branding.PrimaryColorHex}" />
+              <TextBlock Text="Accent" FontWeight="Bold" />
+              <TextBlock Text="{Binding Branding.AccentColorHex}" />
+              <TextBlock Text="Logo" FontWeight="Bold" />
+              <TextBlock Text="{Binding Branding.LogoPath}" />
+              <TextBlock Text="Receipt header" FontWeight="Bold" />
+              <TextBlock Text="{Binding Branding.ReceiptHeader}" />
+            </UniformGrid>
+          </StackPanel>
+        </TabItem>
+
         <TabItem Header="Login">
           <StackPanel Margin="20">
             <TextBlock Text="Login local offline" FontSize="20" FontWeight="Bold" />

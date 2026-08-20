@@ -4,11 +4,22 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using SolidPOS.PosCore.Wpf.Composition;
+using SolidPOS.PosCore.Application.Branding;
+using SolidPOS.PosCore.Infrastructure.Branding;
 
 namespace SolidPOS.PosCore.Wpf;
 
 public partial class App : System.Windows.Application
 {
+    private static string? GetOption(IReadOnlyList<string> args, string name)
+    {
+        for (var index = 0; index < args.Count - 1; index++)
+        {
+            if (string.Equals(args[index], name, StringComparison.OrdinalIgnoreCase)) return args[index + 1];
+        }
+        return null;
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -16,13 +27,22 @@ public partial class App : System.Windows.Application
         if (e.Args.Any(arg => string.Equals(arg, "--self-test", StringComparison.OrdinalIgnoreCase)))
         {
             Directory.CreateDirectory(".\\.runtime");
-            var viewModel = PosCoreWpfCompositionRoot.CreateShellViewModel(".\\.runtime\\poscore-wpf-sales-flow-self-test.sqlite");
+            var brandingPackagePath = GetOption(e.Args, "--branding-package");
+            SolidPOS.PosCore.Domain.TenantBrandingPackage? brandingPackage = null;
+            if (!string.IsNullOrWhiteSpace(brandingPackagePath))
+            {
+                var brandingService = new TenantBrandingPackageService(new JsonTenantBrandingPackageStore());
+                brandingPackage = brandingService.LoadValidatedAsync(brandingPackagePath).GetAwaiter().GetResult();
+            }
+            var viewModel = PosCoreWpfCompositionRoot.CreateShellViewModel(".\\.runtime\\poscore-wpf-sales-flow-self-test.sqlite", brandingPackage);
             viewModel.ExecuteQsrSelfTest();
 
             var lines = new List<string>
             {
                 "PosCore WPF QSR self-test started.",
                 "WPF shell initialized.",
+                $"Branding package applied: tenantName={viewModel.Branding.TenantName}; appName={viewModel.Branding.AppName}; primaryColor={viewModel.Branding.PrimaryColorHex}; accentColor={viewModel.Branding.AccentColorHex}",
+                $"Receipt branding ready: header={viewModel.Branding.ReceiptHeader}; footer={viewModel.Branding.ReceiptFooter}",
                 $"Local login view model ready: {viewModel.Login.Email}",
                 $"Terminal status view model ready: {viewModel.TerminalStatus.Status}",
                 $"Catalog view ready: {viewModel.Sales.CatalogSummary}",
@@ -40,6 +60,8 @@ public partial class App : System.Windows.Application
             {
                 "PosCore WPF self-test started.",
                 "WPF shell initialized.",
+                $"Branding package applied: tenantName={viewModel.Branding.TenantName}; appName={viewModel.Branding.AppName}; primaryColor={viewModel.Branding.PrimaryColorHex}; accentColor={viewModel.Branding.AccentColorHex}",
+                $"Receipt branding ready: header={viewModel.Branding.ReceiptHeader}; footer={viewModel.Branding.ReceiptFooter}",
                 $"Local login view model ready: {viewModel.Login.Email}",
                 $"Terminal status view model ready: {viewModel.TerminalStatus.Status}",
                 $"Sales view model ready: {viewModel.Sales.CatalogSummary}",

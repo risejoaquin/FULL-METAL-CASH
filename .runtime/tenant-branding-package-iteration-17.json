@@ -1,0 +1,12 @@
+{
+  "tenantId": "0ce5bbd0-528b-4aee-9fe3-93df001a4fde",
+  "tenantName": "Mi Cafeteria",
+  "appName": "Mi Cafeteria POS",
+  "primaryColorHex": "#20242A",
+  "accentColorHex": "#2F80ED",
+  "logoPath": "assets/logo-placeholder.png",
+  "receiptHeader": "Mi Cafeteria",
+  "receiptFooter": "Gracias por su compra.",
+  "packageVersion": "1.0",
+  "generatedAtUtc": "2026-08-20T06:20:50.6348695+00:00"
+}
