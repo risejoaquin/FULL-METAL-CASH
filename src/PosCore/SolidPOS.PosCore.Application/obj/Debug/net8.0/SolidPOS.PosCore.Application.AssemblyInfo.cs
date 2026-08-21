@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SolidPOS")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3c8591163ed12d9f2d142e3dd68c09ef7ad44dd9")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+f62d281d1e8af32f41cab5338d47d232c28d0732")]
 [assembly: System.Reflection.AssemblyProductAttribute("SolidPOS")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SolidPOS.PosCore.Application")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
