@@ -36,4 +36,4 @@ La existencia de un dead-letter previo no hace fallar por sí sola la fase; qued
 - fallo de pull/read models o reconciliación de caja.
 
 ## Estado de entrega
-`PENDING USER VALIDATION`
+`PASS BETA OFFLINE RELIABILITY FIELD RUN / GO BETA-05`
