@@ -50,3 +50,7 @@ Run:
   -Password $securePassword `
   -DatabaseUrl $env:DATABASE_URL
 ```
+
+## PILOT-09 backup and restore reference
+
+Rollback decisions during pilot incidents must reference the latest validated backup and restore drill. For SolidPOS pilot operations, backup evidence comes from PILOT-08 Backup / Restore / Rollback Drill. Restore must be validated in an isolated PostgreSQL container before any production-impacting recovery decision. No destructive production restore is allowed without explicit owner approval and a fresh backup manifest.
