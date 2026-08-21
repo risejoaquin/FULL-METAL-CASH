@@ -1,0 +1,21 @@
+# BETA-01 Store Onboarding Checklist
+
+- [ ] Production health/live is alive.
+- [ ] Production health/ready and database readiness are ready.
+- [ ] Target tenant is active.
+- [ ] At least one store is active.
+- [ ] At least one active terminal is assigned to an active store.
+- [ ] Admin account is active, unlocked and authenticates successfully.
+- [ ] Admin has at least one role assignment.
+- [ ] Admin has store access.
+- [ ] Roles and permissions exist.
+- [ ] At least one active customer profile exists for beta operations.
+- [ ] Catalog has active category and sellable product.
+- [ ] Active price list and valid MXN prices exist.
+- [ ] Update channels are available and `beta` exists.
+- [ ] Tenant-scoped Velopack universal release evidence exists.
+- [ ] Audit trail exists.
+- [ ] Support contact matrix and SLA path are documented.
+- [ ] Acceptance checklist is ready.
+- [ ] SQL cross-check returns GO with `blockers = {}` / empty array.
+- [ ] Onboarding manifest and phase log are generated.

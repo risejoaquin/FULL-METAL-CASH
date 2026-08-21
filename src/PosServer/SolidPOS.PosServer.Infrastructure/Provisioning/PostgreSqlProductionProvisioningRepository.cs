@@ -40,11 +40,17 @@ public sealed class PostgreSqlProductionProvisioningRepository : IProductionProv
 
         if (idempotencyKey is not null)
         {
-            ProductionTenantBootstrapResponse? existing = await TryReadExistingRunAsync(connection, transaction, idempotencyKey, cancellationToken);
+            ExistingBootstrapRun? existing = await TryReadExistingRunAsync(connection, transaction, idempotencyKey, cancellationToken);
             if (existing is not null)
             {
+                if (!string.Equals(existing.RequestHash, requestHash, StringComparison.Ordinal))
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return null;
+                }
+
                 await transaction.CommitAsync(cancellationToken);
-                return existing;
+                return existing.Response;
             }
         }
 
@@ -420,7 +426,7 @@ public sealed class PostgreSqlProductionProvisioningRepository : IProductionProv
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private static async Task<ProductionTenantBootstrapResponse?> TryReadExistingRunAsync(
+    private static async Task<ExistingBootstrapRun?> TryReadExistingRunAsync(
         NpgsqlConnection connection,
         NpgsqlTransaction transaction,
         string idempotencyKey,
@@ -428,6 +434,7 @@ public sealed class PostgreSqlProductionProvisioningRepository : IProductionProv
     {
         const string sql = """
             SELECT
+              r.request_hash,
               r.tenant_id,
               r.admin_user_id,
               r.store_id,
@@ -450,16 +457,18 @@ public sealed class PostgreSqlProductionProvisioningRepository : IProductionProv
             return null;
         }
 
-        return new ProductionTenantBootstrapResponse(
-            reader.GetGuid(0),
-            reader.GetGuid(2),
+        var response = new ProductionTenantBootstrapResponse(
             reader.GetGuid(1),
-            reader.GetString(3),
+            reader.GetGuid(3),
+            reader.GetGuid(2),
             reader.GetString(4),
             reader.GetString(5),
+            reader.GetString(6),
             WasExisting: true,
             DemoUserDisabled: false,
             Message: "Production tenant bootstrap already completed for this idempotency key.");
+
+        return new ExistingBootstrapRun(reader.GetString(0), response);
     }
 
     private static async Task AppendAuditAsync(
@@ -533,6 +542,8 @@ public sealed class PostgreSqlProductionProvisioningRepository : IProductionProv
         parameter.Value = value.HasValue ? value.Value.GetRawText() : defaultJson;
     }
 
+    private sealed record ExistingBootstrapRun(string RequestHash, ProductionTenantBootstrapResponse Response);
+
     private static string? NormalizeOptional(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
@@ -545,7 +556,22 @@ public sealed class PostgreSqlProductionProvisioningRepository : IProductionProv
             request.TenantId,
             TenantName = request.TenantName.Trim(),
             AdminEmail = request.AdminEmail.Trim().ToLowerInvariant(),
-            StoreCode = request.StoreCode.Trim().ToUpperInvariant()
+            AdminFullName = request.AdminFullName.Trim(),
+            StoreCode = request.StoreCode.Trim().ToUpperInvariant(),
+            StoreName = request.StoreName.Trim(),
+            LegalName = NormalizeOptional(request.LegalName),
+            Timezone = request.Timezone.Trim(),
+            Currency = request.Currency.Trim().ToUpperInvariant(),
+            BusinessVertical = request.BusinessVertical.Trim().ToLowerInvariant(),
+            UiLayout = request.UiLayout.Trim().ToLowerInvariant(),
+            Branding = request.Branding?.GetRawText(),
+            ReceiptSettings = request.ReceiptSettings?.GetRawText(),
+            HardwareProfile = request.HardwareProfile?.GetRawText(),
+            FeatureFlags = request.FeatureFlags?.GetRawText(),
+            ModulesEnabled = request.ModulesEnabled?.GetRawText(),
+            StoreAddress = NormalizeOptional(request.StoreAddress),
+            StorePhone = NormalizeOptional(request.StorePhone),
+            request.DisableDemoUser
         };
 
         byte[] bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(hashSource, JsonOptions));
