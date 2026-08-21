@@ -51,11 +51,14 @@ const expectedMarkers = [
   'OperationsDashboard',
   '/api/v1/auth/login',
   '/api/v1/sync/status',
+  '/api/v1/observability/metrics',
   '/health/ready',
   '/api/v1/sales',
   '/api/v1/returns',
   '/api/v1/audit/events',
   'getOperationsSnapshot',
+  'getOperationalMetrics',
+  'OperationalMetricsDto',
   'accessToken'
 ];
 
@@ -69,7 +72,7 @@ console.log('PosDashboard reports/audit/operations self-test started.');
 console.log('Vite React TypeScript production build ready.');
 console.log('Protected client ready: /api/v1/auth/login with accessToken.');
 console.log('Reports client ready: /api/v1/sales and /api/v1/returns.');
-console.log('Operations client ready: /health/ready and /api/v1/sync/status.');
+console.log('Operations client ready: /health/ready, /api/v1/sync/status and /api/v1/observability/metrics.');
 console.log('Audit client ready: /api/v1/audit/events.');
 console.log('Admin dashboard sections ready: Overview, Reports, Operations, Audit.');
-console.log('PosDashboard production pilot readiness dashboard completed.');
+console.log('PosDashboard operations monitoring dashboard completed.');

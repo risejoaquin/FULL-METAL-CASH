@@ -80,6 +80,57 @@ export type AuditEntryDto = {
   severity?: 'info' | 'warning' | 'critical' | string;
 };
 
+export type OperationalMetricsDto = {
+  generatedAt?: string;
+  database?: {
+    ready?: boolean;
+    databaseName?: string;
+    serverVersion?: string;
+    activeConnections?: number;
+    requiredTablesPresent?: boolean;
+    missingRequiredTables?: string[];
+  };
+  requests?: {
+    totalRequests?: number;
+    failedRequests?: number;
+    averageLatencyMs?: number;
+    p95LatencyMs?: number;
+    topRoutes?: Array<{
+      method?: string;
+      route?: string;
+      count?: number;
+      failedCount?: number;
+      averageLatencyMs?: number;
+      p95LatencyMs?: number;
+    }>;
+  };
+  sync?: {
+    inboxByStatus?: Record<string, number>;
+    pendingConflicts?: number;
+    resolvedConflicts?: number;
+    deadLetterEvents?: number;
+    retryPendingEvents?: number;
+  };
+  sales?: {
+    salesLast24Hours?: number;
+    averagePersistLatencyMsLast24Hours?: number;
+    apiAverageLatencyMs?: number;
+    apiP95LatencyMs?: number;
+  };
+  payments?: {
+    failedPaymentsLast24Hours?: number;
+    declinedPaymentsLast24Hours?: number;
+  };
+  inventory?: {
+    negativeInventoryItemCount?: number;
+    lowStockItemCount?: number;
+  };
+  audit?: {
+    auditEventsLast24Hours?: number;
+    lastAuditEventAt?: string | null;
+  };
+};
+
 export type DashboardMetrics = {
   health: HealthState;
   totalSalesCents: number;
@@ -92,6 +143,16 @@ export type DashboardMetrics = {
   auditEvents: number;
   criticalAuditEvents: number;
   lastUpdatedAt: string;
+  activeDbConnections: number;
+  requestP95LatencyMs: number;
+  failedRequests: number;
+  pendingConflicts: number;
+  resolvedConflicts: number;
+  retryPendingSync: number;
+  salesLast24Hours: number;
+  failedPaymentsLast24Hours: number;
+  negativeInventoryItemCount: number;
+  lowStockItemCount: number;
 };
 
 export type OperationsSnapshot = {
@@ -101,6 +162,7 @@ export type OperationsSnapshot = {
   returns: ReturnSummaryDto[];
   cashShift?: CashShiftSummaryDto | null;
   audit: AuditEntryDto[];
+  operationalMetrics?: OperationalMetricsDto | null;
   metrics: DashboardMetrics;
 };
 
@@ -164,18 +226,29 @@ export class PosServerClient {
     }
   }
 
+  async getOperationalMetrics(accessToken: string): Promise<OperationalMetricsDto | null> {
+    try {
+      const response = await fetch(`${this.baseUrl}/api/v1/observability/metrics`, {
+        headers: authHeaders(accessToken)
+      });
+      return await safeJson<OperationalMetricsDto>(response);
+    } catch {
+      return null;
+    }
+  }
+
   async getSales(accessToken: string, limit = 10): Promise<SaleSummaryDto[]> {
     const { from, to } = todayRange();
     try {
       const response = await fetch(`${this.baseUrl}/api/v1/sales?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=${limit}`, {
         headers: authHeaders(accessToken)
       });
-      const payload = await safeJson<SaleSummaryDto[] | { items?: SaleSummaryDto[]; sales?: SaleSummaryDto[] }>(response);
+      const payload = await safeJson<SaleSummaryDto[] | { items?: SaleSummaryDto[]; sales?: SaleSummaryDto[]; data?: SaleSummaryDto[]; results?: SaleSummaryDto[] }>(response);
       if (Array.isArray(payload)) {
         return payload;
       }
 
-      return payload?.items ?? payload?.sales ?? [];
+      return payload?.items ?? payload?.sales ?? payload?.data ?? payload?.results ?? [];
     } catch {
       return [];
     }
@@ -187,12 +260,12 @@ export class PosServerClient {
       const response = await fetch(`${this.baseUrl}/api/v1/returns?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=${limit}`, {
         headers: authHeaders(accessToken)
       });
-      const payload = await safeJson<ReturnSummaryDto[] | { items?: ReturnSummaryDto[]; returns?: ReturnSummaryDto[] }>(response);
+      const payload = await safeJson<ReturnSummaryDto[] | { items?: ReturnSummaryDto[]; returns?: ReturnSummaryDto[]; data?: ReturnSummaryDto[]; results?: ReturnSummaryDto[] }>(response);
       if (Array.isArray(payload)) {
         return payload;
       }
 
-      return payload?.items ?? payload?.returns ?? [];
+      return payload?.items ?? payload?.returns ?? payload?.data ?? payload?.results ?? [];
     } catch {
       return [];
     }
@@ -203,12 +276,12 @@ export class PosServerClient {
       const response = await fetch(`${this.baseUrl}/api/v1/audit/events?limit=${limit}`, {
         headers: authHeaders(accessToken)
       });
-      const payload = await safeJson<AuditEntryDto[] | { items?: AuditEntryDto[]; auditEvents?: AuditEntryDto[] }>(response);
+      const payload = await safeJson<AuditEntryDto[] | { items?: AuditEntryDto[]; auditEvents?: AuditEntryDto[]; events?: AuditEntryDto[]; data?: AuditEntryDto[]; results?: AuditEntryDto[] }>(response);
       if (Array.isArray(payload)) {
         return payload;
       }
 
-      return payload?.items ?? payload?.auditEvents ?? [];
+      return payload?.items ?? payload?.auditEvents ?? payload?.events ?? payload?.data ?? payload?.results ?? [];
     } catch {
       return [];
     }
@@ -230,9 +303,10 @@ export class PosServerClient {
   }
 
   async getOperationsSnapshot(accessToken: string): Promise<OperationsSnapshot> {
-    const [health, sync, sales, returns, audit] = await Promise.all([
+    const [health, sync, operationalMetrics, sales, returns, audit] = await Promise.all([
       this.getHealth(),
       this.getSyncStatus(accessToken),
+      this.getOperationalMetrics(accessToken),
       this.getSales(accessToken, 10),
       this.getReturns(accessToken, 10),
       this.getAuditLog(accessToken, 10)
@@ -251,18 +325,29 @@ export class PosServerClient {
       returns,
       cashShift: null,
       audit,
+      operationalMetrics,
       metrics: {
         health,
         totalSalesCents,
         salesCount,
         refundsCents,
         returnsCount,
-        pendingSync: sync.pendingCount ?? 0,
-        processedSync: sync.processedCount ?? 0,
-        deadLetter: sync.deadLetterCount ?? 0,
+        pendingSync: sync.pendingCount ?? operationalMetrics?.sync?.inboxByStatus?.received ?? 0,
+        processedSync: sync.processedCount ?? operationalMetrics?.sync?.inboxByStatus?.processed ?? 0,
+        deadLetter: sync.deadLetterCount ?? operationalMetrics?.sync?.deadLetterEvents ?? 0,
         auditEvents: audit.length,
         criticalAuditEvents,
-        lastUpdatedAt: new Date().toISOString()
+        lastUpdatedAt: new Date().toISOString(),
+        activeDbConnections: operationalMetrics?.database?.activeConnections ?? 0,
+        requestP95LatencyMs: operationalMetrics?.requests?.p95LatencyMs ?? 0,
+        failedRequests: operationalMetrics?.requests?.failedRequests ?? 0,
+        pendingConflicts: operationalMetrics?.sync?.pendingConflicts ?? 0,
+        resolvedConflicts: operationalMetrics?.sync?.resolvedConflicts ?? 0,
+        retryPendingSync: operationalMetrics?.sync?.retryPendingEvents ?? 0,
+        salesLast24Hours: operationalMetrics?.sales?.salesLast24Hours ?? 0,
+        failedPaymentsLast24Hours: operationalMetrics?.payments?.failedPaymentsLast24Hours ?? 0,
+        negativeInventoryItemCount: operationalMetrics?.inventory?.negativeInventoryItemCount ?? 0,
+        lowStockItemCount: operationalMetrics?.inventory?.lowStockItemCount ?? 0
       }
     };
   }
