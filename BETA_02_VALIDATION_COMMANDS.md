@@ -35,3 +35,8 @@ Unblock-File .\scripts\security\scan-local-secrets.ps1
 
 ## If it fails
 Send the complete console output from the first failing `[BETA-02]` step onward. If generated, also send `.runtime\beta-02-tenant-provisioning-separation-hardening\beta-02-separation-manifest.json` after confirming it contains no secrets. Do not send passwords, JWTs, provisioning keys or the full DATABASE_URL.
+
+
+## HOTFIX 02.2
+
+El comando de validación no cambia. El SQL ahora distingue fixtures extranjeros opcionales de blockers reales y valida RLS/policies de las tablas núcleo.

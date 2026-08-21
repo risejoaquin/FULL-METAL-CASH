@@ -42,6 +42,13 @@ WITH params AS (
     (SELECT s.id::text FROM pos.sales s JOIN params p ON s.tenant_id<>p.tenant_id ORDER BY s.created_at LIMIT 1) AS foreign_sale_id,
     (SELECT pr.id::text FROM pos.products pr JOIN params p ON pr.tenant_id<>p.tenant_id AND pr.deleted_at IS NULL ORDER BY pr.created_at LIMIT 1) AS foreign_product_id,
     (SELECT ur.id::text FROM pos.update_releases ur JOIN params p ON ur.tenant_id IS NOT NULL AND ur.tenant_id<>p.tenant_id AND ur.revoked_at IS NULL ORDER BY ur.published_at DESC LIMIT 1) AS foreign_release_id
+), rls AS (
+  SELECT
+    count(*) FILTER (WHERE c.relrowsecurity)::int AS rls_enabled_count,
+    (SELECT count(*)::int FROM pg_policies p WHERE p.schemaname='pos' AND p.tablename IN ('stores','users','terminals','customers','products','sales') AND p.policyname LIKE 'tenant_isolation_%') AS tenant_policy_count
+  FROM pg_class c
+  JOIN pg_namespace n ON n.oid=c.relnamespace
+  WHERE n.nspname='pos' AND c.relname IN ('stores','users','terminals','customers','products','sales')
 ), isolation AS (
   SELECT
     (SELECT count(*) FROM pos.stores s JOIN params p ON s.tenant_id<>p.tenant_id)::int AS foreign_store_count,
@@ -66,9 +73,19 @@ WITH params AS (
     CASE WHEN t.active_price_list_count<1 THEN 'tenant_price_list_missing' END,
     CASE WHEN t.tenant_release_count<1 THEN 'tenant_release_channel_missing' END,
     CASE WHEN f.foreign_tenant_id IS NULL THEN 'no_foreign_tenant_available_for_isolation_test' END,
-    CASE WHEN i.foreign_store_count<1 OR i.foreign_user_count<1 OR i.foreign_terminal_count<1 OR i.foreign_product_count<1 THEN 'foreign_tenant_fixture_incomplete' END
+    CASE WHEN r.rls_enabled_count<>6 THEN 'core_tenant_rls_not_enabled' END,
+    CASE WHEN r.tenant_policy_count<>6 THEN 'core_tenant_rls_policy_missing' END
   ],NULL) AS items
-  FROM required_tables rt CROSS JOIN target t CROSS JOIN foreign_sample f CROSS JOIN isolation i
+  FROM required_tables rt CROSS JOIN target t CROSS JOIN foreign_sample f CROSS JOIN rls r
+), conditions AS (
+  SELECT array_remove(ARRAY[
+    CASE WHEN i.foreign_store_count<1 THEN 'foreign_store_fixture_unavailable' END,
+    CASE WHEN i.foreign_user_count<1 THEN 'foreign_user_fixture_unavailable' END,
+    CASE WHEN i.foreign_terminal_count<1 THEN 'foreign_terminal_fixture_unavailable' END,
+    CASE WHEN i.foreign_customer_count<1 THEN 'foreign_customer_fixture_unavailable' END,
+    CASE WHEN i.foreign_product_count<1 THEN 'foreign_product_fixture_unavailable' END
+  ],NULL) AS items
+  FROM isolation i
 )
 SELECT jsonb_build_object(
   'beta02SqlValidation', CASE WHEN cardinality((SELECT items FROM blockers))=0 THEN 'GO' ELSE 'NO-GO' END,
@@ -100,6 +117,14 @@ SELECT jsonb_build_object(
   'foreignSaleId',(SELECT foreign_sale_id FROM foreign_sample),
   'foreignProductId',(SELECT foreign_product_id FROM foreign_sample),
   'foreignReleaseId',(SELECT foreign_release_id FROM foreign_sample),
+  'foreignStoreCount',(SELECT foreign_store_count FROM isolation),
+  'foreignUserCount',(SELECT foreign_user_count FROM isolation),
+  'foreignTerminalCount',(SELECT foreign_terminal_count FROM isolation),
+  'foreignCustomerCount',(SELECT foreign_customer_count FROM isolation),
+  'foreignProductCount',(SELECT foreign_product_count FROM isolation),
+  'rlsEnabledCoreTableCount',(SELECT rls_enabled_count FROM rls),
+  'rlsTenantPolicyCount',(SELECT tenant_policy_count FROM rls),
+  'conditions',(SELECT to_jsonb(items) FROM conditions),
   'blockers',(SELECT to_jsonb(items) FROM blockers),
   'schemaVersion',4,
   'syncContract','schema_version_4',

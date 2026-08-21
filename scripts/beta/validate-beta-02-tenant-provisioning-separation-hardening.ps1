@@ -37,7 +37,7 @@ $current=Invoke-Api Get '/api/v1/tenants/current' $null $h;Assert-True(([string]
 Write-Step 'Production provisioning status and authentication PASS'
 
 Write-Step 'SQL tenant provisioning source-of-truth...'
-$sql=Invoke-DbJson $sqlPath @{tenant_id=$TenantId;admin_email=$Email};$blockers=@($sql.blockers);Assert-True($blockers.Count-eq0)"BETA-02 SQL blockers: $($blockers -join ', ')";Write-Step 'SQL tenant provisioning source-of-truth PASS'
+$sql=Invoke-DbJson $sqlPath @{tenant_id=$TenantId;admin_email=$Email};$blockers=@($sql.blockers);Assert-True($blockers.Count-eq0)"BETA-02 SQL blockers: $($blockers -join ', ')";$conditions=@($sql.conditions);Write-Step 'SQL tenant provisioning source-of-truth PASS'
 
 Write-Step 'Tenant-scoped list isolation...'
 $stores=Items(Invoke-Api Get '/api/v1/stores' $null $h);$users=Items(Invoke-Api Get '/api/v1/users' $null $h);$terminals=Items(Invoke-Api Get '/api/v1/terminals' $null $h);$customers=Items(Invoke-Api Get '/api/v1/customers?limit=100' $null $h)
@@ -52,9 +52,10 @@ if($sql.foreignCustomerId){$negative.foreignCustomerStatus=HttpStatus "/api/v1/c
 if($sql.foreignSaleId){$negative.foreignSaleStatus=HttpStatus "/api/v1/sales/$($sql.foreignSaleId)" $h;Assert-True($negative.foreignSaleStatus-eq404)'Foreign sale must return 404.'}
 Write-Step 'Cross-tenant negative reads PASS'
 
-$manifest=[ordered]@{phase='BETA-02';status='PASS BETA TENANT PROVISIONING SEPARATION HARDENING / GO BETA-03';tenantId=$TenantId;baseUrl=$script:base;generatedAt=(Get-Date).ToUniversalTime().ToString('o');betaDecision='GO_BETA_03';provisioningEnabled=$status.enabled;provisioningConfigured=$status.configured;completedBootstrapRunCount=[long]$sql.completedBootstrapRunCount;seededRoleCount=[long]$sql.seededRoleCount;seededPermissionAssignmentCount=[long]$sql.seededPermissionAssignmentCount;adminOwnerAssignmentCount=[long]$sql.adminOwnerAssignmentCount;adminStoreAccessCount=[long]$sql.adminStoreAccessCount;activeStoreCount=[long]$sql.activeStoreCount;activeTerminalCount=[long]$sql.activeTerminalCount;activeProductCount=[long]$sql.activeProductCount;activePriceListCount=[long]$sql.activePriceListCount;tenantReleaseCount=[long]$sql.tenantReleaseCount;foreignTenantId=$sql.foreignTenantId;crossTenantNegativeTests=$negative;blockers=@();schemaVersion=4;syncContract='schema_version_4';nextPhase='BETA-03 - Beta Store Operations Validation'}
+$manifest=[ordered]@{phase='BETA-02';status='PASS BETA TENANT PROVISIONING SEPARATION HARDENING / GO BETA-03';tenantId=$TenantId;baseUrl=$script:base;generatedAt=(Get-Date).ToUniversalTime().ToString('o');betaDecision='GO_BETA_03';provisioningEnabled=$status.enabled;provisioningConfigured=$status.configured;completedBootstrapRunCount=[long]$sql.completedBootstrapRunCount;seededRoleCount=[long]$sql.seededRoleCount;seededPermissionAssignmentCount=[long]$sql.seededPermissionAssignmentCount;adminOwnerAssignmentCount=[long]$sql.adminOwnerAssignmentCount;adminStoreAccessCount=[long]$sql.adminStoreAccessCount;activeStoreCount=[long]$sql.activeStoreCount;activeTerminalCount=[long]$sql.activeTerminalCount;activeProductCount=[long]$sql.activeProductCount;activePriceListCount=[long]$sql.activePriceListCount;tenantReleaseCount=[long]$sql.tenantReleaseCount;foreignTenantId=$sql.foreignTenantId;foreignFixtureCoverage=[ordered]@{stores=[long]$sql.foreignStoreCount;users=[long]$sql.foreignUserCount;terminals=[long]$sql.foreignTerminalCount;customers=[long]$sql.foreignCustomerCount;products=[long]$sql.foreignProductCount};rlsEnabledCoreTableCount=[long]$sql.rlsEnabledCoreTableCount;rlsTenantPolicyCount=[long]$sql.rlsTenantPolicyCount;crossTenantNegativeTests=$negative;conditions=$conditions;blockers=@();schemaVersion=4;syncContract='schema_version_4';nextPhase='BETA-03 - Beta Store Operations Validation'}
 $manifest|ConvertTo-Json -Depth 20|Set-Content -Encoding UTF8 $manifestPath
-@"# BETA-02 Tenant Provisioning and Separation Hardening Log
+@"
+# BETA-02 Tenant Provisioning and Separation Hardening Log
 
 - status: $($manifest.status)
 - generatedAt: $($manifest.generatedAt)
@@ -64,6 +65,9 @@ $manifest|ConvertTo-Json -Depth 20|Set-Content -Encoding UTF8 $manifestPath
 - activeStoreCount: $($manifest.activeStoreCount)
 - activeTerminalCount: $($manifest.activeTerminalCount)
 - foreignTenantId: $($manifest.foreignTenantId)
+- rlsEnabledCoreTableCount: $($manifest.rlsEnabledCoreTableCount)
+- rlsTenantPolicyCount: $($manifest.rlsTenantPolicyCount)
+- conditions: $($manifest.conditions -join ', ')
 - blockers: {}
 - schemaVersion: 4
 - syncContract: schema_version_4
