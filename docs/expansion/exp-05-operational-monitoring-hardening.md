@@ -1,4 +1,4 @@
-# SolidPOS EXP-05 — Operational Monitoring Hardening
+﻿# SolidPOS EXP-05 — Operational Monitoring Hardening
 
 ## Estado objetivo
 
@@ -31,7 +31,7 @@ Cada métrica crítica debe tener:
 
 EXP-05 permite avanzar a EXP-06 si:
 
-- no hay blockers de salud, base de datos, conflictos pendientes, failed payments o failed requests;
+- no hay blockers de salud, base de datos, conflictos pendientes, failed payments o nuevos failed requests durante la ventana de validación; el contador acumulado previo se conserva como evidencia histórica;
 - las condiciones conocidas quedan explícitamente monitoreadas;
 - el contrato SQL y el contrato HTTP de observability/metrics pasan.
 

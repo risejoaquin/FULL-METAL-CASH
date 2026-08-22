@@ -20,3 +20,7 @@ Validate controlled `internal -> beta` release promotion and a rollback drill wi
 
 ## Decision
 `PASS BETA RELEASE PROMOTION ROLLBACK DRILL / GO BETA-07`
+
+
+## Validation status
+PASS REAL PRODUCTION — PASS BETA RELEASE PROMOTION ROLLBACK DRILL / GO BETA-07.

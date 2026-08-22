@@ -8,6 +8,18 @@ $ErrorActionPreference = 'Stop'
 
 $resolvedRoot = (Resolve-Path $Root).Path
 
+function Get-RelativePathCompat {
+    param([string]$BasePath,[string]$TargetPath)
+    $baseFull = [IO.Path]::GetFullPath($BasePath)
+    $targetFull = [IO.Path]::GetFullPath($TargetPath)
+    $separator = [IO.Path]::DirectorySeparatorChar
+    if (-not $baseFull.EndsWith([string]$separator)) { $baseFull += $separator }
+    if ($targetFull.StartsWith($baseFull, [StringComparison]::OrdinalIgnoreCase)) {
+        return $targetFull.Substring($baseFull.Length)
+    }
+    return $targetFull
+}
+
 $patterns = @(
     @{ Name = 'PostgreSQL URL with password'; Regex = 'postgres(?:ql)?://[^\s:@/]+:[^\s:@/]+@[^\s]+' },
     @{ Name = 'Npgsql password connection string'; Regex = '(?i)(Host|Server)=.+;(Password|Pwd)=[^;\s]+' },
@@ -86,7 +98,7 @@ foreach ($file in $files) {
 
             if (-not $isAllowedExample) {
                 $lineNumber = ($content.Substring(0, $match.Index) -split "`n").Count
-                $relativePath = [IO.Path]::GetRelativePath($resolvedRoot, $file.FullName)
+                $relativePath = Get-RelativePathCompat -BasePath $resolvedRoot -TargetPath $file.FullName
                 $redacted = if ($value.Length -gt 18) { $value.Substring(0, 8) + '...' + $value.Substring($value.Length - 4) } else { '[redacted]' }
                 $matches.Add([pscustomobject]@{
                     File = $relativePath
