@@ -61,4 +61,27 @@ public sealed class BuilderUpdatesContractTests
         Assert.Equal("preserve_local_branding", response.BrandingPolicy);
         Assert.Same(release, response.Release);
     }
+    [Fact]
+    public void Update_release_request_preserves_optional_terminal_cohort()
+    {
+        Guid terminalId = Guid.NewGuid();
+        var request = new CreateUpdateReleaseRequest(
+            "1.0.0-rc.1",
+            "stable",
+            "velopack",
+            "https://updates.solidpos.local/ga-06/setup.exe",
+            "sha256-demo",
+            "signature-demo",
+            "0.10.0",
+            false,
+            true,
+            true,
+            new[] { terminalId });
+
+        Assert.NotNull(request.TargetTerminalIds);
+        Assert.Contains(terminalId, request.TargetTerminalIds!);
+        Assert.True(request.TenantScoped);
+        Assert.False(request.Mandatory);
+    }
+
 }

@@ -65,10 +65,25 @@ public static class BuilderUpdatesEndpoints
             IBuilderUpdatesService service,
             CancellationToken cancellationToken) =>
         {
-            UpdateReleaseResponse? response = await service.CreateReleaseAsync(request, cancellationToken);
-            return response is null
-                ? Rejected("Update release creation rejected")
-                : Results.Created($"/api/v1/updates/releases/{response.Id}", response);
+            try
+            {
+                UpdateReleaseResponse? response = await service.CreateReleaseAsync(request, cancellationToken);
+                return response is null
+                    ? Rejected("Update release creation rejected")
+                    : Results.Created($"/api/v1/updates/releases/{response.Id}", response);
+            }
+            catch (UpdateReleaseCreationConflictException conflict)
+            {
+                return Results.Conflict(new
+                {
+                    title = "Update release creation conflict",
+                    errorCode = conflict.ErrorCode,
+                    conflictingFields = conflict.ConflictingFields,
+                    version = request.Version,
+                    channel = request.Channel,
+                    packageType = request.PackageType
+                });
+            }
         })
         .RequireAuthorization(PermissionCodes.UpdatesManage)
         .WithName("CreateUpdateRelease");
@@ -77,10 +92,11 @@ public static class BuilderUpdatesEndpoints
             [FromQuery] string? currentVersion,
             [FromQuery] string? channel,
             [FromQuery] string? packageType,
+            [FromQuery] Guid? terminalId,
             IBuilderUpdatesService service,
             CancellationToken cancellationToken) =>
         {
-            UpdateCheckResponse? response = await service.CheckForUpdateAsync(currentVersion, channel, packageType, cancellationToken);
+            UpdateCheckResponse? response = await service.CheckForUpdateAsync(currentVersion, channel, packageType, terminalId, cancellationToken);
             return response is null
                 ? Rejected("Update check rejected")
                 : Results.Ok(response);

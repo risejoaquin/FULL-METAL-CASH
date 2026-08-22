@@ -75,7 +75,8 @@ public sealed record CreateUpdateReleaseRequest(
     string? RollbackVersion,
     bool Mandatory,
     bool UniversalInstaller,
-    bool TenantScoped);
+    bool TenantScoped,
+    IReadOnlyCollection<Guid>? TargetTerminalIds = null);
 
 public sealed record UpdateCheckResponse(
     bool UpdateAvailable,

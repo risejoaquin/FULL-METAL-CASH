@@ -3,11 +3,14 @@
     <RootNamespace>SolidPOS.PosCore.Wpf</RootNamespace>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <UseWPF>true</UseWPF>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>SolidPOS.PosCore.Wpf</AssemblyName>
+    <StartupObject>SolidPOS.PosCore.Wpf.Program</StartupObject>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.0" />
     <ProjectReference Include="..\SolidPOS.PosCore.Application\SolidPOS.PosCore.Application.csproj" />
     <ProjectReference Include="..\SolidPOS.PosCore.Domain\SolidPOS.PosCore.Domain.csproj" />
     <ProjectReference Include="..\SolidPOS.PosCore.Infrastructure\SolidPOS.PosCore.Infrastructure.csproj" />

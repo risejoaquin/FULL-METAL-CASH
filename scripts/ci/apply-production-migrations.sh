@@ -40,7 +40,8 @@ else
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/015_security_auth_hardening.sql"
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/016_production_provisioning_bootstrap.sql"
   psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/017_pos_operational_completion.sql"
-psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/018_sync_e2e_contract_hardening.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/018_sync_e2e_contract_hardening.sql"
+  psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/019_update_release_cohort_targeting.sql"
 fi
 
 psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 <<'SQL'
@@ -67,7 +68,8 @@ BEGIN
       ('builder_builds'),
       ('update_releases'),
       ('production_bootstrap_runs'),
-      ('cash_movements')
+      ('cash_movements'),
+      ('update_release_targets')
   ) AS required(required_table)
   WHERE to_regclass('pos.' || required_table) IS NULL;
 

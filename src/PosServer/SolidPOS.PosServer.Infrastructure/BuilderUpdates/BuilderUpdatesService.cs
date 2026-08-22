@@ -100,19 +100,23 @@ public sealed class BuilderUpdatesService : IBuilderUpdatesService
 
     public async Task<UpdateReleaseResponse?> CreateReleaseAsync(CreateUpdateReleaseRequest request, CancellationToken cancellationToken)
     {
-        if (!TryGetTenantId(out Guid tenantId)
-            || string.IsNullOrWhiteSpace(request.Version)
-            || !Channels.Contains(Normalize(request.Channel))
-            || !PackageTypes.Contains(Normalize(request.PackageType))
-            || string.IsNullOrWhiteSpace(request.ArtifactUrl)
-            || string.IsNullOrWhiteSpace(request.ArtifactHash)
-            || string.IsNullOrWhiteSpace(request.Signature))
+        var invalidFields = new List<string>();
+        if (!TryGetTenantId(out Guid tenantId)) invalidFields.Add("tenantId");
+        if (string.IsNullOrWhiteSpace(request.Version)) invalidFields.Add("version");
+        if (!Channels.Contains(Normalize(request.Channel))) invalidFields.Add("channel");
+        if (!PackageTypes.Contains(Normalize(request.PackageType))) invalidFields.Add("packageType");
+        if (string.IsNullOrWhiteSpace(request.ArtifactUrl)) invalidFields.Add("artifactUrl");
+        if (string.IsNullOrWhiteSpace(request.ArtifactHash)) invalidFields.Add("artifactHash");
+        if (string.IsNullOrWhiteSpace(request.Signature)) invalidFields.Add("signature");
+        if ((request.TargetTerminalIds?.Count ?? 0) > 0 && !request.TenantScoped) invalidFields.Add("tenantScoped");
+
+        if (invalidFields.Count > 0)
         {
-            _logger.LogWarning("Update release creation rejected for tenant {TenantId}", _tenantContext.TenantId);
-            return null;
+            _logger.LogWarning("Update release creation rejected for tenant {TenantId}; invalid fields {InvalidFields}", _tenantContext.TenantId, string.Join(',', invalidFields));
+            throw new UpdateReleaseCreationConflictException("INVALID_RELEASE_REQUEST", invalidFields);
         }
 
-        UpdateReleaseResponse? response = await _repository.CreateReleaseAsync(
+        UpdateReleaseWriteResult? write = await _repository.CreateReleaseAsync(
             tenantId,
             request with
             {
@@ -122,19 +126,34 @@ public sealed class BuilderUpdatesService : IBuilderUpdatesService
                 ArtifactUrl = request.ArtifactUrl.Trim(),
                 ArtifactHash = request.ArtifactHash.Trim(),
                 Signature = request.Signature.Trim(),
-                RollbackVersion = string.IsNullOrWhiteSpace(request.RollbackVersion) ? null : request.RollbackVersion.Trim()
+                RollbackVersion = string.IsNullOrWhiteSpace(request.RollbackVersion) ? null : request.RollbackVersion.Trim(),
+                TargetTerminalIds = request.TargetTerminalIds?.Where(id => id != Guid.Empty).Distinct().ToArray()
             },
             cancellationToken);
 
-        if (response is not null)
+        if (write is null)
         {
-            await WriteAuditAsync(tenantId, "updates.release.created", "update_release", response.Id, response, cancellationToken);
+            throw new UpdateReleaseCreationConflictException("RELEASE_WRITE_REJECTED");
+        }
+
+        UpdateReleaseResponse response = write.Release;
+        await WriteAuditAsync(tenantId, write.WasCreated ? "updates.release.created" : "updates.release.reconciled", "update_release", response.Id, response, cancellationToken);
+        if (write.InsertedTargetCount > 0)
+        {
+            await WriteAuditAsync(tenantId, "updates.release.cohort.targeted", "update_release", response.Id, new
+            {
+                response.Id,
+                response.Version,
+                response.Channel,
+                TargetTerminalIds = request.TargetTerminalIds!.Where(id => id != Guid.Empty).Distinct().ToArray(),
+                InsertedTargetCount = write.InsertedTargetCount
+            }, cancellationToken);
         }
 
         return response;
     }
 
-    public Task<UpdateCheckResponse?> CheckForUpdateAsync(string? currentVersion, string? channel, string? packageType, CancellationToken cancellationToken)
+    public Task<UpdateCheckResponse?> CheckForUpdateAsync(string? currentVersion, string? channel, string? packageType, Guid? terminalId, CancellationToken cancellationToken)
     {
         if (!TryGetTenantId(out Guid tenantId)
             || string.IsNullOrWhiteSpace(currentVersion)
@@ -148,12 +167,26 @@ public sealed class BuilderUpdatesService : IBuilderUpdatesService
 
         async Task<UpdateCheckResponse?> CheckAsync()
         {
-            return await _repository.CheckForUpdateAsync(
+            string normalizedCurrentVersion = currentVersion.Trim();
+            UpdateCheckResponse response = await _repository.CheckForUpdateAsync(
                 tenantId,
-                currentVersion.Trim(),
+                normalizedCurrentVersion,
                 Normalize(channel!),
                 Normalize(packageType ?? "velopack"),
+                terminalId,
                 cancellationToken);
+
+            if (response.Release is not null && !SemanticVersionOrdering.IsStrictlyNewer(response.Release.Version, normalizedCurrentVersion))
+            {
+                return response with
+                {
+                    UpdateAvailable = false,
+                    Release = null,
+                    Decision = "already_current_or_newer"
+                };
+            }
+
+            return response;
         }
     }
 

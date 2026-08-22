@@ -37,7 +37,8 @@ BEGIN
       ('audit_events'),
       ('builder_projects'),
       ('builder_builds'),
-      ('update_releases')
+      ('update_releases'),
+      ('update_release_targets')
   ) AS required(required_table)
   WHERE to_regclass('pos.' || required_table) IS NULL;
 

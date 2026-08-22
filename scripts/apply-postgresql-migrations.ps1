@@ -27,7 +27,8 @@ $MigrationFiles = @(
     "database/postgresql/015_security_auth_hardening.sql",
     "database/postgresql/016_production_provisioning_bootstrap.sql",
     "database/postgresql/017_pos_operational_completion.sql",
-    "database/postgresql/018_sync_e2e_contract_hardening.sql"
+    "database/postgresql/018_sync_e2e_contract_hardening.sql",
+    "database/postgresql/019_update_release_cohort_targeting.sql"
 )
 
 function Invoke-PostgresScalar {
@@ -44,7 +45,15 @@ function Invoke-PostgresScalar {
 
     $docker = Get-Command docker -ErrorAction SilentlyContinue
     if (-not $docker) {
-        throw "Neither psql nor docker is available. Install PostgreSQL client tools or start the included Docker environment."
+        throw "Neither psql nor docker is available. Install PostgreSQL client tools or start Docker."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($DatabaseUrl)) {
+        $result = & docker run --rm postgres:17 psql $DatabaseUrl -tAc $Sql
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker client psql scalar command failed against DatabaseUrl"
+        }
+        return ($result | Select-Object -First 1).Trim()
     }
 
     $result = & docker exec -e "PGPASSWORD=$DockerPassword" $DockerContainer psql -U $DockerUser -d $DockerDatabase -tAc $Sql
@@ -68,7 +77,15 @@ function Invoke-PostgresSql {
 
     $docker = Get-Command docker -ErrorAction SilentlyContinue
     if (-not $docker) {
-        throw "Neither psql nor docker is available. Install PostgreSQL client tools or start the included Docker environment."
+        throw "Neither psql nor docker is available. Install PostgreSQL client tools or start Docker."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($DatabaseUrl)) {
+        & docker run --rm postgres:17 psql $DatabaseUrl -v ON_ERROR_STOP=1 -c $Sql
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker client psql command failed against DatabaseUrl"
+        }
+        return
     }
 
     & docker exec -e "PGPASSWORD=$DockerPassword" $DockerContainer psql -U $DockerUser -d $DockerDatabase -v ON_ERROR_STOP=1 -c $Sql
@@ -96,7 +113,17 @@ function Invoke-PostgresFile {
 
     $docker = Get-Command docker -ErrorAction SilentlyContinue
     if (-not $docker) {
-        throw "Neither psql nor docker is available. Install PostgreSQL client tools or start the included Docker environment."
+        throw "Neither psql nor docker is available. Install PostgreSQL client tools or start Docker."
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($DatabaseUrl)) {
+        $MigrationDir = Split-Path -Parent $FullPath
+        $MigrationName = Split-Path -Leaf $FullPath
+        & docker run --rm -v "${MigrationDir}:/migrations:ro" postgres:17 psql $DatabaseUrl -v ON_ERROR_STOP=1 -f "/migrations/$MigrationName"
+        if ($LASTEXITCODE -ne 0) {
+            throw "docker client psql failed for $RelativePath against DatabaseUrl"
+        }
+        return
     }
 
     $ContainerPath = "/tmp/solidpos_$(Split-Path $RelativePath -Leaf)"
@@ -135,7 +162,8 @@ if ($SchemaExists -eq "t" -and -not $ResetSchema) {
     "database/postgresql/015_security_auth_hardening.sql",
     "database/postgresql/016_production_provisioning_bootstrap.sql",
     "database/postgresql/017_pos_operational_completion.sql",
-    "database/postgresql/018_sync_e2e_contract_hardening.sql"
+    "database/postgresql/018_sync_e2e_contract_hardening.sql",
+        "database/postgresql/019_update_release_cohort_targeting.sql"
     )
 }
 

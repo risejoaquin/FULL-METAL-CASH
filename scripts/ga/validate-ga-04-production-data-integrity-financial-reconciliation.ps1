@@ -43,10 +43,12 @@ Assert-True (Test-Path $checkSql) 'GA-04 SQL check missing.'
 Assert-True ($DatabaseUrl.StartsWith('postgresql://') -or $DatabaseUrl.StartsWith('postgres://')) 'DATABASE_URL must be PostgreSQL.'
 foreach($d in $docs){Assert-True (Test-Path $d) "Required GA-04 document missing: $d"}
 Assert-DocumentContains $docs[0] @('GA-04','Production Data Integrity and Financial Reconciliation Gate','Sales / Payments','Returns / Refunds','Inventory','PASS GA PRODUCTION DATA INTEGRITY FINANCIAL RECONCILIATION / GO GA-05')
-Assert-DocumentContains $docs[1] @('PENDING USER VALIDATION','schemaVersion = 4','syncContract = schema_version_4','generalAvailabilityActivated = False','all material mismatch counts must be zero')
+$ga04MainState=(Get-Content -Raw $docs[1]).ToLowerInvariant(); Assert-True ($ga04MainState.Contains('pending user validation') -or $ga04MainState.Contains('pass real production')) 'GA-04 main document must contain a valid lifecycle state.'
+Assert-DocumentContains $docs[1] @('schemaVersion = 4','syncContract = schema_version_4','generalAvailabilityActivated = False','all material mismatch counts must be zero')
 Assert-DocumentContains $docs[2] @('sale/payment reconciliation','public token integrity','counted vs expected','ledger consistency','substitute semantics','orphan roles','invalid store access')
 Assert-DocumentContains $docs[3] @('sales/payments','receipts','returns/refunds','cash','inventory','catalog/pricing','users/access','sync/audit')
-Assert-DocumentContains $docs[4] @('PENDING USER VALIDATION','PASS GA PRODUCTION DATA INTEGRITY FINANCIAL RECONCILIATION / GO GA-05','FAIL / HOTFIX REQUIRED')
+$ga04GoState=(Get-Content -Raw $docs[4]).ToLowerInvariant(); Assert-True ($ga04GoState.Contains('pending user validation') -or $ga04GoState.Contains('pass real production')) 'GA-04 go/no-go document must contain a valid lifecycle state.'
+Assert-DocumentContains $docs[4] @('PASS GA PRODUCTION DATA INTEGRITY FINANCIAL RECONCILIATION / GO GA-05','FAIL / HOTFIX REQUIRED')
 Write-Step 'Repository/document GA-04 guardrails PASS'
 
 Write-Step 'Secret scan...'

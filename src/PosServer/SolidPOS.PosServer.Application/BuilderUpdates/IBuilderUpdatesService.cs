@@ -14,5 +14,5 @@ public interface IBuilderUpdatesService
 
     Task<UpdateReleaseResponse?> CreateReleaseAsync(CreateUpdateReleaseRequest request, CancellationToken cancellationToken);
 
-    Task<UpdateCheckResponse?> CheckForUpdateAsync(string? currentVersion, string? channel, string? packageType, CancellationToken cancellationToken);
+    Task<UpdateCheckResponse?> CheckForUpdateAsync(string? currentVersion, string? channel, string? packageType, Guid? terminalId, CancellationToken cancellationToken);
 }

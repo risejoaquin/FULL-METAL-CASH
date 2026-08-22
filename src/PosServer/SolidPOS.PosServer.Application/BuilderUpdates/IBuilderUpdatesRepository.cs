@@ -12,7 +12,7 @@ public interface IBuilderUpdatesRepository
 
     Task<IReadOnlyCollection<UpdateChannelResponse>> ListChannelsAsync(CancellationToken cancellationToken);
 
-    Task<UpdateReleaseResponse?> CreateReleaseAsync(Guid tenantId, CreateUpdateReleaseRequest request, CancellationToken cancellationToken);
+    Task<UpdateReleaseWriteResult?> CreateReleaseAsync(Guid tenantId, CreateUpdateReleaseRequest request, CancellationToken cancellationToken);
 
-    Task<UpdateCheckResponse> CheckForUpdateAsync(Guid tenantId, string currentVersion, string channel, string packageType, CancellationToken cancellationToken);
+    Task<UpdateCheckResponse> CheckForUpdateAsync(Guid tenantId, string currentVersion, string channel, string packageType, Guid? terminalId, CancellationToken cancellationToken);
 }
