@@ -13,7 +13,28 @@ function Assert-True { param([bool]$Condition,[string]$Message) if(-not $Conditi
 function Get-Items { param($Response) if($null -eq $Response){return @()}; if($Response -is [System.Array]){return @($Response)}; foreach($n in @('items','data','results','terminals')){ if($null -ne $Response.$n){ return @($Response.$n) } }; return @($Response) }
 function Assert-DocumentContains { param([string]$Path,[string[]]$Terms) Assert-True (Test-Path $Path) "Required document missing: $Path"; $c=(Get-Content -Raw $Path).ToLowerInvariant(); foreach($t in $Terms){Assert-True ($c.Contains($t.ToLowerInvariant())) "Document $Path missing term: $t"} }
 function Convert-SolidPosSecureString { param([securestring]$SecureValue) $bstr=[Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureValue); try {[Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)} finally {[Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)} }
-function Invoke-DbJsonFile { param([string]$SqlPath,[hashtable]$Variables) $mount=(Resolve-Path (Split-Path -Parent $SqlPath)).Path; $name=Split-Path -Leaf $SqlPath; $args=@('run','--rm','--env',"DATABASE_URL=$DatabaseUrl",'-v',"${mount}:/sql:ro",'postgres:17','psql',"$DatabaseUrl",'-tA','-v','ON_ERROR_STOP=1'); foreach($key in $Variables.Keys){$args+=@('-v',"$key=$($Variables[$key])")}; $args+=@('-f',"/sql/$name"); $global:LASTEXITCODE=0; $out=docker @args; if($LASTEXITCODE -ne 0){throw "DB JSON file command failed for $SqlPath."}; $global:LASTEXITCODE=0; $json=($out|Where-Object{-not [string]::IsNullOrWhiteSpace($_)}|Select-Object -Last 1); Assert-True (-not [string]::IsNullOrWhiteSpace($json)) 'DB JSON file did not return JSON.'; return ($json|ConvertFrom-Json) }
+function Invoke-DbJsonFile {
+ param([string]$SqlPath,[hashtable]$Variables)
+ $mount=(Resolve-Path (Split-Path -Parent $SqlPath)).Path
+ $name=Split-Path -Leaf $SqlPath
+ $args=@('run','--rm','--env',"DATABASE_URL=$DatabaseUrl",'-v',"${mount}:/sql:ro",'postgres:17','psql',"$DatabaseUrl",'-tA','-v','ON_ERROR_STOP=1')
+ foreach($key in $Variables.Keys){$args+=@('-v',"$key=$($Variables[$key])")}
+ $args+=@('-f',"/sql/$name")
+ $global:LASTEXITCODE=0
+ $out=docker @args
+ if($LASTEXITCODE -ne 0){throw "DB JSON file command failed for $SqlPath."}
+ $global:LASTEXITCODE=0
+ $rows=@($out | ForEach-Object { ([string]$_).Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+ for($i=$rows.Count-1; $i -ge 0; $i--){
+   $candidate=$rows[$i]
+   if($candidate -match '^(BEGIN|COMMIT|ROLLBACK|SET)$'){ continue }
+   try {
+     $parsed=$candidate | ConvertFrom-Json -ErrorAction Stop
+     if($null -ne $parsed){ return $parsed }
+   } catch { }
+ }
+ throw "DB JSON file did not return a valid JSON object: $SqlPath."
+}
 function Invoke-DbScalar { param([string]$Sql) $global:LASTEXITCODE=0; $out=docker run --rm --env "DATABASE_URL=$DatabaseUrl" postgres:17 psql "$DatabaseUrl" -tA -v ON_ERROR_STOP=1 -c $Sql; if($LASTEXITCODE -ne 0){throw 'DB scalar command failed.'}; $global:LASTEXITCODE=0; $rows=@($out | ForEach-Object { [string]$_ }); if($rows.Count -eq 0){ return '' }; $last=$rows | Select-Object -Last 1; if($null -eq $last){ return '' }; return ([string]$last).Trim() }
 
 $base=$BaseUrl.TrimEnd('/')
