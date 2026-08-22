@@ -10,6 +10,7 @@ $ErrorActionPreference='Stop'
 function Write-Step { param([string]$Message) Write-Host "[GA-02] $Message" }
 function Assert-True { param([bool]$Condition,[string]$Message) if(-not $Condition){throw $Message} }
 function Assert-DocumentContains { param([string]$Path,[string[]]$Terms) Assert-True (Test-Path $Path) "Required document missing: $Path"; $c=(Get-Content -Raw $Path).ToLowerInvariant(); foreach($t in $Terms){Assert-True ($c.Contains($t.ToLowerInvariant())) "Document $Path missing term: $t"} }
+function Assert-DocumentContainsAny { param([string]$Path,[string[]]$Terms) Assert-True (Test-Path $Path) "Required document missing: $Path"; $c=(Get-Content -Raw $Path).ToLowerInvariant(); $ok=$false; foreach($t in $Terms){if($c.Contains($t.ToLowerInvariant())){$ok=$true}}; Assert-True $ok "Document $Path missing all accepted lifecycle terms: $($Terms -join ', ')" }
 function Invoke-DbJsonFile { param([string]$SqlPath,[hashtable]$Variables) $mount=(Resolve-Path (Split-Path -Parent $SqlPath)).Path; $name=Split-Path -Leaf $SqlPath; $args=@('run','--rm','--env',"DATABASE_URL=$DatabaseUrl",'-v',"${mount}:/sql:ro",'postgres:17','psql',"$DatabaseUrl",'-tA','-v','ON_ERROR_STOP=1'); foreach($key in $Variables.Keys){$args+=@('-v',"$key=$($Variables[$key])")}; $args+=@('-f',"/sql/$name"); $global:LASTEXITCODE=0; $out=docker @args; if($LASTEXITCODE -ne 0){throw "DB JSON file command failed for $SqlPath."}; $global:LASTEXITCODE=0; $json=($out|Where-Object{-not [string]::IsNullOrWhiteSpace($_)}|Select-Object -Last 1); Assert-True (-not [string]::IsNullOrWhiteSpace($json)) 'DB JSON file did not return JSON.'; return ($json|ConvertFrom-Json) }
 
 $base=$BaseUrl.TrimEnd('/')
@@ -44,9 +45,11 @@ Assert-True (Test-Path $remediationSql) 'GA-02 safe remediation SQL missing.'
 Assert-True ($DatabaseUrl.StartsWith('postgresql://') -or $DatabaseUrl.StartsWith('postgres://')) 'DATABASE_URL must be PostgreSQL.'
 foreach($d in $docs){Assert-True (Test-Path $d) "Required GA-02 document missing: $d"}
 Assert-DocumentContains $docs[0] @('GA-02','Sync Queue and SLA Closure','retryPendingCount = 0','retryOverSlaCount = 0','PASS GA SYNC QUEUE SLA CLOSURE / GO GA-03')
-Assert-DocumentContains $docs[1] @('GA-02','close_as_historical_evidence','append-only','schemaVersion = 4','PENDING USER VALIDATION')
+Assert-DocumentContains $docs[1] @('GA-02','close_as_historical_evidence','append-only','schemaVersion = 4')
+Assert-DocumentContainsAny $docs[1] @('PENDING USER VALIDATION','PASS REAL PRODUCTION')
 Assert-DocumentContains $docs[3] @('retry','quarantine','supersede','close_as_historical_evidence','commercial')
-Assert-DocumentContains $docs[5] @('PENDING USER VALIDATION','PASS GA SYNC QUEUE SLA CLOSURE / GO GA-03','FAIL / HOTFIX REQUIRED')
+Assert-DocumentContains $docs[5] @('PASS GA SYNC QUEUE SLA CLOSURE / GO GA-03','FAIL / HOTFIX REQUIRED')
+Assert-DocumentContainsAny $docs[5] @('PENDING USER VALIDATION','PASS REAL PRODUCTION')
 Write-Step 'Repository/document GA-02 guardrails PASS'
 
 Write-Step 'Secret scan...'

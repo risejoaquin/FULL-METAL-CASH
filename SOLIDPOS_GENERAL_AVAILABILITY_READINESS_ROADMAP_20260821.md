@@ -1034,3 +1034,17 @@ syncContract = schema_version_4
 ```
 
 y la activación real de GA deberá ejecutarse como una operación posterior explícita, auditable y reversible.
+
+---
+
+# Runtime progress update — 2026-08-22
+
+```text
+GA-01: PASS REAL PRODUCTION
+GA-02: PASS REAL PRODUCTION
+GA-03: PENDING USER VALIDATION
+GA-04: LOCKED
+GENERAL AVAILABILITY: NOT ACTIVATED
+```
+
+GA-02 production closure evidence recorded `retryPendingCount = 0`, `retryOverSlaCount = 0`, `staleProcessingCount = 0`, `pendingConflictCount = 0`, no new/untriaged dead-letter, and `PASS GA SYNC QUEUE SLA CLOSURE / GO GA-03`.
