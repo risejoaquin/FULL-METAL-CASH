@@ -61,7 +61,10 @@ foreach($d in $docs){Assert-True (Test-Path $d) "Required GA-01 document missing
 Assert-DocumentContains $docs[0] @('GA-01','Baseline Freeze','schemaVersion = 4','syncContract = schema_version_4','PASS GENERAL AVAILABILITY BASELINE FREEZE / GO GA-02')
 Assert-DocumentContains $docs[1] @('GA-01','readiness charter','BETA-10','blockers = {}','generalAvailabilityActivated = False','GO GA-02')
 Assert-DocumentContains $docs[3] @('scope freeze','non-goals','inherited conditions','schemaVersion = 4','inventory_ledger','none | add | substitute')
-Assert-DocumentContains $docs[5] @('PENDING USER VALIDATION','PASS GENERAL AVAILABILITY BASELINE FREEZE / GO GA-02','FAIL / HOTFIX REQUIRED')
+Assert-DocumentContains $docs[5] @('PASS GENERAL AVAILABILITY BASELINE FREEZE / GO GA-02','FAIL / HOTFIX REQUIRED')
+$ga01GoNoGoContent=(Get-Content -Raw $docs[5]).ToLowerInvariant()
+$ga01StateValid=$ga01GoNoGoContent.Contains('pending user validation') -or $ga01GoNoGoContent.Contains('pass real production')
+Assert-True $ga01StateValid "Document $($docs[5]) must declare either PENDING USER VALIDATION or PASS REAL PRODUCTION."
 $repoBaselineHash=Get-RepositoryBaselineHash -Root $repoRoot
 Assert-True ($repoBaselineHash -match '^[a-f0-9]{64}$') 'Repository baseline SHA-256 could not be calculated.'
 Write-Step "Repository/document GA baseline guardrails PASS; baselineHash=$repoBaselineHash"
