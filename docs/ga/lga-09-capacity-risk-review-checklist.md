@@ -1,0 +1,26 @@
+# LGA-09 Capacity Risk Review Checklist
+
+- [ ] LGA-08 PASS evidence available.
+- [ ] Public GA NOT ACTIVATED.
+- [ ] `/health/live` returns 2xx.
+- [ ] `/health/ready` returns 2xx.
+- [ ] Database observability reports ready.
+- [ ] Concurrency 3 probe executed with six requests.
+- [ ] p95 readiness captured and compared with 1200 ms.
+- [ ] Waiting connections <= 12.
+- [ ] No long-running queries > 30 seconds.
+- [ ] At least one active store and one available terminal.
+- [ ] Active stores do not exceed Limited GA scope.
+- [ ] Sync queues (pending/processing/retry) remain clean.
+- [ ] Sync conflict baseline <= 3.
+- [ ] Dead letter baseline <= 1.
+- [ ] Schema version 4 / `schema_version_4` confirmed.
+- [ ] Audit activity exists in the 24-hour decision window.
+- [ ] Recent sales/payments/receipts satisfy decision-window minimums.
+- [ ] Negative stock remains zero.
+- [ ] No duplicate local sales or negative payments.
+- [ ] RLS remains enabled on tenant tables.
+- [ ] Dashboard URL/read models respond successfully.
+- [ ] Capacity risk decision recorded.
+- [ ] If probe fails, decision is `CAPACITY_UPGRADE_REQUIRED_BEFORE_PUBLIC_GA`.
+- [ ] Public GA remains NOT ACTIVATED after the validator completes.

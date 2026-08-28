@@ -1,0 +1,25 @@
+# GA-05 Release Candidate Checklist
+
+- [ ] fresh GA-04 PASS
+- [ ] secret scan PASS
+- [ ] `dotnet restore`
+- [ ] `dotnet build -c Release`
+- [ ] `dotnet test -c Release`
+- [ ] PosDashboard build when not explicitly skipped
+- [ ] two deterministic `dotnet publish` outputs match
+- [ ] Velopack library version 1.2.0
+- [ ] Velopack CLI version 1.2.0
+- [ ] `vpk pack` produces Setup.exe and `.nupkg`
+- [ ] main executable Authenticode signature verification PASS
+- [ ] Setup.exe Authenticode signature verification PASS
+- [ ] installer SHA-256 recorded
+- [ ] rollback version present
+- [ ] dependency inventory generated
+- [ ] source reference/provenance generated
+- [ ] artifact retention >= 180 days by default
+- [ ] `mandatory = false`
+- [ ] `tenantScoped = true`
+- [ ] stable production release count remains 0
+- [ ] schemaVersion 4 preserved
+- [ ] General Availability remains inactive
+- [ ] signature verification PASS

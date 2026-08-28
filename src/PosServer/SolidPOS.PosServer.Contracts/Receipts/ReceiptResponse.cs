@@ -1,0 +1,28 @@
+namespace SolidPOS.PosServer.Contracts.Receipts;
+
+public sealed record ReceiptResponse(
+    Guid SaleId,
+    Guid TenantId,
+    Guid StoreId,
+    string TenantName,
+    string StoreName,
+    string? StoreAddress,
+    string? StorePhone,
+    Guid TerminalId,
+    string TerminalName,
+    Guid CashierUserId,
+    string CashierName,
+    Guid LocalSaleId,
+    string Status,
+    string Currency,
+    DateTimeOffset OccurredAt,
+    DateTimeOffset CreatedAt,
+    long SubtotalCents,
+    long DiscountCents,
+    long TaxCents,
+    long TipCents,
+    long TotalCents,
+    long PaidCents,
+    long ChangeCents,
+    IReadOnlyCollection<ReceiptLineResponse> Lines,
+    IReadOnlyCollection<ReceiptPaymentResponse> Payments);

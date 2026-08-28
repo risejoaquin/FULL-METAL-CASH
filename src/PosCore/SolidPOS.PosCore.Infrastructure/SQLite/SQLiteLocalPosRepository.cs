@@ -1,0 +1,1829 @@
+using Microsoft.Data.Sqlite;
+using SolidPOS.PosCore.Application.Storage;
+using SolidPOS.PosCore.Domain;
+
+namespace SolidPOS.PosCore.Infrastructure.SQLite;
+
+public sealed class SQLiteLocalPosRepository : ILocalPosRepository, ILocalResilienceRepository
+{
+    private readonly SQLiteLocalDatabase _database;
+
+    public SQLiteLocalPosRepository(SQLiteLocalDatabase database)
+    {
+        _database = database;
+    }
+
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        Execute(connection, """
+CREATE TABLE IF NOT EXISTS terminal_binding (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  terminal_fingerprint TEXT NOT NULL,
+  terminal_token TEXT NOT NULL,
+  bound_at_utc TEXT NOT NULL,
+  schema_version INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS offline_sales (
+  local_sale_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  occurred_at_utc TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  subtotal_cents INTEGER NOT NULL,
+  discount_cents INTEGER NOT NULL,
+  total_cents INTEGER NOT NULL,
+  paid_cents INTEGER NOT NULL,
+  status TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_outbox_events (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  schema_version INTEGER NOT NULL,
+  sequence_number INTEGER NOT NULL,
+  payload_json TEXT NOT NULL,
+  status INTEGER NOT NULL,
+  created_at_utc TEXT NOT NULL,
+  synced_at_utc TEXT NULL,
+  last_error TEXT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS local_sync_acknowledgements (
+  id TEXT PRIMARY KEY,
+  batch_id TEXT NOT NULL,
+  outbox_event_id TEXT NOT NULL,
+  remote_status TEXT NOT NULL,
+  remote_response_json TEXT NOT NULL,
+  acknowledged_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_catalog_products (
+  product_id TEXT NOT NULL,
+  variant_id TEXT NULL,
+  sku TEXT NOT NULL,
+  name TEXT NOT NULL,
+  price_cents INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  status TEXT NOT NULL,
+  updated_at_utc TEXT NOT NULL,
+  synced_at_utc TEXT NOT NULL,
+  PRIMARY KEY(product_id, variant_id)
+);
+CREATE TABLE IF NOT EXISTS local_catalog_sync_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  product_count INTEGER NOT NULL,
+  synced_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_inventory_recipes (
+  recipe_id TEXT PRIMARY KEY,
+  output_product_id TEXT NOT NULL,
+  output_variant_id TEXT NULL,
+  yield_quantity TEXT NOT NULL,
+  yield_unit_id TEXT NOT NULL,
+  waste_percent TEXT NOT NULL,
+  status TEXT NOT NULL,
+  synced_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_inventory_recipe_items (
+  recipe_item_id TEXT PRIMARY KEY,
+  recipe_id TEXT NOT NULL,
+  ingredient_product_id TEXT NOT NULL,
+  ingredient_variant_id TEXT NULL,
+  quantity TEXT NOT NULL,
+  unit_id TEXT NOT NULL,
+  optional INTEGER NOT NULL,
+  synced_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_inventory_cache_sync_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  recipe_count INTEGER NOT NULL,
+  recipe_item_count INTEGER NOT NULL,
+  synced_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_inventory_movements (
+  id TEXT PRIMARY KEY,
+  local_sale_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  product_id TEXT NOT NULL,
+  variant_id TEXT NULL,
+  movement_type TEXT NOT NULL,
+  quantity_delta TEXT NOT NULL,
+  unit_id TEXT NOT NULL,
+  occurred_at_utc TEXT NOT NULL,
+  source TEXT NOT NULL,
+  created_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_cash_shifts (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  opened_by_user_id TEXT NOT NULL,
+  opened_at_utc TEXT NOT NULL,
+  opening_amount_cents INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  closed_by_user_id TEXT NULL,
+  closed_at_utc TEXT NULL,
+  counted_cash_cents INTEGER NULL,
+  expected_cash_cents INTEGER NULL,
+  difference_cents INTEGER NULL
+);
+CREATE TABLE IF NOT EXISTS local_cash_movements (
+  id TEXT PRIMARY KEY,
+  shift_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  movement_type TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  occurred_at_utc TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_id TEXT NULL,
+  note TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS local_sale_payments (
+  local_payment_id TEXT PRIMARY KEY,
+  local_sale_id TEXT NOT NULL,
+  shift_id TEXT NOT NULL,
+  method_code TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  tendered_cents INTEGER NOT NULL,
+  change_cents INTEGER NOT NULL,
+  created_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_sync_pull_state (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  cursor TEXT NULL,
+  last_pulled_at_utc TEXT NULL,
+  last_change_count INTEGER NOT NULL DEFAULT 0,
+  total_applied_change_count INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS local_applied_changes (
+  change_id TEXT PRIMARY KEY,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  operation TEXT NOT NULL,
+  entity_version INTEGER NOT NULL,
+  changed_at_utc TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  applied_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_remote_sales (
+  remote_sale_id TEXT PRIMARY KEY,
+  local_sale_id TEXT NULL,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  total_cents INTEGER NOT NULL,
+  occurred_at_utc TEXT NULL,
+  raw_json TEXT NOT NULL,
+  applied_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_remote_receipts (
+  receipt_id TEXT PRIMARY KEY,
+  sale_id TEXT NOT NULL,
+  receipt_number TEXT NOT NULL,
+  public_token TEXT NULL,
+  raw_json TEXT NOT NULL,
+  applied_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_users (
+  user_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  role_code TEXT NOT NULL,
+  is_active INTEGER NOT NULL,
+  last_synced_at_utc TEXT NOT NULL,
+  max_offline_hours INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_user_permissions (
+  user_id TEXT NOT NULL,
+  permission_code TEXT NOT NULL,
+  synced_at_utc TEXT NOT NULL,
+  PRIMARY KEY(user_id, permission_code)
+);
+CREATE TABLE IF NOT EXISTS local_sessions (
+  session_id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  email TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  role_code TEXT NOT NULL,
+  created_at_utc TEXT NOT NULL,
+  expires_at_utc TEXT NOT NULL,
+  status TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_audit_events (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  user_id TEXT NULL,
+  session_id TEXT NULL,
+  event_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  occurred_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_print_jobs (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  sale_id TEXT NOT NULL,
+  receipt_id TEXT NOT NULL,
+  receipt_number TEXT NOT NULL,
+  content TEXT NOT NULL,
+  status TEXT NOT NULL,
+  queued_at_utc TEXT NOT NULL,
+  printed_at_utc TEXT NULL,
+  last_error TEXT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS local_hardware_events (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  device_type TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  occurred_at_utc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_recovery_journal (
+  id TEXT PRIMARY KEY,
+  operation TEXT NOT NULL,
+  status TEXT NOT NULL,
+  message TEXT NOT NULL,
+  started_at_utc TEXT NOT NULL,
+  completed_at_utc TEXT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_local_recovery_journal_time ON local_recovery_journal(started_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_sessions_active ON local_sessions(status, expires_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_audit_events_time ON local_audit_events(occurred_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_print_jobs_status ON local_print_jobs(status, queued_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_hardware_events_time ON local_hardware_events(occurred_at_utc);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_local_catalog_products_sku ON local_catalog_products(sku);
+CREATE INDEX IF NOT EXISTS idx_local_inventory_recipes_output ON local_inventory_recipes(output_product_id, output_variant_id, status);
+CREATE INDEX IF NOT EXISTS idx_local_inventory_recipe_items_recipe ON local_inventory_recipe_items(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_local_inventory_movements_sale ON local_inventory_movements(local_sale_id);
+CREATE INDEX IF NOT EXISTS idx_local_cash_shifts_open ON local_cash_shifts(status, opened_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_cash_movements_shift ON local_cash_movements(shift_id, occurred_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_sale_payments_shift ON local_sale_payments(shift_id);
+CREATE INDEX IF NOT EXISTS idx_local_applied_changes_entity ON local_applied_changes(entity_type, entity_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_local_remote_sales_local_sale ON local_remote_sales(local_sale_id) WHERE local_sale_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_local_remote_receipts_sale ON local_remote_receipts(sale_id);
+CREATE INDEX IF NOT EXISTS idx_local_outbox_pending ON local_outbox_events(status, sequence_number);
+CREATE INDEX IF NOT EXISTS idx_local_sync_ack_event ON local_sync_acknowledgements(outbox_event_id, acknowledged_at_utc);
+""");
+        return Task.CompletedTask;
+    }
+
+    public Task SaveTerminalBindingAsync(TerminalBinding binding, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO terminal_binding (id, tenant_id, store_id, terminal_id, terminal_fingerprint, terminal_token, bound_at_utc, schema_version)
+VALUES (1, $tenantId, $storeId, $terminalId, $fingerprint, $token, $boundAtUtc, $schemaVersion)
+ON CONFLICT(id) DO UPDATE SET
+  tenant_id = excluded.tenant_id,
+  store_id = excluded.store_id,
+  terminal_id = excluded.terminal_id,
+  terminal_fingerprint = excluded.terminal_fingerprint,
+  terminal_token = excluded.terminal_token,
+  bound_at_utc = excluded.bound_at_utc,
+  schema_version = excluded.schema_version;
+""";
+        command.Parameters.AddWithValue("$tenantId", binding.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", binding.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", binding.TerminalId.ToString());
+        command.Parameters.AddWithValue("$fingerprint", binding.TerminalFingerprint);
+        command.Parameters.AddWithValue("$token", binding.TerminalToken);
+        command.Parameters.AddWithValue("$boundAtUtc", binding.BoundAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$schemaVersion", binding.SchemaVersion);
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<TerminalBinding?> GetTerminalBindingAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT tenant_id, store_id, terminal_id, terminal_fingerprint, terminal_token, bound_at_utc, schema_version FROM terminal_binding WHERE id = 1;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<TerminalBinding?>(null);
+
+        var binding = new TerminalBinding(
+            Guid.Parse(reader.GetString(0)),
+            Guid.Parse(reader.GetString(1)),
+            Guid.Parse(reader.GetString(2)),
+            reader.GetString(3),
+            reader.GetString(4),
+            DateTimeOffset.Parse(reader.GetString(5)),
+            reader.GetInt32(6));
+        return Task.FromResult<TerminalBinding?>(binding);
+    }
+
+    public Task SaveOfflineSaleAsync(OfflineSaleDraft sale, LocalOutboxEvent outboxEvent, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var saleCommand = connection.CreateCommand())
+        {
+            saleCommand.Transaction = transaction;
+            saleCommand.CommandText = """
+INSERT INTO offline_sales (local_sale_id, tenant_id, store_id, terminal_id, occurred_at_utc, currency, subtotal_cents, discount_cents, total_cents, paid_cents, status)
+VALUES ($saleId, $tenantId, $storeId, $terminalId, $occurredAtUtc, $currency, $subtotalCents, $discountCents, $totalCents, $paidCents, 'pending_sync');
+""";
+            saleCommand.Parameters.AddWithValue("$saleId", sale.LocalSaleId.ToString());
+            saleCommand.Parameters.AddWithValue("$tenantId", sale.TenantId.ToString());
+            saleCommand.Parameters.AddWithValue("$storeId", sale.StoreId.ToString());
+            saleCommand.Parameters.AddWithValue("$terminalId", sale.TerminalId.ToString());
+            saleCommand.Parameters.AddWithValue("$occurredAtUtc", sale.OccurredAtUtc.ToString("O"));
+            saleCommand.Parameters.AddWithValue("$currency", sale.Currency);
+            saleCommand.Parameters.AddWithValue("$subtotalCents", sale.SubtotalCents);
+            saleCommand.Parameters.AddWithValue("$discountCents", sale.DiscountCents);
+            saleCommand.Parameters.AddWithValue("$totalCents", sale.TotalCents);
+            saleCommand.Parameters.AddWithValue("$paidCents", sale.PaidCents);
+            saleCommand.ExecuteNonQuery();
+        }
+
+        InsertOutboxEvent(connection, transaction, outboxEvent);
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+
+    public Task SaveOfflineSaleWithInventoryAsync(OfflineSaleDraft sale, LocalOutboxEvent outboxEvent, IReadOnlyCollection<LocalInventoryMovement> movements, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var saleCommand = connection.CreateCommand())
+        {
+            saleCommand.Transaction = transaction;
+            saleCommand.CommandText = """
+INSERT INTO offline_sales (local_sale_id, tenant_id, store_id, terminal_id, occurred_at_utc, currency, subtotal_cents, discount_cents, total_cents, paid_cents, status)
+VALUES ($saleId, $tenantId, $storeId, $terminalId, $occurredAtUtc, $currency, $subtotalCents, $discountCents, $totalCents, $paidCents, 'pending_sync');
+""";
+            saleCommand.Parameters.AddWithValue("$saleId", sale.LocalSaleId.ToString());
+            saleCommand.Parameters.AddWithValue("$tenantId", sale.TenantId.ToString());
+            saleCommand.Parameters.AddWithValue("$storeId", sale.StoreId.ToString());
+            saleCommand.Parameters.AddWithValue("$terminalId", sale.TerminalId.ToString());
+            saleCommand.Parameters.AddWithValue("$occurredAtUtc", sale.OccurredAtUtc.ToString("O"));
+            saleCommand.Parameters.AddWithValue("$currency", sale.Currency);
+            saleCommand.Parameters.AddWithValue("$subtotalCents", sale.SubtotalCents);
+            saleCommand.Parameters.AddWithValue("$discountCents", sale.DiscountCents);
+            saleCommand.Parameters.AddWithValue("$totalCents", sale.TotalCents);
+            saleCommand.Parameters.AddWithValue("$paidCents", sale.PaidCents);
+            saleCommand.ExecuteNonQuery();
+        }
+
+        foreach (LocalInventoryMovement movement in movements)
+        {
+            InsertInventoryMovement(connection, transaction, movement);
+        }
+
+        InsertOutboxEvent(connection, transaction, outboxEvent);
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+
+    public Task SaveCatalogProductsAsync(IReadOnlyCollection<LocalCatalogProduct> products, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var delete = connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM local_catalog_products;";
+            delete.ExecuteNonQuery();
+        }
+
+        foreach (var product in products)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_catalog_products (product_id, variant_id, sku, name, price_cents, currency, status, updated_at_utc, synced_at_utc)
+VALUES ($productId, $variantId, $sku, $name, $priceCents, $currency, $status, $updatedAtUtc, $syncedAtUtc);
+""";
+            command.Parameters.AddWithValue("$productId", product.ProductId.ToString());
+            command.Parameters.AddWithValue("$variantId", product.VariantId?.ToString() ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$sku", product.Sku);
+            command.Parameters.AddWithValue("$name", product.Name);
+            command.Parameters.AddWithValue("$priceCents", product.PriceCents);
+            command.Parameters.AddWithValue("$currency", product.Currency);
+            command.Parameters.AddWithValue("$status", product.Status);
+            command.Parameters.AddWithValue("$updatedAtUtc", product.UpdatedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$syncedAtUtc", product.SyncedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        using (var state = connection.CreateCommand())
+        {
+            state.Transaction = transaction;
+            state.CommandText = """
+INSERT INTO local_catalog_sync_state (id, product_count, synced_at_utc)
+VALUES (1, $productCount, $syncedAtUtc)
+ON CONFLICT(id) DO UPDATE SET
+  product_count = excluded.product_count,
+  synced_at_utc = excluded.synced_at_utc;
+""";
+            state.Parameters.AddWithValue("$productCount", products.Count);
+            state.Parameters.AddWithValue("$syncedAtUtc", syncedAtUtc.ToString("O"));
+            state.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalCatalogProduct?> GetCatalogProductBySkuAsync(string sku, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT product_id, variant_id, sku, name, price_cents, currency, status, updated_at_utc, synced_at_utc
+FROM local_catalog_products
+WHERE sku = $sku
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$sku", sku);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalCatalogProduct?>(null);
+        var product = new LocalCatalogProduct(
+            Guid.Parse(reader.GetString(0)),
+            reader.IsDBNull(1) ? null : Guid.Parse(reader.GetString(1)),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetInt32(4),
+            reader.GetString(5),
+            reader.GetString(6),
+            DateTimeOffset.Parse(reader.GetString(7)),
+            DateTimeOffset.Parse(reader.GetString(8)));
+        return Task.FromResult<LocalCatalogProduct?>(product);
+    }
+
+    public Task<int> CountCatalogProductsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_catalog_products;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+
+    public Task SaveInventoryRecipeCacheAsync(IReadOnlyCollection<LocalInventoryRecipe> recipes, IReadOnlyCollection<LocalInventoryRecipeItem> recipeItems, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var deleteItems = connection.CreateCommand())
+        {
+            deleteItems.Transaction = transaction;
+            deleteItems.CommandText = "DELETE FROM local_inventory_recipe_items;";
+            deleteItems.ExecuteNonQuery();
+        }
+        using (var deleteRecipes = connection.CreateCommand())
+        {
+            deleteRecipes.Transaction = transaction;
+            deleteRecipes.CommandText = "DELETE FROM local_inventory_recipes;";
+            deleteRecipes.ExecuteNonQuery();
+        }
+
+        foreach (LocalInventoryRecipe recipe in recipes)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_inventory_recipes (recipe_id, output_product_id, output_variant_id, yield_quantity, yield_unit_id, waste_percent, status, synced_at_utc)
+VALUES ($recipeId, $outputProductId, $outputVariantId, $yieldQuantity, $yieldUnitId, $wastePercent, $status, $syncedAtUtc);
+""";
+            command.Parameters.AddWithValue("$recipeId", recipe.RecipeId.ToString());
+            command.Parameters.AddWithValue("$outputProductId", recipe.OutputProductId.ToString());
+            command.Parameters.AddWithValue("$outputVariantId", recipe.OutputVariantId?.ToString() ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$yieldQuantity", recipe.YieldQuantity.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$yieldUnitId", recipe.YieldUnitId.ToString());
+            command.Parameters.AddWithValue("$wastePercent", recipe.WastePercent.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$status", recipe.Status);
+            command.Parameters.AddWithValue("$syncedAtUtc", recipe.SyncedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        foreach (LocalInventoryRecipeItem item in recipeItems)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_inventory_recipe_items (recipe_item_id, recipe_id, ingredient_product_id, ingredient_variant_id, quantity, unit_id, optional, synced_at_utc)
+VALUES ($recipeItemId, $recipeId, $ingredientProductId, $ingredientVariantId, $quantity, $unitId, $optional, $syncedAtUtc);
+""";
+            command.Parameters.AddWithValue("$recipeItemId", item.RecipeItemId.ToString());
+            command.Parameters.AddWithValue("$recipeId", item.RecipeId.ToString());
+            command.Parameters.AddWithValue("$ingredientProductId", item.IngredientProductId.ToString());
+            command.Parameters.AddWithValue("$ingredientVariantId", item.IngredientVariantId?.ToString() ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("$quantity", item.Quantity.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            command.Parameters.AddWithValue("$unitId", item.UnitId.ToString());
+            command.Parameters.AddWithValue("$optional", item.Optional ? 1 : 0);
+            command.Parameters.AddWithValue("$syncedAtUtc", item.SyncedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        using (var state = connection.CreateCommand())
+        {
+            state.Transaction = transaction;
+            state.CommandText = """
+INSERT INTO local_inventory_cache_sync_state (id, recipe_count, recipe_item_count, synced_at_utc)
+VALUES (1, $recipeCount, $recipeItemCount, $syncedAtUtc)
+ON CONFLICT(id) DO UPDATE SET
+  recipe_count = excluded.recipe_count,
+  recipe_item_count = excluded.recipe_item_count,
+  synced_at_utc = excluded.synced_at_utc;
+""";
+            state.Parameters.AddWithValue("$recipeCount", recipes.Count);
+            state.Parameters.AddWithValue("$recipeItemCount", recipeItems.Count);
+            state.Parameters.AddWithValue("$syncedAtUtc", syncedAtUtc.ToString("O"));
+            state.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalInventoryRecipe?> GetRecipeForOutputAsync(Guid productId, Guid? variantId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT recipe_id, output_product_id, output_variant_id, yield_quantity, yield_unit_id, waste_percent, status, synced_at_utc
+FROM local_inventory_recipes
+WHERE output_product_id = $productId
+  AND ((output_variant_id IS NULL AND $variantId IS NULL) OR output_variant_id = $variantId)
+  AND status = 'active'
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$productId", productId.ToString());
+        command.Parameters.AddWithValue("$variantId", variantId?.ToString() ?? (object)DBNull.Value);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalInventoryRecipe?>(null);
+        return Task.FromResult<LocalInventoryRecipe?>(new LocalInventoryRecipe(
+            Guid.Parse(reader.GetString(0)),
+            Guid.Parse(reader.GetString(1)),
+            reader.IsDBNull(2) ? null : Guid.Parse(reader.GetString(2)),
+            decimal.Parse(reader.GetString(3), System.Globalization.CultureInfo.InvariantCulture),
+            Guid.Parse(reader.GetString(4)),
+            decimal.Parse(reader.GetString(5), System.Globalization.CultureInfo.InvariantCulture),
+            reader.GetString(6),
+            DateTimeOffset.Parse(reader.GetString(7))));
+    }
+
+    public Task<IReadOnlyList<LocalInventoryRecipeItem>> GetRecipeItemsAsync(Guid recipeId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT recipe_item_id, recipe_id, ingredient_product_id, ingredient_variant_id, quantity, unit_id, optional, synced_at_utc
+FROM local_inventory_recipe_items
+WHERE recipe_id = $recipeId
+ORDER BY recipe_item_id;
+""";
+        command.Parameters.AddWithValue("$recipeId", recipeId.ToString());
+        using var reader = command.ExecuteReader();
+        var items = new List<LocalInventoryRecipeItem>();
+        while (reader.Read())
+        {
+            items.Add(new LocalInventoryRecipeItem(
+                Guid.Parse(reader.GetString(0)),
+                Guid.Parse(reader.GetString(1)),
+                Guid.Parse(reader.GetString(2)),
+                reader.IsDBNull(3) ? null : Guid.Parse(reader.GetString(3)),
+                decimal.Parse(reader.GetString(4), System.Globalization.CultureInfo.InvariantCulture),
+                Guid.Parse(reader.GetString(5)),
+                reader.GetInt32(6) == 1,
+                DateTimeOffset.Parse(reader.GetString(7))));
+        }
+
+        return Task.FromResult<IReadOnlyList<LocalInventoryRecipeItem>>(items);
+    }
+
+    public Task<IReadOnlyList<LocalInventoryMovement>> GetInventoryMovementsByLocalSaleIdAsync(Guid localSaleId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, local_sale_id, tenant_id, store_id, terminal_id, product_id, variant_id, movement_type, quantity_delta, unit_id, occurred_at_utc, source, created_at_utc
+FROM local_inventory_movements
+WHERE local_sale_id = $localSaleId
+ORDER BY product_id, movement_type;
+""";
+        command.Parameters.AddWithValue("$localSaleId", localSaleId.ToString());
+        using var reader = command.ExecuteReader();
+        var movements = new List<LocalInventoryMovement>();
+        while (reader.Read())
+        {
+            movements.Add(ReadInventoryMovement(reader));
+        }
+
+        return Task.FromResult<IReadOnlyList<LocalInventoryMovement>>(movements);
+    }
+
+    public Task<int> CountInventoryRecipesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_inventory_recipes;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<int> CountInventoryRecipeItemsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_inventory_recipe_items;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task SaveOutboxEventAsync(LocalOutboxEvent outboxEvent, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        InsertOutboxEvent(connection, transaction, outboxEvent);
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<LocalOutboxEvent>> GetPendingOutboxEventsAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, event_type, schema_version, sequence_number, payload_json, status, created_at_utc, synced_at_utc, last_error, attempts
+FROM local_outbox_events
+WHERE status = $status
+ORDER BY sequence_number
+LIMIT $limit;
+""";
+        command.Parameters.AddWithValue("$status", (int)LocalOutboxStatus.Pending);
+        command.Parameters.AddWithValue("$limit", limit);
+        using var reader = command.ExecuteReader();
+        var events = new List<LocalOutboxEvent>();
+        while (reader.Read())
+        {
+            events.Add(ReadOutboxEvent(reader));
+        }
+
+        return Task.FromResult<IReadOnlyList<LocalOutboxEvent>>(events);
+    }
+
+    public Task<LocalOutboxEvent?> GetLatestOutboxEventByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, event_type, schema_version, sequence_number, payload_json, status, created_at_utc, synced_at_utc, last_error, attempts
+FROM local_outbox_events
+WHERE status = $status
+ORDER BY sequence_number DESC
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$status", (int)status);
+        using var reader = command.ExecuteReader();
+        return Task.FromResult(reader.Read() ? ReadOutboxEvent(reader) : null);
+    }
+
+    public Task MarkOutboxSyncedAsync(IEnumerable<Guid> eventIds, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        foreach (var eventId in eventIds)
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE local_outbox_events SET status = $status, synced_at_utc = $syncedAtUtc WHERE id = $id;";
+            command.Parameters.AddWithValue("$status", (int)LocalOutboxStatus.Synced);
+            command.Parameters.AddWithValue("$syncedAtUtc", syncedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$id", eventId.ToString());
+            command.ExecuteNonQuery();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task MarkOutboxFailedAsync(Guid eventId, string error, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_outbox_events SET status = $status, last_error = $error, attempts = attempts + 1 WHERE id = $id;";
+        command.Parameters.AddWithValue("$status", (int)LocalOutboxStatus.Failed);
+        command.Parameters.AddWithValue("$error", error);
+        command.Parameters.AddWithValue("$id", eventId.ToString());
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task ResetOutboxEventToPendingAsync(Guid eventId, string reason, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+UPDATE local_outbox_events
+SET status = $pendingStatus, synced_at_utc = NULL, last_error = $reason
+WHERE id = $id;
+""";
+        command.Parameters.AddWithValue("$pendingStatus", (int)LocalOutboxStatus.Pending);
+        command.Parameters.AddWithValue("$reason", reason);
+        command.Parameters.AddWithValue("$id", eventId.ToString());
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<int> RetryFailedOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+UPDATE local_outbox_events
+SET status = $pendingStatus, last_error = $reason
+WHERE status = $failedStatus AND attempts < $maxAttempts;
+SELECT changes();
+""";
+        command.Parameters.AddWithValue("$pendingStatus", (int)LocalOutboxStatus.Pending);
+        command.Parameters.AddWithValue("$failedStatus", (int)LocalOutboxStatus.Failed);
+        command.Parameters.AddWithValue("$maxAttempts", maxAttempts);
+        command.Parameters.AddWithValue("$reason", reason);
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task SaveSyncAcknowledgementsAsync(IEnumerable<LocalSyncAcknowledgement> acknowledgements, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        foreach (var acknowledgement in acknowledgements)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = @"
+INSERT INTO local_sync_acknowledgements (id, batch_id, outbox_event_id, remote_status, remote_response_json, acknowledged_at_utc)
+VALUES ($id, $batchId, $outboxEventId, $remoteStatus, $remoteResponseJson, $acknowledgedAtUtc);";
+            command.Parameters.AddWithValue("$id", acknowledgement.Id.ToString());
+            command.Parameters.AddWithValue("$batchId", acknowledgement.BatchId.ToString());
+            command.Parameters.AddWithValue("$outboxEventId", acknowledgement.OutboxEventId.ToString());
+            command.Parameters.AddWithValue("$remoteStatus", acknowledgement.RemoteStatus);
+            command.Parameters.AddWithValue("$remoteResponseJson", acknowledgement.RemoteResponseJson);
+            command.Parameters.AddWithValue("$acknowledgedAtUtc", acknowledgement.AcknowledgedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountOutboxByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_outbox_events WHERE status = $status;";
+        command.Parameters.AddWithValue("$status", (int)status);
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<LocalSyncPullState> GetSyncPullStateAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT cursor, last_pulled_at_utc, last_change_count, total_applied_change_count FROM local_sync_pull_state WHERE id = 1;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+        {
+            return Task.FromResult(new LocalSyncPullState(null, null, 0, 0));
+        }
+
+        return Task.FromResult(new LocalSyncPullState(
+            reader.IsDBNull(0) ? null : reader.GetString(0),
+            reader.IsDBNull(1) ? null : DateTimeOffset.Parse(reader.GetString(1)),
+            reader.GetInt32(2),
+            reader.GetInt32(3)));
+    }
+
+    public Task<int> ApplySyncPullChangesAsync(IReadOnlyCollection<LocalAppliedSyncChange> changes, string nextCursor, DateTimeOffset pulledAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        int appliedCount = 0;
+        foreach (LocalAppliedSyncChange change in changes)
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT OR IGNORE INTO local_applied_changes (change_id, entity_type, entity_id, operation, entity_version, changed_at_utc, payload_json, applied_at_utc)
+VALUES ($changeId, $entityType, $entityId, $operation, $entityVersion, $changedAtUtc, $payloadJson, $appliedAtUtc);
+""";
+            command.Parameters.AddWithValue("$changeId", change.ChangeId.ToString());
+            command.Parameters.AddWithValue("$entityType", change.EntityType);
+            command.Parameters.AddWithValue("$entityId", change.EntityId.ToString());
+            command.Parameters.AddWithValue("$operation", change.Operation);
+            command.Parameters.AddWithValue("$entityVersion", change.EntityVersion);
+            command.Parameters.AddWithValue("$changedAtUtc", change.ChangedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$payloadJson", change.PayloadJson);
+            command.Parameters.AddWithValue("$appliedAtUtc", change.AppliedAtUtc.ToString("O"));
+            appliedCount += command.ExecuteNonQuery();
+        }
+
+        using (var stateCommand = connection.CreateCommand())
+        {
+            stateCommand.Transaction = transaction;
+            stateCommand.CommandText = """
+INSERT INTO local_sync_pull_state (id, cursor, last_pulled_at_utc, last_change_count, total_applied_change_count)
+VALUES (1, $cursor, $lastPulledAtUtc, $lastChangeCount, $appliedCount)
+ON CONFLICT(id) DO UPDATE SET
+  cursor = excluded.cursor,
+  last_pulled_at_utc = excluded.last_pulled_at_utc,
+  last_change_count = excluded.last_change_count,
+  total_applied_change_count = local_sync_pull_state.total_applied_change_count + $appliedCount;
+""";
+            stateCommand.Parameters.AddWithValue("$cursor", nextCursor);
+            stateCommand.Parameters.AddWithValue("$lastPulledAtUtc", pulledAtUtc.ToString("O"));
+            stateCommand.Parameters.AddWithValue("$lastChangeCount", changes.Count);
+            stateCommand.Parameters.AddWithValue("$appliedCount", appliedCount);
+            stateCommand.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.FromResult(appliedCount);
+    }
+
+    public Task<int> CountAppliedSyncChangesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_applied_changes;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task SaveRemoteSaleReadModelAsync(LocalRemoteSaleReadModel sale, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_remote_sales (remote_sale_id, local_sale_id, tenant_id, store_id, terminal_id, status, total_cents, occurred_at_utc, raw_json, applied_at_utc)
+VALUES ($remoteSaleId, $localSaleId, $tenantId, $storeId, $terminalId, $status, $totalCents, $occurredAtUtc, $rawJson, $appliedAtUtc)
+ON CONFLICT(remote_sale_id) DO UPDATE SET
+  local_sale_id = excluded.local_sale_id,
+  status = excluded.status,
+  total_cents = excluded.total_cents,
+  occurred_at_utc = excluded.occurred_at_utc,
+  raw_json = excluded.raw_json,
+  applied_at_utc = excluded.applied_at_utc;
+""";
+        command.Parameters.AddWithValue("$remoteSaleId", sale.RemoteSaleId.ToString());
+        command.Parameters.AddWithValue("$localSaleId", sale.LocalSaleId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$tenantId", sale.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", sale.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", sale.TerminalId.ToString());
+        command.Parameters.AddWithValue("$status", sale.Status);
+        command.Parameters.AddWithValue("$totalCents", sale.TotalCents);
+        command.Parameters.AddWithValue("$occurredAtUtc", sale.OccurredAtUtc?.ToString("O") ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$rawJson", sale.RawJson);
+        command.Parameters.AddWithValue("$appliedAtUtc", sale.AppliedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task SaveRemoteReceiptReadModelAsync(LocalRemoteReceiptReadModel receipt, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_remote_receipts (receipt_id, sale_id, receipt_number, public_token, raw_json, applied_at_utc)
+VALUES ($receiptId, $saleId, $receiptNumber, $publicToken, $rawJson, $appliedAtUtc)
+ON CONFLICT(receipt_id) DO UPDATE SET
+  receipt_number = excluded.receipt_number,
+  public_token = excluded.public_token,
+  raw_json = excluded.raw_json,
+  applied_at_utc = excluded.applied_at_utc;
+""";
+        command.Parameters.AddWithValue("$receiptId", receipt.ReceiptId.ToString());
+        command.Parameters.AddWithValue("$saleId", receipt.SaleId.ToString());
+        command.Parameters.AddWithValue("$receiptNumber", receipt.ReceiptNumber);
+        command.Parameters.AddWithValue("$publicToken", receipt.PublicToken ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$rawJson", receipt.RawJson);
+        command.Parameters.AddWithValue("$appliedAtUtc", receipt.AppliedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<int> CountRemoteSalesAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_remote_sales;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<int> CountRemoteReceiptsAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_remote_receipts;";
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<LocalRemoteSaleReadModel?> GetRemoteSaleByLocalSaleIdAsync(Guid localSaleId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT remote_sale_id, local_sale_id, tenant_id, store_id, terminal_id, status, total_cents, occurred_at_utc, raw_json, applied_at_utc FROM local_remote_sales WHERE local_sale_id = $localSaleId LIMIT 1;";
+        command.Parameters.AddWithValue("$localSaleId", localSaleId.ToString());
+        using var reader = command.ExecuteReader();
+        return Task.FromResult<LocalRemoteSaleReadModel?>(reader.Read() ? ReadRemoteSale(reader) : null);
+    }
+
+    public Task<LocalRemoteReceiptReadModel?> GetRemoteReceiptBySaleIdAsync(Guid saleId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT receipt_id, sale_id, receipt_number, public_token, raw_json, applied_at_utc FROM local_remote_receipts WHERE sale_id = $saleId LIMIT 1;";
+        command.Parameters.AddWithValue("$saleId", saleId.ToString());
+        using var reader = command.ExecuteReader();
+        return Task.FromResult<LocalRemoteReceiptReadModel?>(reader.Read() ? ReadRemoteReceipt(reader) : null);
+    }
+
+
+    public Task OpenLocalCashShiftAsync(LocalCashShift shift, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var check = connection.CreateCommand())
+        {
+            check.Transaction = transaction;
+            check.CommandText = "SELECT COUNT(*) FROM local_cash_shifts WHERE status = 'open';";
+            if (Convert.ToInt32(check.ExecuteScalar()) > 0)
+            {
+                throw new InvalidOperationException("A local cash shift is already open for this terminal.");
+            }
+        }
+
+        using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_cash_shifts (id, tenant_id, store_id, terminal_id, opened_by_user_id, opened_at_utc, opening_amount_cents, status)
+VALUES ($id, $tenantId, $storeId, $terminalId, $openedByUserId, $openedAtUtc, $openingAmountCents, $status);
+""";
+            command.Parameters.AddWithValue("$id", shift.Id.ToString());
+            command.Parameters.AddWithValue("$tenantId", shift.TenantId.ToString());
+            command.Parameters.AddWithValue("$storeId", shift.StoreId.ToString());
+            command.Parameters.AddWithValue("$terminalId", shift.TerminalId.ToString());
+            command.Parameters.AddWithValue("$openedByUserId", shift.OpenedByUserId.ToString());
+            command.Parameters.AddWithValue("$openedAtUtc", shift.OpenedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$openingAmountCents", shift.OpeningAmountCents);
+            command.Parameters.AddWithValue("$status", shift.Status);
+            command.ExecuteNonQuery();
+        }
+
+        InsertCashMovement(connection, transaction, new LocalCashMovement(
+            Guid.NewGuid(),
+            shift.Id,
+            shift.TenantId,
+            shift.StoreId,
+            shift.TerminalId,
+            "opening",
+            shift.OpeningAmountCents,
+            shift.OpenedAtUtc,
+            "local_cash_shift",
+            shift.Id,
+            "opening_amount"));
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalCashShift?> GetOpenLocalCashShiftAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, opened_by_user_id, opened_at_utc, opening_amount_cents, status, closed_by_user_id, closed_at_utc, counted_cash_cents, expected_cash_cents, difference_cents
+FROM local_cash_shifts
+WHERE status = 'open'
+ORDER BY opened_at_utc DESC
+LIMIT 1;
+""";
+        using var reader = command.ExecuteReader();
+        return Task.FromResult<LocalCashShift?>(reader.Read() ? ReadCashShift(reader) : null);
+    }
+
+    public Task<LocalCashShift?> GetLocalCashShiftAsync(Guid shiftId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, opened_by_user_id, opened_at_utc, opening_amount_cents, status, closed_by_user_id, closed_at_utc, counted_cash_cents, expected_cash_cents, difference_cents
+FROM local_cash_shifts
+WHERE id = $shiftId
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+        using var reader = command.ExecuteReader();
+        return Task.FromResult<LocalCashShift?>(reader.Read() ? ReadCashShift(reader) : null);
+    }
+
+    public Task AddLocalCashMovementAsync(LocalCashMovement movement, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        InsertCashMovement(connection, transaction, movement);
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task RecordLocalCashSaleAsync(Guid shiftId, OfflineSaleDraft sale, int tenderedCents, int changeCents, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        var payment = sale.Payments.FirstOrDefault(payment => string.Equals(payment.MethodCode, "cash", StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException("Offline sale does not contain a cash payment.");
+        var localPaymentId = payment.LocalPaymentId ?? Guid.NewGuid();
+
+        using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_sale_payments (local_payment_id, local_sale_id, shift_id, method_code, amount_cents, tendered_cents, change_cents, created_at_utc)
+VALUES ($localPaymentId, $localSaleId, $shiftId, $methodCode, $amountCents, $tenderedCents, $changeCents, $createdAtUtc);
+""";
+            command.Parameters.AddWithValue("$localPaymentId", localPaymentId.ToString());
+            command.Parameters.AddWithValue("$localSaleId", sale.LocalSaleId.ToString());
+            command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+            command.Parameters.AddWithValue("$methodCode", payment.MethodCode);
+            command.Parameters.AddWithValue("$amountCents", payment.AmountCents);
+            command.Parameters.AddWithValue("$tenderedCents", tenderedCents);
+            command.Parameters.AddWithValue("$changeCents", changeCents);
+            command.Parameters.AddWithValue("$createdAtUtc", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        InsertCashMovement(connection, transaction, new LocalCashMovement(
+            Guid.NewGuid(),
+            shiftId,
+            sale.TenantId,
+            sale.StoreId,
+            sale.TerminalId,
+            "sale_cash",
+            sale.TotalCents,
+            sale.OccurredAtUtc,
+            "offline_sale",
+            sale.LocalSaleId,
+            $"tendered={tenderedCents};change={changeCents}"));
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public async Task CloseLocalCashShiftAsync(Guid shiftId, Guid closedByUserId, int countedCashCents, DateTimeOffset closedAtUtc, CancellationToken cancellationToken = default)
+    {
+        LocalCashShiftSummary summary = await GetLocalCashShiftSummaryAsync(shiftId, cancellationToken).ConfigureAwait(false);
+        int differenceCents = countedCashCents - summary.ExpectedCashCents;
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+UPDATE local_cash_shifts
+SET status = 'closed',
+    closed_by_user_id = $closedByUserId,
+    closed_at_utc = $closedAtUtc,
+    counted_cash_cents = $countedCashCents,
+    expected_cash_cents = $expectedCashCents,
+    difference_cents = $differenceCents
+WHERE id = $shiftId AND status = 'open';
+""";
+        command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+        command.Parameters.AddWithValue("$closedByUserId", closedByUserId.ToString());
+        command.Parameters.AddWithValue("$closedAtUtc", closedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$countedCashCents", countedCashCents);
+        command.Parameters.AddWithValue("$expectedCashCents", summary.ExpectedCashCents);
+        command.Parameters.AddWithValue("$differenceCents", differenceCents);
+        if (command.ExecuteNonQuery() == 0)
+        {
+            throw new InvalidOperationException($"Open local cash shift not found: {shiftId}.");
+        }
+    }
+
+    public Task<LocalCashShiftSummary> GetLocalCashShiftSummaryAsync(Guid shiftId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        LocalCashShift shift;
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+SELECT id, tenant_id, store_id, terminal_id, opened_by_user_id, opened_at_utc, opening_amount_cents, status, closed_by_user_id, closed_at_utc, counted_cash_cents, expected_cash_cents, difference_cents
+FROM local_cash_shifts
+WHERE id = $shiftId
+LIMIT 1;
+""";
+            command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+            using var reader = command.ExecuteReader();
+            if (!reader.Read()) throw new InvalidOperationException($"Local cash shift not found: {shiftId}.");
+            shift = ReadCashShift(reader);
+        }
+
+        int cashSales = ScalarInt(connection, "SELECT COALESCE(SUM(amount_cents), 0) FROM local_cash_movements WHERE shift_id = $shiftId AND movement_type = 'sale_cash';", shiftId);
+        int cashIn = ScalarInt(connection, "SELECT COALESCE(SUM(amount_cents), 0) FROM local_cash_movements WHERE shift_id = $shiftId AND movement_type = 'cash_in';", shiftId);
+        int cashOut = ScalarInt(connection, "SELECT COALESCE(SUM(amount_cents), 0) FROM local_cash_movements WHERE shift_id = $shiftId AND movement_type = 'cash_out';", shiftId);
+        int movementCount = ScalarInt(connection, "SELECT COUNT(*) FROM local_cash_movements WHERE shift_id = $shiftId;", shiftId);
+        int paymentCount = ScalarInt(connection, "SELECT COUNT(*) FROM local_sale_payments WHERE shift_id = $shiftId;", shiftId);
+        int expectedCash = shift.OpeningAmountCents + cashSales + cashIn - cashOut;
+        int? countedCash = shift.CountedCashCents;
+        int? difference = shift.DifferenceCents ?? (countedCash.HasValue ? countedCash.Value - expectedCash : null);
+
+        return Task.FromResult(new LocalCashShiftSummary(shift.Id, shift.Status, shift.OpeningAmountCents, cashSales, cashIn, cashOut, expectedCash, countedCash, difference, paymentCount, movementCount));
+    }
+
+    private static void InsertInventoryMovement(SqliteConnection connection, SqliteTransaction transaction, LocalInventoryMovement movement)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+INSERT INTO local_inventory_movements (id, local_sale_id, tenant_id, store_id, terminal_id, product_id, variant_id, movement_type, quantity_delta, unit_id, occurred_at_utc, source, created_at_utc)
+VALUES ($id, $localSaleId, $tenantId, $storeId, $terminalId, $productId, $variantId, $movementType, $quantityDelta, $unitId, $occurredAtUtc, $source, $createdAtUtc);
+""";
+        command.Parameters.AddWithValue("$id", movement.Id.ToString());
+        command.Parameters.AddWithValue("$localSaleId", movement.LocalSaleId.ToString());
+        command.Parameters.AddWithValue("$tenantId", movement.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", movement.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", movement.TerminalId.ToString());
+        command.Parameters.AddWithValue("$productId", movement.ProductId.ToString());
+        command.Parameters.AddWithValue("$variantId", movement.VariantId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$movementType", movement.MovementType);
+        command.Parameters.AddWithValue("$quantityDelta", movement.QuantityDelta.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("$unitId", movement.UnitId.ToString());
+        command.Parameters.AddWithValue("$occurredAtUtc", movement.OccurredAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$source", movement.Source);
+        command.Parameters.AddWithValue("$createdAtUtc", movement.CreatedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+    }
+
+
+    public Task SaveLocalUserAsync(LocalUser user, IReadOnlyCollection<string> permissions, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var command = connection.CreateCommand())
+        {
+            command.Transaction = transaction;
+            command.CommandText = """
+INSERT INTO local_users (user_id, tenant_id, store_id, email, display_name, password_hash, role_code, is_active, last_synced_at_utc, max_offline_hours)
+VALUES ($userId, $tenantId, $storeId, $email, $displayName, $passwordHash, $roleCode, $isActive, $lastSyncedAtUtc, $maxOfflineHours)
+ON CONFLICT(user_id) DO UPDATE SET
+  tenant_id = excluded.tenant_id,
+  store_id = excluded.store_id,
+  email = excluded.email,
+  display_name = excluded.display_name,
+  password_hash = excluded.password_hash,
+  role_code = excluded.role_code,
+  is_active = excluded.is_active,
+  last_synced_at_utc = excluded.last_synced_at_utc,
+  max_offline_hours = excluded.max_offline_hours;
+""";
+            command.Parameters.AddWithValue("$userId", user.UserId.ToString());
+            command.Parameters.AddWithValue("$tenantId", user.TenantId.ToString());
+            command.Parameters.AddWithValue("$storeId", user.StoreId.ToString());
+            command.Parameters.AddWithValue("$email", user.Email.ToLowerInvariant());
+            command.Parameters.AddWithValue("$displayName", user.DisplayName);
+            command.Parameters.AddWithValue("$passwordHash", user.PasswordHash);
+            command.Parameters.AddWithValue("$roleCode", user.RoleCode);
+            command.Parameters.AddWithValue("$isActive", user.IsActive ? 1 : 0);
+            command.Parameters.AddWithValue("$lastSyncedAtUtc", user.LastSyncedAtUtc.ToString("O"));
+            command.Parameters.AddWithValue("$maxOfflineHours", user.MaxOfflineHours);
+            command.ExecuteNonQuery();
+        }
+        using (var delete = connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM local_user_permissions WHERE user_id = $userId;";
+            delete.Parameters.AddWithValue("$userId", user.UserId.ToString());
+            delete.ExecuteNonQuery();
+        }
+        foreach (var permission in permissions.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            using var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "INSERT INTO local_user_permissions (user_id, permission_code, synced_at_utc) VALUES ($userId, $permissionCode, $syncedAtUtc);";
+            command.Parameters.AddWithValue("$userId", user.UserId.ToString());
+            command.Parameters.AddWithValue("$permissionCode", permission);
+            command.Parameters.AddWithValue("$syncedAtUtc", user.LastSyncedAtUtc.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalUser?> GetLocalUserByEmailAsync(string email, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT user_id, tenant_id, store_id, email, display_name, password_hash, role_code, is_active, last_synced_at_utc, max_offline_hours FROM local_users WHERE lower(email) = lower($email);";
+        command.Parameters.AddWithValue("$email", email);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalUser?>(null);
+        var user = new LocalUser(Guid.Parse(reader.GetString(0)), Guid.Parse(reader.GetString(1)), Guid.Parse(reader.GetString(2)), reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetInt32(7) == 1, DateTimeOffset.Parse(reader.GetString(8)), reader.GetInt32(9));
+        return Task.FromResult<LocalUser?>(user);
+    }
+
+    public Task CreateLocalSessionAsync(LocalSession session, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_sessions (session_id, user_id, tenant_id, store_id, email, display_name, role_code, created_at_utc, expires_at_utc, status)
+VALUES ($sessionId, $userId, $tenantId, $storeId, $email, $displayName, $roleCode, $createdAtUtc, $expiresAtUtc, $status);
+""";
+        command.Parameters.AddWithValue("$sessionId", session.SessionId.ToString());
+        command.Parameters.AddWithValue("$userId", session.UserId.ToString());
+        command.Parameters.AddWithValue("$tenantId", session.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", session.StoreId.ToString());
+        command.Parameters.AddWithValue("$email", session.Email);
+        command.Parameters.AddWithValue("$displayName", session.DisplayName);
+        command.Parameters.AddWithValue("$roleCode", session.RoleCode);
+        command.Parameters.AddWithValue("$createdAtUtc", session.CreatedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$expiresAtUtc", session.ExpiresAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$status", session.Status);
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalSession?> GetLocalSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT session_id, user_id, tenant_id, store_id, email, display_name, role_code, created_at_utc, expires_at_utc, status FROM local_sessions WHERE session_id = $sessionId;";
+        command.Parameters.AddWithValue("$sessionId", sessionId.ToString());
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalSession?>(null);
+        return Task.FromResult<LocalSession?>(ReadLocalSession(reader));
+    }
+
+    public Task<LocalSession?> GetLatestActiveLocalSessionAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT session_id, user_id, tenant_id, store_id, email, display_name, role_code, created_at_utc, expires_at_utc, status FROM local_sessions WHERE status = 'active' ORDER BY created_at_utc DESC LIMIT 1;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalSession?>(null);
+        return Task.FromResult<LocalSession?>(ReadLocalSession(reader));
+    }
+
+    public Task CloseLocalSessionAsync(Guid sessionId, DateTimeOffset closedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_sessions SET status = 'closed' WHERE session_id = $sessionId;";
+        command.Parameters.AddWithValue("$sessionId", sessionId.ToString());
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> LocalUserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(1) FROM local_user_permissions WHERE user_id = $userId AND permission_code = $permissionCode;";
+        command.Parameters.AddWithValue("$userId", userId.ToString());
+        command.Parameters.AddWithValue("$permissionCode", permissionCode);
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()) > 0);
+    }
+
+    public Task LogLocalAuditEventAsync(LocalAuditEvent auditEvent, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_audit_events (id, tenant_id, store_id, user_id, session_id, event_type, message, occurred_at_utc)
+VALUES ($id, $tenantId, $storeId, $userId, $sessionId, $eventType, $message, $occurredAtUtc);
+""";
+        command.Parameters.AddWithValue("$id", auditEvent.Id.ToString());
+        command.Parameters.AddWithValue("$tenantId", auditEvent.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", auditEvent.StoreId.ToString());
+        command.Parameters.AddWithValue("$userId", auditEvent.UserId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$sessionId", auditEvent.SessionId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$eventType", auditEvent.EventType);
+        command.Parameters.AddWithValue("$message", auditEvent.Message);
+        command.Parameters.AddWithValue("$occurredAtUtc", auditEvent.OccurredAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalAuthSummary> GetLocalAuthSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        int users = ScalarInt(connection, "SELECT COUNT(1) FROM local_users;");
+        int permissions = ScalarInt(connection, "SELECT COUNT(1) FROM local_user_permissions;");
+        int sessions = ScalarInt(connection, "SELECT COUNT(1) FROM local_sessions WHERE status = 'active';");
+        int audits = ScalarInt(connection, "SELECT COUNT(1) FROM local_audit_events;");
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT max(last_synced_at_utc) FROM local_users;";
+        var scalar = command.ExecuteScalar();
+        DateTimeOffset? lastSynced = scalar is string text && !string.IsNullOrWhiteSpace(text) ? DateTimeOffset.Parse(text) : null;
+        return Task.FromResult(new LocalAuthSummary(users, permissions, sessions, audits, lastSynced));
+    }
+
+
+    public Task SaveReceiptPrintJobAsync(LocalReceiptPrintJob job, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_print_jobs (id, tenant_id, store_id, terminal_id, sale_id, receipt_id, receipt_number, content, status, queued_at_utc, printed_at_utc, last_error, attempts)
+VALUES ($id, $tenantId, $storeId, $terminalId, $saleId, $receiptId, $receiptNumber, $content, $status, $queuedAtUtc, $printedAtUtc, $lastError, $attempts)
+ON CONFLICT(id) DO UPDATE SET
+  status = excluded.status,
+  printed_at_utc = excluded.printed_at_utc,
+  last_error = excluded.last_error,
+  attempts = excluded.attempts;
+""";
+        command.Parameters.AddWithValue("$id", job.Id.ToString());
+        command.Parameters.AddWithValue("$tenantId", job.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", job.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", job.TerminalId.ToString());
+        command.Parameters.AddWithValue("$saleId", job.SaleId.ToString());
+        command.Parameters.AddWithValue("$receiptId", job.ReceiptId.ToString());
+        command.Parameters.AddWithValue("$receiptNumber", job.ReceiptNumber);
+        command.Parameters.AddWithValue("$content", job.Content);
+        command.Parameters.AddWithValue("$status", job.Status);
+        command.Parameters.AddWithValue("$queuedAtUtc", job.QueuedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$printedAtUtc", job.PrintedAtUtc?.ToString("O") ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$lastError", job.LastError ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$attempts", job.Attempts);
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalReceiptPrintJob?> GetNextPendingReceiptPrintJobAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, tenant_id, store_id, terminal_id, sale_id, receipt_id, receipt_number, content, status, queued_at_utc, printed_at_utc, last_error, attempts FROM local_print_jobs WHERE status = 'pending' ORDER BY queued_at_utc LIMIT 1;";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return Task.FromResult<LocalReceiptPrintJob?>(null);
+        return Task.FromResult<LocalReceiptPrintJob?>(ReadReceiptPrintJob(reader));
+    }
+
+    public Task MarkReceiptPrintJobPrintedAsync(Guid jobId, DateTimeOffset printedAtUtc, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_print_jobs SET status = 'printed', printed_at_utc = $printedAtUtc, last_error = NULL, attempts = attempts + 1 WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", jobId.ToString());
+        command.Parameters.AddWithValue("$printedAtUtc", printedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task MarkReceiptPrintJobFailedAsync(Guid jobId, string error, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_print_jobs SET status = 'failed', last_error = $error, attempts = attempts + 1 WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", jobId.ToString());
+        command.Parameters.AddWithValue("$error", error);
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task SaveHardwareEventAsync(LocalHardwareEvent hardwareEvent, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+INSERT INTO local_hardware_events (id, tenant_id, store_id, terminal_id, device_type, event_type, message, occurred_at_utc)
+VALUES ($id, $tenantId, $storeId, $terminalId, $deviceType, $eventType, $message, $occurredAtUtc);
+""";
+        command.Parameters.AddWithValue("$id", hardwareEvent.Id.ToString());
+        command.Parameters.AddWithValue("$tenantId", hardwareEvent.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", hardwareEvent.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", hardwareEvent.TerminalId.ToString());
+        command.Parameters.AddWithValue("$deviceType", hardwareEvent.DeviceType);
+        command.Parameters.AddWithValue("$eventType", hardwareEvent.EventType);
+        command.Parameters.AddWithValue("$message", hardwareEvent.Message);
+        command.Parameters.AddWithValue("$occurredAtUtc", hardwareEvent.OccurredAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task<LocalHardwareSummary> GetHardwareSummaryAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        int pending = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'pending';");
+        int printed = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'printed';");
+        int failed = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'failed';");
+        int events = ScalarInt(connection, "SELECT COUNT(1) FROM local_hardware_events;");
+        LocalHardwareEvent? latest = null;
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, tenant_id, store_id, terminal_id, device_type, event_type, message, occurred_at_utc FROM local_hardware_events ORDER BY occurred_at_utc DESC LIMIT 1;";
+        using var reader = command.ExecuteReader();
+        if (reader.Read()) latest = ReadHardwareEvent(reader);
+        return Task.FromResult(new LocalHardwareSummary(pending, printed, failed, events, latest));
+    }
+
+
+
+    public Task<(Guid OutboxEventId, Guid PrintJobId, Guid SessionId)> CreateResilienceValidationFixtureAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        var tenantId = Guid.Parse("0ce5bbd0-528b-4aee-9fe3-93df001a4fde");
+        var storeId = Guid.Parse("8e446c29-e9ad-41ed-a738-125aff7608b6");
+        var terminalId = Guid.NewGuid();
+        using (var binding = connection.CreateCommand())
+        {
+            binding.CommandText = "SELECT tenant_id, store_id, terminal_id FROM terminal_binding WHERE id = 1;";
+            using var reader = binding.ExecuteReader();
+            if (reader.Read())
+            {
+                tenantId = Guid.Parse(reader.GetString(0));
+                storeId = Guid.Parse(reader.GetString(1));
+                terminalId = Guid.Parse(reader.GetString(2));
+            }
+        }
+
+        var outboxEventId = Guid.NewGuid();
+        var printJobId = Guid.NewGuid();
+        var sessionId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        using var transaction = connection.BeginTransaction();
+        using (var outbox = connection.CreateCommand())
+        {
+            outbox.Transaction = transaction;
+            outbox.CommandText = "INSERT INTO local_outbox_events (id, tenant_id, store_id, terminal_id, event_type, schema_version, sequence_number, payload_json, status, created_at_utc, synced_at_utc, last_error, attempts) VALUES ($id, $tenantId, $storeId, $terminalId, 'pos.validation_recovery', 4, $sequence, '{}', 3, $createdAt, NULL, 'fixture_failed_outbox', 0);";
+            outbox.Parameters.AddWithValue("$id", outboxEventId.ToString());
+            outbox.Parameters.AddWithValue("$tenantId", tenantId.ToString());
+            outbox.Parameters.AddWithValue("$storeId", storeId.ToString());
+            outbox.Parameters.AddWithValue("$terminalId", terminalId.ToString());
+            outbox.Parameters.AddWithValue("$sequence", now.ToUnixTimeMilliseconds());
+            outbox.Parameters.AddWithValue("$createdAt", now.ToString("O"));
+            outbox.ExecuteNonQuery();
+        }
+        using (var print = connection.CreateCommand())
+        {
+            print.Transaction = transaction;
+            print.CommandText = "INSERT INTO local_print_jobs (id, tenant_id, store_id, terminal_id, sale_id, receipt_id, receipt_number, content, status, queued_at_utc, printed_at_utc, last_error, attempts) VALUES ($id, $tenantId, $storeId, $terminalId, $saleId, $receiptId, 'SP-RECOVERY-FIXTURE', 'Recovery fixture receipt', 'failed', $queuedAt, NULL, 'fixture_failed_print', 0);";
+            print.Parameters.AddWithValue("$id", printJobId.ToString());
+            print.Parameters.AddWithValue("$tenantId", tenantId.ToString());
+            print.Parameters.AddWithValue("$storeId", storeId.ToString());
+            print.Parameters.AddWithValue("$terminalId", terminalId.ToString());
+            print.Parameters.AddWithValue("$saleId", Guid.NewGuid().ToString());
+            print.Parameters.AddWithValue("$receiptId", Guid.NewGuid().ToString());
+            print.Parameters.AddWithValue("$queuedAt", now.ToString("O"));
+            print.ExecuteNonQuery();
+        }
+        using (var session = connection.CreateCommand())
+        {
+            session.Transaction = transaction;
+            session.CommandText = "INSERT INTO local_sessions (session_id, user_id, tenant_id, store_id, email, display_name, role_code, created_at_utc, expires_at_utc, status) VALUES ($sessionId, $userId, $tenantId, $storeId, 'recovery.fixture@solidpos.local', 'Recovery Fixture', 'cashier', $createdAt, $expiresAt, 'active');";
+            session.Parameters.AddWithValue("$sessionId", sessionId.ToString());
+            session.Parameters.AddWithValue("$userId", Guid.NewGuid().ToString());
+            session.Parameters.AddWithValue("$tenantId", tenantId.ToString());
+            session.Parameters.AddWithValue("$storeId", storeId.ToString());
+            session.Parameters.AddWithValue("$createdAt", now.AddHours(-2).ToString("O"));
+            session.Parameters.AddWithValue("$expiresAt", now.AddHours(-1).ToString("O"));
+            session.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return Task.FromResult((outboxEventId, printJobId, sessionId));
+    }
+
+    public Task<LocalIntegrityReport> VerifyIntegrityAsync(CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        var sqliteIntegrity = "unknown";
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "PRAGMA integrity_check;";
+            sqliteIntegrity = Convert.ToString(command.ExecuteScalar()) ?? "unknown";
+        }
+
+        int pendingOutbox = ScalarInt(connection, "SELECT COUNT(1) FROM local_outbox_events WHERE status = 0;");
+        int failedOutbox = ScalarInt(connection, "SELECT COUNT(1) FROM local_outbox_events WHERE status = 3;");
+        int deadLetterOutbox = ScalarInt(connection, "SELECT COUNT(1) FROM local_outbox_events WHERE status = 4;");
+        int pendingPrintJobs = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'pending';");
+        int failedPrintJobs = ScalarInt(connection, "SELECT COUNT(1) FROM local_print_jobs WHERE status = 'failed';");
+        int openCashShifts = ScalarInt(connection, "SELECT COUNT(1) FROM local_cash_shifts WHERE status = 'open';");
+        int activeSessions = ScalarInt(connection, "SELECT COUNT(1) FROM local_sessions WHERE status = 'active';");
+        int journalEntries = ScalarInt(connection, "SELECT COUNT(1) FROM local_recovery_journal;");
+
+        var issues = new List<LocalIntegrityIssue>();
+        if (!string.Equals(sqliteIntegrity, "ok", StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(new LocalIntegrityIssue("sqlite.integrity", "critical", $"SQLite integrity_check returned {sqliteIntegrity}.", 1));
+        }
+        if (deadLetterOutbox > 0)
+        {
+            issues.Add(new LocalIntegrityIssue("outbox.dead_letter", "critical", "Local outbox has dead-letter events that require operator review.", deadLetterOutbox));
+        }
+        if (failedOutbox > 0)
+        {
+            issues.Add(new LocalIntegrityIssue("outbox.failed", "warning", "Local outbox has failed events eligible for controlled retry.", failedOutbox));
+        }
+        if (failedPrintJobs > 0)
+        {
+            issues.Add(new LocalIntegrityIssue("print.failed", "warning", "Local print queue has failed jobs eligible for controlled retry.", failedPrintJobs));
+        }
+        if (openCashShifts > 1)
+        {
+            issues.Add(new LocalIntegrityIssue("cash_shift.multiple_open", "critical", "More than one local cash shift is open for this terminal database.", openCashShifts));
+        }
+
+        bool ok = !issues.Any(x => x.Severity == "critical");
+        var report = new LocalIntegrityReport(_database.DatabasePath, ok, sqliteIntegrity, pendingOutbox, failedOutbox, deadLetterOutbox, pendingPrintJobs, failedPrintJobs, openCashShifts, activeSessions, journalEntries, issues);
+        return Task.FromResult(report);
+    }
+
+    public Task<LocalRecoveryResult> RepairRuntimeAsync(string reason, bool createBackup, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        var journalId = Guid.NewGuid();
+        var startedAt = DateTimeOffset.UtcNow;
+        InsertRecoveryJournal(connection, journalId, "repair", "running", reason, startedAt, null);
+
+        string? backupPath = null;
+        bool backupCreated = false;
+        if (createBackup)
+        {
+            var backup = CreateBackupFile(Path.Combine(Path.GetDirectoryName(_database.DatabasePath) ?? Environment.CurrentDirectory, "backups"));
+            backupPath = backup.BackupPath;
+            backupCreated = true;
+        }
+
+        int outboxRepaired;
+        int printRepaired;
+        int sessionsClosed;
+        int cashFlagged = Math.Max(0, ScalarInt(connection, "SELECT COUNT(1) FROM local_cash_shifts WHERE status = 'open';") - 1);
+        using (var transaction = connection.BeginTransaction())
+        {
+            outboxRepaired = ExecuteNonQuery(connection, transaction, "UPDATE local_outbox_events SET status = 0, last_error = 'recovered_for_retry', attempts = attempts + 1 WHERE status = 3 AND attempts < 5;");
+            printRepaired = ExecuteNonQuery(connection, transaction, "UPDATE local_print_jobs SET status = 'pending', last_error = NULL, attempts = attempts + 1 WHERE status = 'failed' AND attempts < 5;");
+            sessionsClosed = ExecuteNonQuery(connection, transaction, "UPDATE local_sessions SET status = 'closed' WHERE status = 'active' AND expires_at_utc <= strftime('%Y-%m-%dT%H:%M:%f+00:00','now');");
+            transaction.Commit();
+        }
+
+        var completedAt = DateTimeOffset.UtcNow;
+        var message = $"Local recovery completed. outboxRepaired={outboxRepaired}; printJobsRepaired={printRepaired}; sessionsClosed={sessionsClosed}; cashShiftsFlagged={cashFlagged}";
+        UpdateRecoveryJournal(connection, journalId, "completed", message, completedAt);
+        return Task.FromResult(new LocalRecoveryResult(journalId, outboxRepaired, printRepaired, sessionsClosed, cashFlagged, backupCreated, backupPath, message));
+    }
+
+    public Task<LocalBackupResult> CreateBackupAsync(string destinationDirectory, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(CreateBackupFile(destinationDirectory));
+    }
+
+    public Task<IReadOnlyList<LocalRecoveryJournalEntry>> GetRecoveryJournalAsync(int limit, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, operation, status, message, started_at_utc, completed_at_utc FROM local_recovery_journal ORDER BY started_at_utc DESC LIMIT $limit;";
+        command.Parameters.AddWithValue("$limit", limit);
+        using var reader = command.ExecuteReader();
+        var entries = new List<LocalRecoveryJournalEntry>();
+        while (reader.Read())
+        {
+            entries.Add(new LocalRecoveryJournalEntry(
+                Guid.Parse(reader.GetString(0)),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                DateTimeOffset.Parse(reader.GetString(4)),
+                reader.IsDBNull(5) ? null : DateTimeOffset.Parse(reader.GetString(5))));
+        }
+
+        return Task.FromResult<IReadOnlyList<LocalRecoveryJournalEntry>>(entries);
+    }
+
+    private static void InsertOutboxEvent(SqliteConnection connection, SqliteTransaction transaction, LocalOutboxEvent outboxEvent)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+INSERT INTO local_outbox_events (id, tenant_id, store_id, terminal_id, event_type, schema_version, sequence_number, payload_json, status, created_at_utc, synced_at_utc, last_error, attempts)
+VALUES ($id, $tenantId, $storeId, $terminalId, $eventType, $schemaVersion, $sequenceNumber, $payloadJson, $status, $createdAtUtc, $syncedAtUtc, $lastError, $attempts);
+""";
+        command.Parameters.AddWithValue("$id", outboxEvent.Id.ToString());
+        command.Parameters.AddWithValue("$tenantId", outboxEvent.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", outboxEvent.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", outboxEvent.TerminalId.ToString());
+        command.Parameters.AddWithValue("$eventType", outboxEvent.EventType);
+        command.Parameters.AddWithValue("$schemaVersion", outboxEvent.SchemaVersion);
+        command.Parameters.AddWithValue("$sequenceNumber", outboxEvent.SequenceNumber);
+        command.Parameters.AddWithValue("$payloadJson", outboxEvent.PayloadJson);
+        command.Parameters.AddWithValue("$status", (int)outboxEvent.Status);
+        command.Parameters.AddWithValue("$createdAtUtc", outboxEvent.CreatedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$syncedAtUtc", outboxEvent.SyncedAtUtc?.ToString("O") ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$lastError", outboxEvent.LastError ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$attempts", outboxEvent.Attempts);
+        command.ExecuteNonQuery();
+    }
+
+
+
+    private static void InsertCashMovement(SqliteConnection connection, SqliteTransaction transaction, LocalCashMovement movement)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+INSERT INTO local_cash_movements (id, shift_id, tenant_id, store_id, terminal_id, movement_type, amount_cents, occurred_at_utc, source_type, source_id, note)
+VALUES ($id, $shiftId, $tenantId, $storeId, $terminalId, $movementType, $amountCents, $occurredAtUtc, $sourceType, $sourceId, $note);
+""";
+        command.Parameters.AddWithValue("$id", movement.Id.ToString());
+        command.Parameters.AddWithValue("$shiftId", movement.ShiftId.ToString());
+        command.Parameters.AddWithValue("$tenantId", movement.TenantId.ToString());
+        command.Parameters.AddWithValue("$storeId", movement.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminalId", movement.TerminalId.ToString());
+        command.Parameters.AddWithValue("$movementType", movement.MovementType);
+        command.Parameters.AddWithValue("$amountCents", movement.AmountCents);
+        command.Parameters.AddWithValue("$occurredAtUtc", movement.OccurredAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$sourceType", movement.SourceType);
+        command.Parameters.AddWithValue("$sourceId", movement.SourceId?.ToString() ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$note", movement.Note ?? (object)DBNull.Value);
+        command.ExecuteNonQuery();
+    }
+
+    private static int ScalarInt(SqliteConnection connection, string sql, Guid shiftId)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.Parameters.AddWithValue("$shiftId", shiftId.ToString());
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private static LocalCashShift ReadCashShift(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        Guid.Parse(reader.GetString(4)),
+        DateTimeOffset.Parse(reader.GetString(5)),
+        reader.GetInt32(6),
+        reader.GetString(7),
+        reader.IsDBNull(8) ? null : Guid.Parse(reader.GetString(8)),
+        reader.IsDBNull(9) ? null : DateTimeOffset.Parse(reader.GetString(9)),
+        reader.IsDBNull(10) ? null : reader.GetInt32(10),
+        reader.IsDBNull(11) ? null : reader.GetInt32(11),
+        reader.IsDBNull(12) ? null : reader.GetInt32(12));
+
+    private static LocalInventoryMovement ReadInventoryMovement(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        Guid.Parse(reader.GetString(4)),
+        Guid.Parse(reader.GetString(5)),
+        reader.IsDBNull(6) ? null : Guid.Parse(reader.GetString(6)),
+        reader.GetString(7),
+        decimal.Parse(reader.GetString(8), System.Globalization.CultureInfo.InvariantCulture),
+        Guid.Parse(reader.GetString(9)),
+        DateTimeOffset.Parse(reader.GetString(10)),
+        reader.GetString(11),
+        DateTimeOffset.Parse(reader.GetString(12)));
+
+
+    private static LocalRemoteSaleReadModel ReadRemoteSale(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        reader.IsDBNull(1) ? null : Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        Guid.Parse(reader.GetString(4)),
+        reader.GetString(5),
+        reader.GetInt32(6),
+        reader.IsDBNull(7) ? null : DateTimeOffset.Parse(reader.GetString(7)),
+        reader.GetString(8),
+        DateTimeOffset.Parse(reader.GetString(9)));
+
+    private static LocalRemoteReceiptReadModel ReadRemoteReceipt(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        reader.GetString(2),
+        reader.IsDBNull(3) ? null : reader.GetString(3),
+        reader.GetString(4),
+        DateTimeOffset.Parse(reader.GetString(5)));
+
+
+    private static LocalReceiptPrintJob ReadReceiptPrintJob(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        Guid.Parse(reader.GetString(4)),
+        Guid.Parse(reader.GetString(5)),
+        reader.GetString(6),
+        reader.GetString(7),
+        reader.GetString(8),
+        DateTimeOffset.Parse(reader.GetString(9)),
+        reader.IsDBNull(10) ? null : DateTimeOffset.Parse(reader.GetString(10)),
+        reader.IsDBNull(11) ? null : reader.GetString(11),
+        reader.GetInt32(12));
+
+    private static LocalHardwareEvent ReadHardwareEvent(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        reader.GetString(4),
+        reader.GetString(5),
+        reader.GetString(6),
+        DateTimeOffset.Parse(reader.GetString(7)));
+
+    private static LocalOutboxEvent ReadOutboxEvent(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        reader.GetString(4),
+        reader.GetInt32(5),
+        reader.GetInt64(6),
+        reader.GetString(7),
+        (LocalOutboxStatus)reader.GetInt32(8),
+        DateTimeOffset.Parse(reader.GetString(9)),
+        reader.IsDBNull(10) ? null : DateTimeOffset.Parse(reader.GetString(10)),
+        reader.IsDBNull(11) ? null : reader.GetString(11),
+        reader.GetInt32(12));
+
+
+
+    private LocalBackupResult CreateBackupFile(string destinationDirectory)
+    {
+        Directory.CreateDirectory(destinationDirectory);
+        var source = _database.DatabasePath;
+        var timestamp = DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmss");
+        var backupPath = Path.Combine(destinationDirectory, $"solidpos-poscore-{timestamp}.sqlite.bak");
+        File.Copy(source, backupPath, overwrite: false);
+        var file = new FileInfo(backupPath);
+        return new LocalBackupResult(backupPath, file.Length, DateTimeOffset.UtcNow);
+    }
+
+    private static int ExecuteNonQuery(SqliteConnection connection, SqliteTransaction transaction, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = sql;
+        return command.ExecuteNonQuery();
+    }
+
+    private static void InsertRecoveryJournal(SqliteConnection connection, Guid id, string operation, string status, string message, DateTimeOffset startedAtUtc, DateTimeOffset? completedAtUtc)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO local_recovery_journal (id, operation, status, message, started_at_utc, completed_at_utc) VALUES ($id, $operation, $status, $message, $startedAtUtc, $completedAtUtc);";
+        command.Parameters.AddWithValue("$id", id.ToString());
+        command.Parameters.AddWithValue("$operation", operation);
+        command.Parameters.AddWithValue("$status", status);
+        command.Parameters.AddWithValue("$message", message);
+        command.Parameters.AddWithValue("$startedAtUtc", startedAtUtc.ToString("O"));
+        command.Parameters.AddWithValue("$completedAtUtc", completedAtUtc?.ToString("O") ?? (object)DBNull.Value);
+        command.ExecuteNonQuery();
+    }
+
+    private static void UpdateRecoveryJournal(SqliteConnection connection, Guid id, string status, string message, DateTimeOffset completedAtUtc)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_recovery_journal SET status = $status, message = $message, completed_at_utc = $completedAtUtc WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id.ToString());
+        command.Parameters.AddWithValue("$status", status);
+        command.Parameters.AddWithValue("$message", message);
+        command.Parameters.AddWithValue("$completedAtUtc", completedAtUtc.ToString("O"));
+        command.ExecuteNonQuery();
+    }
+
+    private static int ScalarInt(SqliteConnection connection, string sql)    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private static LocalSession ReadLocalSession(SqliteDataReader reader) => new(
+        Guid.Parse(reader.GetString(0)),
+        Guid.Parse(reader.GetString(1)),
+        Guid.Parse(reader.GetString(2)),
+        Guid.Parse(reader.GetString(3)),
+        reader.GetString(4),
+        reader.GetString(5),
+        reader.GetString(6),
+        DateTimeOffset.Parse(reader.GetString(7)),
+        DateTimeOffset.Parse(reader.GetString(8)),
+        reader.GetString(9));
+
+    private static void Execute(SqliteConnection connection, string sql)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.ExecuteNonQuery();
+    }
+}

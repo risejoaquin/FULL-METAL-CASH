@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SolidPOS.PosServer.Application</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SolidPOS.PosServer.Domain\SolidPOS.PosServer.Domain.csproj" />
+    <ProjectReference Include="..\SolidPOS.PosServer.Contracts\SolidPOS.PosServer.Contracts.csproj" />
+  </ItemGroup>
+</Project>

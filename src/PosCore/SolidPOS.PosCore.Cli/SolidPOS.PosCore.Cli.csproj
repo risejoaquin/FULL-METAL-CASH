@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SolidPOS.PosCore.Cli</RootNamespace>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SolidPOS.PosCore.Application\SolidPOS.PosCore.Application.csproj" />
+    <ProjectReference Include="..\SolidPOS.PosCore.Domain\SolidPOS.PosCore.Domain.csproj" />
+    <ProjectReference Include="..\SolidPOS.PosCore.Infrastructure\SolidPOS.PosCore.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+.git
+.github
+.vscode
+.idea
+**/bin
+**/obj
+**/TestResults
+**/.vs
+*.user
+*.suo
+*.zip
+.env
+.env.*
+!*.env.example
+node_modules
+coverage

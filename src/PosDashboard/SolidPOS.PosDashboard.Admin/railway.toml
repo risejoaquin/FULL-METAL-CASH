@@ -1,0 +1,8 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "npm install --no-save --package-lock=false @rolldown/binding-linux-x64-gnu@1.2.5 @tailwindcss/oxide-linux-x64-gnu@4.3.3 lightningcss-linux-x64-gnu@1.33.0 && npm run build"
+
+[deploy]
+startCommand = "npx serve -s dist -l $PORT"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

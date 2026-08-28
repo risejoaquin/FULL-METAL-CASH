@@ -1,0 +1,22 @@
+# LGA-11 Public GA Readiness Checklist
+
+- [ ] LGA-10 PASS evidence exists and is reviewed.
+- [ ] Readiness checklist confirms Limited GA is still active.
+- [ ] `/health/live` returns 2xx.
+- [ ] `/health/ready` returns 2xx.
+- [ ] Concurrency 3 probe is recorded.
+- [ ] p95 readiness is compared with 1200 ms.
+- [ ] Waiting connections remain <= 12.
+- [ ] Long-running query count is zero.
+- [ ] Commercial operations remain healthy: sales, payments and receipts meet minimums.
+- [ ] Cash shifts remain reconciled and no unacceptable cash differences exist.
+- [ ] Negative stock count is zero.
+- [ ] Dashboard and reports are available.
+- [ ] Audit and support operations evidence is present.
+- [ ] Sync queues pending/processing/retry remain clean.
+- [ ] Conflict/dead-letter baselines have not increased.
+- [ ] RLS remains complete.
+- [ ] schema version 4 / schema_version_4 remains authoritative.
+- [ ] If capacity fails, readiness decision is KEEP_LIMITED_GA.
+- [ ] If capacity fails, capacity recommendation is CAPACITY_UPGRADE_REQUIRED_BEFORE_PUBLIC_GA.
+- [ ] Public GA NOT ACTIVATED.

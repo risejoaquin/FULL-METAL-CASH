@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SolidPOS.PosCore.Infrastructure</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SolidPOS.PosCore.Application\SolidPOS.PosCore.Application.csproj" />
+    <ProjectReference Include="..\SolidPOS.PosCore.Domain\SolidPOS.PosCore.Domain.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,57 @@
+# .NET
+**/bin/
+**/obj/
+TestResults/
+coverage/
+
+# Runtime / local databases
+.runtime/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Frontend
+**/node_modules/
+**/dist/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+appsettings.Local.json
+appsettings.*.local.json
+*.pfx
+*.p12
+*.key
+*.pem
+
+# Logs / diagnostics
+*.log
+*.dmp
+*.dump
+*.trace
+*.tmp
+*.temp
+
+# Packaging / generated releases
+*.nupkg
+*.pkg
+Releases/
+artifacts/
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Docker local data
+postgres-data/
+.docker-data/
