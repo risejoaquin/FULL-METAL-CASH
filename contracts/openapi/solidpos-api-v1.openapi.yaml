@@ -1556,6 +1556,44 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '500':
           $ref: '#/components/responses/UnexpectedError'
+  /observability/prometheus:
+    get:
+      tags:
+      - Observability
+      summary: Exports production operational metrics in Prometheus text format.
+      operationId: get_observability_prometheus
+      responses:
+        '200':
+          description: Prometheus metrics export.
+          content:
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+  /observability/alerts:
+    get:
+      tags:
+      - Observability
+      summary: Evaluates production alert rules from current operational metrics.
+      operationId: get_observability_alerts
+      responses:
+        '200':
+          description: Production alert evaluation.
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
   /receipts/{saleId}:
     get:
       tags:
