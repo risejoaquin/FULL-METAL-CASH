@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Serilog.Context;
@@ -18,13 +19,21 @@ public sealed class RequestLogEnrichmentMiddleware
 
     public async Task InvokeAsync(HttpContext context, ITenantContext tenantContext)
     {
-        using (LogContext.PushProperty("tenant_id", tenantContext.TenantId))
-        using (LogContext.PushProperty("user_id", tenantContext.UserId))
-        using (LogContext.PushProperty("terminal_id", tenantContext.TerminalId))
-        using (LogContext.PushProperty("store_id", tenantContext.StoreId))
-        using (LogContext.PushProperty("endpoint", $"{context.Request.Method} {context.Request.Path}"))
+        bool tenantScoped = tenantContext.TenantId.HasValue;
+        bool terminalScoped = tenantContext.TerminalId.HasValue;
+        string route = context.GetEndpoint() is Microsoft.AspNetCore.Routing.RouteEndpoint routeEndpoint
+            ? routeEndpoint.RoutePattern.RawText ?? context.Request.Path.Value ?? "unknown"
+            : context.Request.Path.Value ?? "unknown";
+
+        Activity.Current?.SetTag("solidpos.tenant_scoped", tenantScoped);
+        Activity.Current?.SetTag("solidpos.terminal_scoped", terminalScoped);
+        Activity.Current?.SetTag("solidpos.route", route);
+
+        using (LogContext.PushProperty("tenant_scoped", tenantScoped))
+        using (LogContext.PushProperty("terminal_scoped", terminalScoped))
+        using (LogContext.PushProperty("endpoint", $"{context.Request.Method} {route}"))
         {
-            _logger.LogDebug("Request log context enriched");
+            _logger.LogDebug("Request diagnostic context enriched");
             await _next(context);
         }
     }

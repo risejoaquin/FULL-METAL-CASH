@@ -1,0 +1,73 @@
+name: SolidPOS CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'v1.1/**'
+      - 'feature/**'
+      - 'hotfix/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: solidpos-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build and test (.NET 8 / Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      NUGET_XMLDOC_MODE: skip
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            **/packages.lock.json
+
+      - name: Secret scan
+        shell: pwsh
+        run: ./scripts/security/scan-local-secrets.ps1 -Root .
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore solidpos-platform.sln
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build solidpos-platform.sln --configuration Release --no-restore
+
+      - name: Test
+        shell: pwsh
+        run: >-
+          dotnet test solidpos-platform.sln
+          --configuration Release
+          --no-build
+          --logger "trx;LogFilePrefix=solidpos"
+          --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidpos-test-results-${{ github.run_id }}
+          path: TestResults/**/*.trx
+          if-no-files-found: warn
+          retention-days: 14

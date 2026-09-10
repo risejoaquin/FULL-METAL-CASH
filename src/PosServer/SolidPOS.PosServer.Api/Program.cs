@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using System.Threading.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Resources;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Events;
@@ -167,8 +168,9 @@ builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
     {
-        context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
-        context.ProblemDetails.Extensions["correlationId"] = context.HttpContext.TraceIdentifier;
+        context.ProblemDetails.Extensions["traceId"] = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.HttpContext.TraceIdentifier;
+        context.ProblemDetails.Extensions["correlationId"] = context.HttpContext.Response.Headers[CorrelationIdMiddleware.HeaderName].FirstOrDefault() ?? context.HttpContext.TraceIdentifier;
+        context.ProblemDetails.Extensions["requestId"] = context.HttpContext.TraceIdentifier;
         context.ProblemDetails.Extensions["service"] = serviceName;
     };
 });
@@ -361,6 +363,20 @@ builder.Services
     .WithTracing(tracing =>
     {
         tracing
+            .AddSource(SolidPosTelemetry.ActivitySourceName)
+            .AddSource("Npgsql")
+            .AddAspNetCoreInstrumentation(options =>
+            {
+                options.RecordException = true;
+                options.Filter = context => !context.Request.Path.StartsWithSegments("/swagger");
+            })
+            .AddHttpClientInstrumentation(options => options.RecordException = true)
+            .AddConsoleExporter();
+    })
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddMeter(SolidPosTelemetry.MeterName)
             .AddAspNetCoreInstrumentation()
             .AddHttpClientInstrumentation()
             .AddConsoleExporter();
@@ -379,9 +395,10 @@ app.UseSerilogRequestLogging(options =>
     options.MessageTemplate = "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms";
     options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
     {
-        diagnosticContext.Set("trace_id", httpContext.TraceIdentifier);
+        diagnosticContext.Set("trace_id", System.Diagnostics.Activity.Current?.TraceId.ToString() ?? httpContext.TraceIdentifier);
+        diagnosticContext.Set("correlation_id", httpContext.Response.Headers[CorrelationIdMiddleware.HeaderName].FirstOrDefault() ?? httpContext.TraceIdentifier);
+        diagnosticContext.Set("request_id", httpContext.TraceIdentifier);
         diagnosticContext.Set("endpoint", $"{httpContext.Request.Method} {httpContext.Request.Path}");
-        diagnosticContext.Set("remote_ip", httpContext.Connection.RemoteIpAddress?.ToString());
     };
 });
 
@@ -393,6 +410,8 @@ app.UseExceptionHandler(exceptionApp =>
         Exception? exception = exceptionFeature?.Error;
         ILogger<Program> logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
 
+        System.Diagnostics.Activity.Current?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, "unhandled_exception");
+        System.Diagnostics.Activity.Current?.SetTag("error.type", exception?.GetType().Name ?? "UnknownException");
         logger.LogError(exception, "Unhandled exception while processing request");
 
         ProblemDetails problem = new()
@@ -403,7 +422,9 @@ app.UseExceptionHandler(exceptionApp =>
             Type = "https://solidpos.local/problems/unexpected-error",
             Instance = context.Request.Path
         };
-        problem.Extensions["traceId"] = context.TraceIdentifier;
+        problem.Extensions["traceId"] = System.Diagnostics.Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+        problem.Extensions["correlationId"] = context.Response.Headers[CorrelationIdMiddleware.HeaderName].FirstOrDefault() ?? context.TraceIdentifier;
+        problem.Extensions["requestId"] = context.TraceIdentifier;
 
         context.Response.StatusCode = StatusCodes.Status500InternalServerError;
         context.Response.ContentType = "application/problem+json";

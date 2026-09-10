@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Microsoft.AspNetCore.Http;
 
 namespace SolidPOS.PosServer.Infrastructure.Observability;
@@ -28,7 +29,22 @@ public sealed class OperationalMetricsMiddleware
                 ? routeEndpoint.RoutePattern.RawText ?? context.Request.Path.Value ?? "unknown"
                 : context.Request.Path.Value ?? "unknown";
 
-            _recorder.Record(context.Request.Method, NormalizeRoute(route, context), context.Response.StatusCode, stopwatch.Elapsed.TotalMilliseconds);
+            string normalizedRoute = NormalizeRoute(route, context);
+            double elapsedMs = stopwatch.Elapsed.TotalMilliseconds;
+            _recorder.Record(context.Request.Method, normalizedRoute, context.Response.StatusCode, elapsedMs);
+
+            var tags = new TagList
+            {
+                { "http.request.method", context.Request.Method },
+                { "http.route", normalizedRoute },
+                { "http.response.status_code", context.Response.StatusCode }
+            };
+            SolidPosTelemetry.RequestCount.Add(1, tags);
+            SolidPosTelemetry.RequestDuration.Record(elapsedMs, tags);
+            if (context.Response.StatusCode >= 400)
+            {
+                SolidPosTelemetry.RequestErrorCount.Add(1, tags);
+            }
         }
     }
 

@@ -10,6 +10,7 @@ using SolidPOS.PosServer.Contracts.Cash;
 using SolidPOS.PosServer.Contracts.Inventory;
 using SolidPOS.PosServer.Contracts.Sales;
 using SolidPOS.PosServer.Contracts.Sync;
+using SolidPOS.PosServer.Infrastructure.Observability;
 
 namespace SolidPOS.PosServer.Infrastructure.Sync;
 
@@ -129,6 +130,7 @@ public sealed class SyncEventProcessingService : ISyncEventProcessingService
 
             await _repository.MarkProcessedAsync(syncEvent.TenantId, syncEvent.Id, result, cancellationToken);
             _logger.LogInformation("Sync event {EventId} processed as {EventType}", syncEvent.EventId, syncEvent.EventType);
+            SolidPosTelemetry.SyncEventCount.Add(1, new KeyValuePair<string, object?>("sync.event_type", syncEvent.EventType), new KeyValuePair<string, object?>("sync.outcome", "processed"));
             return new SyncProcessEventResultResponse(syncEvent.Id, syncEvent.EventId, syncEvent.EventType, "processed", null, null);
         }
         catch (SyncEventProcessingException exception)
@@ -163,6 +165,7 @@ public sealed class SyncEventProcessingService : ISyncEventProcessingService
                     syncEvent.EventType,
                     exception.ErrorCode,
                     exception.Message);
+                SolidPosTelemetry.SyncEventCount.Add(1, new KeyValuePair<string, object?>("sync.event_type", syncEvent.EventType), new KeyValuePair<string, object?>("sync.outcome", "conflict"));
                 return new SyncProcessEventResultResponse(syncEvent.Id, syncEvent.EventId, syncEvent.EventType, "conflict", exception.ErrorCode, exception.Message);
             }
 
@@ -173,12 +176,14 @@ public sealed class SyncEventProcessingService : ISyncEventProcessingService
                 syncEvent.EventType,
                 exception.ErrorCode,
                 exception.Message);
+            SolidPosTelemetry.SyncEventCount.Add(1, new KeyValuePair<string, object?>("sync.event_type", syncEvent.EventType), new KeyValuePair<string, object?>("sync.outcome", "rejected"));
             return new SyncProcessEventResultResponse(syncEvent.Id, syncEvent.EventId, syncEvent.EventType, "rejected", exception.ErrorCode, exception.Message);
         }
         catch (Exception exception)
         {
             await _repository.MarkRejectedAsync(syncEvent.TenantId, syncEvent.Id, "processing_exception", exception.Message, cancellationToken);
             _logger.LogError(exception, "Sync event {EventId} failed while processing as {EventType}", syncEvent.EventId, syncEvent.EventType);
+            SolidPosTelemetry.SyncEventCount.Add(1, new KeyValuePair<string, object?>("sync.event_type", syncEvent.EventType), new KeyValuePair<string, object?>("sync.outcome", "processing_exception"));
             return new SyncProcessEventResultResponse(syncEvent.Id, syncEvent.EventId, syncEvent.EventType, "rejected", "processing_exception", exception.Message);
         }
     }
