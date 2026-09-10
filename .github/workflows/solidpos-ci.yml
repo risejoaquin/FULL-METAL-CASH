@@ -42,6 +42,10 @@ jobs:
         shell: pwsh
         run: ./scripts/security/scan-local-secrets.ps1 -Root .
 
+      - name: V1.1-02 metrics and alerting static contract
+        shell: pwsh
+        run: ./scripts/v1.1/validate-v1.1-02-production-metrics-alerting.ps1 -StaticOnly
+
       - name: Restore
         shell: pwsh
         run: dotnet restore solidpos-platform.sln

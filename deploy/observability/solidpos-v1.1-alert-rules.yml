@@ -1,0 +1,44 @@
+groups:
+  - name: solidpos-v1.1-production-alerts
+    rules:
+      - alert: SolidPOSHighHttpErrorRate
+        expr: solidpos_http_error_ratio > 0.05
+        for: 5m
+        labels:
+          severity: warning
+
+      - alert: SolidPOSHighHttpP95Latency
+        expr: solidpos_http_p95_latency_ms > 1200
+        for: 5m
+        labels:
+          severity: warning
+
+      - alert: SolidPOSPostgreSqlServerWaitPressure
+        expr: solidpos_postgresql_active_non_client_wait_event > 0
+        for: 2m
+        labels:
+          severity: warning
+
+      - alert: SolidPOSSyncQueueNotConverged
+        expr: (solidpos_sync_pending + solidpos_sync_processing + solidpos_sync_retry_pending) > 0
+        for: 5m
+        labels:
+          severity: warning
+
+      - alert: SolidPOSSyncDeadLetterAboveAcceptedBaseline
+        expr: solidpos_sync_dead_letter > 1
+        for: 1m
+        labels:
+          severity: critical
+
+      - alert: SolidPOSNegativeStockDetected
+        expr: solidpos_inventory_negative_stock > 0
+        for: 1m
+        labels:
+          severity: critical
+
+      - alert: SolidPOSSalePaymentMismatchDetected
+        expr: solidpos_financial_sale_payment_mismatch > 0
+        for: 1m
+        labels:
+          severity: critical

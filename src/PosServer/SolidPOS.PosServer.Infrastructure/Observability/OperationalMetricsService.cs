@@ -58,8 +58,9 @@ public sealed class OperationalMetricsService : IOperationalMetricsService
             cancellationToken);
         PaymentMetricsResponse payments = await _repository.GetPaymentMetricsAsync(tenantId, cancellationToken);
         InventoryRiskMetricsResponse inventory = await _repository.GetInventoryMetricsAsync(tenantId, cancellationToken);
+        FinancialIntegrityMetricsResponse financialIntegrity = await _repository.GetFinancialIntegrityMetricsAsync(tenantId, cancellationToken);
         AuditTrailMetricsResponse audit = await _repository.GetAuditMetricsAsync(tenantId, cancellationToken);
 
-        return new OperationalMetricsResponse(_clock.UtcNow, database, requestMetrics, sync, sales, payments, inventory, audit);
+        return new OperationalMetricsResponse(_clock.UtcNow, database, requestMetrics, sync, sales, payments, inventory, financialIntegrity, audit);
     }
 }

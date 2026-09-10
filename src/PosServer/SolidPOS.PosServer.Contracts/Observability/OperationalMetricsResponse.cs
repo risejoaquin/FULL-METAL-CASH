@@ -8,6 +8,7 @@ public sealed record OperationalMetricsResponse(
     SalesLatencyMetricsResponse Sales,
     PaymentMetricsResponse Payments,
     InventoryRiskMetricsResponse Inventory,
+    FinancialIntegrityMetricsResponse FinancialIntegrity,
     AuditTrailMetricsResponse Audit);
 
 public sealed record DatabaseMetricsResponse(
@@ -15,6 +16,8 @@ public sealed record DatabaseMetricsResponse(
     string DatabaseName,
     string ServerVersion,
     int ActiveConnections,
+    int ActiveNonClientWaitEventCount,
+    int ClientReadWaitEventCount,
     bool RequiredTablesPresent,
     IReadOnlyList<string> MissingRequiredTables);
 
@@ -54,6 +57,23 @@ public sealed record InventoryRiskMetricsResponse(
     long NegativeInventoryItemCount,
     long LowStockItemCount);
 
+public sealed record FinancialIntegrityMetricsResponse(
+    long SalePaymentMismatchCount);
+
 public sealed record AuditTrailMetricsResponse(
     long AuditEventsLast24Hours,
     DateTimeOffset? LastAuditEventAt);
+
+public sealed record ProductionAlertsResponse(
+    DateTimeOffset GeneratedAt,
+    bool HasActiveAlerts,
+    IReadOnlyList<ProductionAlertResponse> Alerts);
+
+public sealed record ProductionAlertResponse(
+    string Code,
+    string Severity,
+    bool Active,
+    double ObservedValue,
+    double Threshold,
+    string Comparator,
+    string Detail);

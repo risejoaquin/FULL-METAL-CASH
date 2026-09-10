@@ -33,7 +33,7 @@ public sealed class PostgreSqlOperationalMetricsRepository : IOperationalMetrics
     {
         if (string.IsNullOrWhiteSpace(_connectionString))
         {
-            return new DatabaseMetricsResponse(false, string.Empty, string.Empty, 0, false, RequiredTables);
+            return new DatabaseMetricsResponse(false, string.Empty, string.Empty, 0, 0, 0, false, RequiredTables);
         }
 
         await using NpgsqlConnection connection = new(_connectionString);
@@ -41,7 +41,24 @@ public sealed class PostgreSqlOperationalMetricsRepository : IOperationalMetrics
 
         string databaseName = connection.Database;
         string serverVersion = connection.PostgreSqlVersion.ToString();
-        int activeConnections = await ScalarAsync<int>(connection, null, "SELECT count(*)::int FROM pg_stat_activity WHERE datname = current_database();", cancellationToken);
+        await using NpgsqlCommand pressureCommand = new("""
+            SELECT
+              count(*)::int AS connection_count,
+              count(*) FILTER (
+                WHERE state = 'active'
+                  AND wait_event IS NOT NULL
+                  AND COALESCE(wait_event_type, '') <> 'Client'
+              )::int AS active_non_client_wait_event,
+              count(*) FILTER (WHERE wait_event = 'ClientRead')::int AS client_read_wait_event
+            FROM pg_stat_activity
+            WHERE datname = current_database();
+            """, connection);
+        await using NpgsqlDataReader pressureReader = await pressureCommand.ExecuteReaderAsync(cancellationToken);
+        await pressureReader.ReadAsync(cancellationToken);
+        int activeConnections = pressureReader.GetInt32(0);
+        int activeNonClientWaitEventCount = pressureReader.GetInt32(1);
+        int clientReadWaitEventCount = pressureReader.GetInt32(2);
+        await pressureReader.DisposeAsync();
 
         List<string> missingTables = [];
         foreach (string table in RequiredTables)
@@ -55,7 +72,7 @@ public sealed class PostgreSqlOperationalMetricsRepository : IOperationalMetrics
             }
         }
 
-        return new DatabaseMetricsResponse(true, databaseName, serverVersion, activeConnections, missingTables.Count == 0, missingTables);
+        return new DatabaseMetricsResponse(true, databaseName, serverVersion, activeConnections, activeNonClientWaitEventCount, clientReadWaitEventCount, missingTables.Count == 0, missingTables);
     }
 
     public async Task<SyncMetricsResponse> GetSyncMetricsAsync(Guid tenantId, CancellationToken cancellationToken)
@@ -146,6 +163,29 @@ public sealed class PostgreSqlOperationalMetricsRepository : IOperationalMetrics
             """, cancellationToken);
 
         return new InventoryRiskMetricsResponse(negative, lowStock);
+    }
+
+    public async Task<FinancialIntegrityMetricsResponse> GetFinancialIntegrityMetricsAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        await using NpgsqlConnection connection = await OpenTenantConnectionAsync(tenantId, cancellationToken);
+        long salePaymentMismatch = await ScalarTenantAsync<long>(connection, tenantId, """
+            WITH payment_totals AS (
+              SELECT sale_id,
+                     COALESCE(sum(amount_cents) FILTER (WHERE lower(status) = 'approved'), 0)::bigint AS approved_cents
+              FROM pos.payments
+              WHERE tenant_id = @tenant_id
+              GROUP BY sale_id
+            )
+            SELECT count(*)::bigint
+            FROM pos.sales s
+            LEFT JOIN payment_totals pt ON pt.sale_id = s.id
+            WHERE s.tenant_id = @tenant_id
+              AND s.deleted_at IS NULL
+              AND s.status IN ('completed', 'partially_returned', 'returned')
+              AND COALESCE(pt.approved_cents, 0) <> s.paid_cents;
+            """, cancellationToken);
+
+        return new FinancialIntegrityMetricsResponse(salePaymentMismatch);
     }
 
     public async Task<AuditTrailMetricsResponse> GetAuditMetricsAsync(Guid tenantId, CancellationToken cancellationToken)
