@@ -7539,6 +7539,7 @@ components:
           enum:
           - ready
           - degraded
+          - unavailable
         database:
           type: string
           enum:
@@ -7562,5 +7563,66 @@ components:
           items:
             type: string
         connectionStringSource:
+          type: string
+          nullable: true
+        databaseLatencyMs:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
+        schemaVersion:
+          type: integer
+          nullable: true
+        syncContract:
+          type: string
+          nullable: true
+        schemaCompatibility:
+          type: string
+          nullable: true
+          enum:
+          - compatible
+          - incompatible
+          - unknown
+        syncReadiness:
+          type: string
+          nullable: true
+          enum:
+          - ready
+          - unavailable
+          - unknown
+        storageReadiness:
+          type: string
+          nullable: true
+          enum:
+          - ready
+          - degraded
+        dependencies:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/ReadinessDependencyResponse'
+    ReadinessDependencyResponse:
+      type: object
+      required:
+      - name
+      - status
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - ready
+          - degraded
+          - unavailable
+        latencyMs:
+          type: integer
+          format: int64
+          nullable: true
+          minimum: 0
+        detail:
+          type: string
+          nullable: true
+        errorCode:
           type: string
           nullable: true

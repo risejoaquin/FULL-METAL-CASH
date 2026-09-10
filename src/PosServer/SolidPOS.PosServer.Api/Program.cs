@@ -468,17 +468,28 @@ app.MapGet("/health/ready", async (
     CancellationToken cancellationToken) =>
 {
     PostgreSqlReadinessResult readiness = await readinessProbe.CheckAsync(cancellationToken);
-    string status = readiness.IsReady ? "ready" : "degraded";
     ReadinessResponse response = new(
-        status,
+        readiness.Status,
         readiness.Database,
         clock.UtcNow,
         readiness.Detail,
         readiness.ErrorCode,
         readiness.MissingTables,
-        readiness.ConnectionStringSource);
+        readiness.ConnectionStringSource,
+        readiness.DatabaseLatencyMs,
+        readiness.SchemaVersion,
+        readiness.SyncContract,
+        readiness.SchemaCompatibility,
+        readiness.SyncReadiness,
+        readiness.StorageReadiness,
+        readiness.Dependencies?.Select(dependency => new ReadinessDependencyResponse(
+            dependency.Name,
+            dependency.Status,
+            dependency.LatencyMs,
+            dependency.Detail,
+            dependency.ErrorCode)).ToArray());
 
-    return readiness.IsReady
+    return readiness.IsAvailable
         ? Results.Ok(response)
         : Results.Json(response, statusCode: StatusCodes.Status503ServiceUnavailable);
 })
