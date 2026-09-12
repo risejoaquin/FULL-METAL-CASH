@@ -23,10 +23,15 @@ public interface ILocalPosRepository
     Task<LocalOutboxEvent?> GetLatestOutboxEventByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default);
     Task MarkOutboxSyncedAsync(IEnumerable<Guid> eventIds, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default);
     Task MarkOutboxFailedAsync(Guid eventId, string error, CancellationToken cancellationToken = default);
+    Task MarkOutboxRetryPendingAsync(Guid eventId, string reason, CancellationToken cancellationToken = default) => MarkOutboxFailedAsync(eventId, reason, cancellationToken);
+    Task MarkOutboxDeadLetterAsync(Guid eventId, string reason, CancellationToken cancellationToken = default) => MarkOutboxFailedAsync(eventId, reason, cancellationToken);
     Task ResetOutboxEventToPendingAsync(Guid eventId, string reason, CancellationToken cancellationToken = default);
     Task<int> RetryFailedOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default);
+    Task<int> RecoverRetryPendingOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default) => RetryFailedOutboxEventsAsync(maxAttempts, reason, cancellationToken);
     Task SaveSyncAcknowledgementsAsync(IEnumerable<LocalSyncAcknowledgement> acknowledgements, CancellationToken cancellationToken = default);
     Task<int> CountOutboxByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default);
+    Task<LocalSyncQueueHealthSummary> GetLocalSyncQueueHealthAsync(DateTimeOffset nowUtc, TimeSpan processingTimeout, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new LocalSyncQueueHealthSummary(0, 0, 0, 0, null, null, false, false));
 
     Task<LocalSyncPullState> GetSyncPullStateAsync(CancellationToken cancellationToken = default) => Task.FromResult(new LocalSyncPullState(null, null, 0, 0));
     Task<int> ApplySyncPullChangesAsync(IReadOnlyCollection<LocalAppliedSyncChange> changes, string nextCursor, DateTimeOffset pulledAtUtc, CancellationToken cancellationToken = default) => Task.FromResult(changes.Count);

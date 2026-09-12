@@ -6,7 +6,8 @@ public enum LocalOutboxStatus
     InFlight = 1,
     Synced = 2,
     Failed = 3,
-    DeadLetter = 4
+    DeadLetter = 4,
+    RetryPending = 5
 }
 
 public sealed record LocalOutboxEvent(
@@ -23,6 +24,16 @@ public sealed record LocalOutboxEvent(
     DateTimeOffset? SyncedAtUtc = null,
     string? LastError = null,
     int Attempts = 0);
+
+public sealed record LocalSyncQueueHealthSummary(
+    int PendingCount,
+    int ProcessingCount,
+    int RetryPendingCount,
+    int DeadLetterCount,
+    DateTimeOffset? OldestPendingAtUtc,
+    DateTimeOffset? OldestRetryPendingAtUtc,
+    bool HasStuckProcessing,
+    bool RequiresRecovery);
 
 public sealed record LocalOutboxBatch(
     Guid BatchId,

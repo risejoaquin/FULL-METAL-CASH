@@ -733,6 +733,30 @@ LIMIT 1;
         return Task.CompletedTask;
     }
 
+    public Task MarkOutboxRetryPendingAsync(Guid eventId, string reason, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_outbox_events SET status = $status, last_error = $reason, attempts = attempts + 1 WHERE id = $id;";
+        command.Parameters.AddWithValue("$status", (int)LocalOutboxStatus.RetryPending);
+        command.Parameters.AddWithValue("$reason", reason);
+        command.Parameters.AddWithValue("$id", eventId.ToString());
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
+    public Task MarkOutboxDeadLetterAsync(Guid eventId, string reason, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE local_outbox_events SET status = $status, last_error = $reason, attempts = attempts + 1 WHERE id = $id;";
+        command.Parameters.AddWithValue("$status", (int)LocalOutboxStatus.DeadLetter);
+        command.Parameters.AddWithValue("$reason", reason);
+        command.Parameters.AddWithValue("$id", eventId.ToString());
+        command.ExecuteNonQuery();
+        return Task.CompletedTask;
+    }
+
     public Task ResetOutboxEventToPendingAsync(Guid eventId, string reason, CancellationToken cancellationToken = default)
     {
         using var connection = _database.OpenConnection();
@@ -761,6 +785,23 @@ SELECT changes();
 """;
         command.Parameters.AddWithValue("$pendingStatus", (int)LocalOutboxStatus.Pending);
         command.Parameters.AddWithValue("$failedStatus", (int)LocalOutboxStatus.Failed);
+        command.Parameters.AddWithValue("$maxAttempts", maxAttempts);
+        command.Parameters.AddWithValue("$reason", reason);
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<int> RecoverRetryPendingOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+UPDATE local_outbox_events
+SET status = $pendingStatus, last_error = $reason
+WHERE status = $retryPendingStatus AND attempts < $maxAttempts;
+SELECT changes();
+""";
+        command.Parameters.AddWithValue("$pendingStatus", (int)LocalOutboxStatus.Pending);
+        command.Parameters.AddWithValue("$retryPendingStatus", (int)LocalOutboxStatus.RetryPending);
         command.Parameters.AddWithValue("$maxAttempts", maxAttempts);
         command.Parameters.AddWithValue("$reason", reason);
         return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
@@ -797,6 +838,30 @@ VALUES ($id, $batchId, $outboxEventId, $remoteStatus, $remoteResponseJson, $ackn
         command.CommandText = "SELECT COUNT(*) FROM local_outbox_events WHERE status = $status;";
         command.Parameters.AddWithValue("$status", (int)status);
         return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
+    public Task<LocalSyncQueueHealthSummary> GetLocalSyncQueueHealthAsync(DateTimeOffset nowUtc, TimeSpan processingTimeout, CancellationToken cancellationToken = default)
+    {
+        using var connection = _database.OpenConnection();
+        int pending = CountOutboxStatus(connection, LocalOutboxStatus.Pending);
+        int processing = CountOutboxStatus(connection, LocalOutboxStatus.InFlight);
+        int retryPending = CountOutboxStatus(connection, LocalOutboxStatus.RetryPending);
+        int deadLetter = CountOutboxStatus(connection, LocalOutboxStatus.DeadLetter);
+        DateTimeOffset? oldestPending = ReadOldestOutboxCreatedAt(connection, LocalOutboxStatus.Pending);
+        DateTimeOffset? oldestRetryPending = ReadOldestOutboxCreatedAt(connection, LocalOutboxStatus.RetryPending);
+        DateTimeOffset? oldestProcessing = ReadOldestOutboxCreatedAt(connection, LocalOutboxStatus.InFlight);
+        bool hasStuckProcessing = oldestProcessing.HasValue && nowUtc - oldestProcessing.Value > processingTimeout;
+        bool requiresRecovery = retryPending > 0 || deadLetter > 0 || hasStuckProcessing;
+
+        return Task.FromResult(new LocalSyncQueueHealthSummary(
+            pending,
+            processing,
+            retryPending,
+            deadLetter,
+            oldestPending,
+            oldestRetryPending,
+            hasStuckProcessing,
+            requiresRecovery));
     }
 
     public Task<LocalSyncPullState> GetSyncPullStateAsync(CancellationToken cancellationToken = default)
@@ -1570,7 +1635,7 @@ VALUES ($id, $tenantId, $storeId, $terminalId, $deviceType, $eventType, $message
         int cashFlagged = Math.Max(0, ScalarInt(connection, "SELECT COUNT(1) FROM local_cash_shifts WHERE status = 'open';") - 1);
         using (var transaction = connection.BeginTransaction())
         {
-            outboxRepaired = ExecuteNonQuery(connection, transaction, "UPDATE local_outbox_events SET status = 0, last_error = 'recovered_for_retry', attempts = attempts + 1 WHERE status = 3 AND attempts < 5;");
+            outboxRepaired = ExecuteNonQuery(connection, transaction, "UPDATE local_outbox_events SET status = 0, last_error = 'recovered_for_retry', attempts = attempts + 1 WHERE status IN (3, 5) AND attempts < 5;");
             printRepaired = ExecuteNonQuery(connection, transaction, "UPDATE local_print_jobs SET status = 'pending', last_error = NULL, attempts = attempts + 1 WHERE status = 'failed' AND attempts < 5;");
             sessionsClosed = ExecuteNonQuery(connection, transaction, "UPDATE local_sessions SET status = 'closed' WHERE status = 'active' AND expires_at_utc <= strftime('%Y-%m-%dT%H:%M:%f+00:00','now');");
             transaction.Commit();
@@ -1776,6 +1841,23 @@ VALUES ($id, $shiftId, $tenantId, $storeId, $terminalId, $movementType, $amountC
         command.Transaction = transaction;
         command.CommandText = sql;
         return command.ExecuteNonQuery();
+    }
+
+    private static int CountOutboxStatus(SqliteConnection connection, LocalOutboxStatus status)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM local_outbox_events WHERE status = $status;";
+        command.Parameters.AddWithValue("$status", (int)status);
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private static DateTimeOffset? ReadOldestOutboxCreatedAt(SqliteConnection connection, LocalOutboxStatus status)
+    {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT created_at_utc FROM local_outbox_events WHERE status = $status ORDER BY created_at_utc LIMIT 1;";
+        command.Parameters.AddWithValue("$status", (int)status);
+        var value = command.ExecuteScalar();
+        return value is null || value == DBNull.Value ? null : DateTimeOffset.Parse((string)value);
     }
 
     private static void InsertRecoveryJournal(SqliteConnection connection, Guid id, string operation, string status, string message, DateTimeOffset startedAtUtc, DateTimeOffset? completedAtUtc)

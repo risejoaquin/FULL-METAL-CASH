@@ -58,6 +58,10 @@ jobs:
         shell: pwsh
         run: ./scripts/v1.1/validate-v1.1-05-poscore-error-ux-recovery.ps1 -StaticOnly
 
+      - name: V1.1-06 sync self-healing static contract
+        shell: pwsh
+        run: ./scripts/v1.1/validate-v1.1-06-sync-self-healing.ps1 -StaticOnly
+
       - name: Restore
         shell: pwsh
         run: dotnet restore solidpos-platform.sln

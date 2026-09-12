@@ -14,12 +14,14 @@ public sealed class RemoteSyncPushService
     private readonly ILocalPosRepository _repository;
     private readonly IRemoteSyncClient _remoteClient;
     private readonly IClock _clock;
+    private readonly LocalSyncRetryPolicy _retryPolicy;
 
-    public RemoteSyncPushService(ILocalPosRepository repository, IRemoteSyncClient remoteClient, IClock clock)
+    public RemoteSyncPushService(ILocalPosRepository repository, IRemoteSyncClient remoteClient, IClock clock, LocalSyncRetryPolicy? retryPolicy = null)
     {
         _repository = repository;
         _remoteClient = remoteClient;
         _clock = clock;
+        _retryPolicy = retryPolicy ?? new LocalSyncRetryPolicy();
     }
 
     public async Task<RemoteSyncPushResult?> PushPendingAsync(int limit, Guid batchId, string terminalAccessToken, CancellationToken cancellationToken = default)
@@ -41,7 +43,7 @@ public sealed class RemoteSyncPushService
         {
             foreach (var pendingEvent in batch.Events)
             {
-                await _repository.MarkOutboxFailedAsync(pendingEvent.Id, exception.Message, cancellationToken).ConfigureAwait(false);
+                await ApplyRetryDecisionAsync(pendingEvent, _retryPolicy.EvaluateException(pendingEvent, exception), cancellationToken).ConfigureAwait(false);
             }
 
             throw;
@@ -55,7 +57,8 @@ public sealed class RemoteSyncPushService
         {
             foreach (var failed in batch.Events.Where(item => !result.AcknowledgedEventIds.Contains(item.Id)))
             {
-                await _repository.MarkOutboxFailedAsync(failed.Id, "Remote sync push returned rejected or failed events.", cancellationToken).ConfigureAwait(false);
+                var decision = _retryPolicy.EvaluateRemoteFailure(failed, "Remote sync push returned rejected or failed events.");
+                await ApplyRetryDecisionAsync(failed, decision, cancellationToken).ConfigureAwait(false);
             }
 
             if (result.AcknowledgedEventIds.Count > 0)
@@ -75,5 +78,20 @@ public sealed class RemoteSyncPushService
             cancellationToken).ConfigureAwait(false);
 
         return result;
+    }
+
+    private Task ApplyRetryDecisionAsync(LocalOutboxEvent outboxEvent, LocalSyncRetryDecision decision, CancellationToken cancellationToken)
+    {
+        if (decision.ShouldDeadLetter)
+        {
+            return _repository.MarkOutboxDeadLetterAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken);
+        }
+
+        if (decision.ShouldRetry)
+        {
+            return _repository.MarkOutboxRetryPendingAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken);
+        }
+
+        return _repository.MarkOutboxFailedAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken);
     }
 }
