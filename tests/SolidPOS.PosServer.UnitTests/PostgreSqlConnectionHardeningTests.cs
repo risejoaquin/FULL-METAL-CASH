@@ -13,7 +13,7 @@ public sealed class PostgreSqlConnectionHardeningTests
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=solidpos;Username=solidpos;Password=test",
+                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=solidpos;Username=solidpos;Password=<password>",
                 ["PostgreSql:Pool:MaxSize"] = "24",
                 ["PostgreSql:Timeouts:ConnectSeconds"] = "8",
                 ["PostgreSql:Timeouts:CommandSeconds"] = "12"
@@ -38,7 +38,7 @@ public sealed class PostgreSqlConnectionHardeningTests
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=solidpos;Username=solidpos;Password=test",
+                ["ConnectionStrings:Postgres"] = "Host=localhost;Database=solidpos;Username=solidpos;Password=<password>",
                 ["PostgreSql:Pool:MinSize"] = "500",
                 ["PostgreSql:Pool:MaxSize"] = "500",
                 ["PostgreSql:Timeouts:CommandSeconds"] = "900"
