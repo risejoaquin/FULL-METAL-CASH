@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>SolidPOS.PosCore.UnitTests</RootNamespace>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
@@ -12,5 +14,6 @@
     <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Application\SolidPOS.PosCore.Application.csproj" />
     <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Domain\SolidPOS.PosCore.Domain.csproj" />
     <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Infrastructure\SolidPOS.PosCore.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Wpf\SolidPOS.PosCore.Wpf.csproj" />
   </ItemGroup>
 </Project>

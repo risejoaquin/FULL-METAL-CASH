@@ -1,5 +1,7 @@
 using System.Windows.Input;
 using SolidPOS.PosCore.Application.Cash;
+using SolidPOS.PosCore.Application.Recovery;
+using SolidPOS.PosCore.Domain;
 
 namespace SolidPOS.PosCore.Wpf.ViewModels;
 
@@ -23,6 +25,13 @@ public sealed class SalesViewModel : ViewModelBase
     private string receiptStatus = "Recibo pendiente.";
     private string syncVisualStatus = "Sync pendiente.";
     private string printStatus = "Impresion pendiente.";
+    private string operatorErrorMessage = "Sin errores activos.";
+    private string recoveryActionsSummary = "Acciones de recuperacion no requeridas.";
+    private string connectivityState = "OFFLINE";
+    private string hardwareFailureSummary = "Hardware listo.";
+    private string lastTechnicalErrorSummary = "Sin diagnostico tecnico activo.";
+    private readonly OperatorRecoveryService recoveryService = new();
+    private OperatorRecoveryResult? lastRecovery;
 
     public SalesViewModel()
     {
@@ -32,6 +41,12 @@ public sealed class SalesViewModel : ViewModelBase
         TakeCashPaymentCommand = new RelayCommand(TakeCashPayment, () => quantity > 0 && tenderedCents >= totalCents);
         QueueFakeReceiptCommand = new RelayCommand(QueueFakeReceipt, () => quantity > 0 && changeCents >= 0);
         MarkSyncedCommand = new RelayCommand(MarkSynced, () => quantity > 0);
+        RetryLastActionCommand = new RelayCommand(RetryLastAction, () => lastRecovery?.CanRetry == true);
+        ContinueOfflineCommand = new RelayCommand(ContinueOffline, () => lastRecovery?.CanContinueOffline == true);
+        RetryPrintCommand = new RelayCommand(RetryPrint, () => lastRecovery?.CanRetryPrint == true);
+        RetryDrawerCommand = new RelayCommand(RetryDrawer, () => lastRecovery?.CanRetryDrawer == true);
+        ReconnectCommand = new RelayCommand(Reconnect, () => ConnectivityState != "ONLINE");
+        DismissErrorCommand = new RelayCommand(DismissError, () => lastRecovery is not null);
     }
 
     public string CatalogSummary
@@ -139,6 +154,36 @@ public sealed class SalesViewModel : ViewModelBase
         set => SetProperty(ref printStatus, value);
     }
 
+    public string OperatorErrorMessage
+    {
+        get => operatorErrorMessage;
+        set => SetProperty(ref operatorErrorMessage, value);
+    }
+
+    public string RecoveryActionsSummary
+    {
+        get => recoveryActionsSummary;
+        set => SetProperty(ref recoveryActionsSummary, value);
+    }
+
+    public string ConnectivityState
+    {
+        get => connectivityState;
+        set => SetProperty(ref connectivityState, value);
+    }
+
+    public string HardwareFailureSummary
+    {
+        get => hardwareFailureSummary;
+        set => SetProperty(ref hardwareFailureSummary, value);
+    }
+
+    public string LastTechnicalErrorSummary
+    {
+        get => lastTechnicalErrorSummary;
+        set => SetProperty(ref lastTechnicalErrorSummary, value);
+    }
+
     public RelayCommand AddAmericanoCommand { get; }
 
     public RelayCommand IncreaseQuantityCommand { get; }
@@ -151,6 +196,18 @@ public sealed class SalesViewModel : ViewModelBase
 
     public RelayCommand MarkSyncedCommand { get; }
 
+    public RelayCommand RetryLastActionCommand { get; }
+
+    public RelayCommand ContinueOfflineCommand { get; }
+
+    public RelayCommand RetryPrintCommand { get; }
+
+    public RelayCommand RetryDrawerCommand { get; }
+
+    public RelayCommand ReconnectCommand { get; }
+
+    public RelayCommand DismissErrorCommand { get; }
+
     private void RefreshCommandStates()
     {
         IncreaseQuantityCommand.RaiseCanExecuteChanged();
@@ -158,6 +215,12 @@ public sealed class SalesViewModel : ViewModelBase
         TakeCashPaymentCommand.RaiseCanExecuteChanged();
         QueueFakeReceiptCommand.RaiseCanExecuteChanged();
         MarkSyncedCommand.RaiseCanExecuteChanged();
+        RetryLastActionCommand.RaiseCanExecuteChanged();
+        ContinueOfflineCommand.RaiseCanExecuteChanged();
+        RetryPrintCommand.RaiseCanExecuteChanged();
+        RetryDrawerCommand.RaiseCanExecuteChanged();
+        ReconnectCommand.RaiseCanExecuteChanged();
+        DismissErrorCommand.RaiseCanExecuteChanged();
     }
 
     public void LoadLocalCatalogSummary()
@@ -231,6 +294,90 @@ public sealed class SalesViewModel : ViewModelBase
     private void MarkSynced()
     {
         SyncVisualStatus = "Estado visual de sync actualizado: venta pendiente de push o ya procesada por runtime.";
+        RefreshCommandStates();
+    }
+
+    public void ShowOfflineFailure(Exception exception)
+    {
+        SetConnectivity(PosCoreConnectivityState.Offline);
+        ApplyRecovery(recoveryService.Describe(exception, new OperatorFailureContext("sync-push")));
+    }
+
+    public void ShowPrinterFailure(Exception exception)
+    {
+        ApplyRecovery(recoveryService.Describe(exception, new OperatorFailureContext("receipt-print", DeviceType: LocalHardwareDeviceTypes.ReceiptPrinter)));
+    }
+
+    public void ShowCashDrawerFailure(Exception exception)
+    {
+        ApplyRecovery(recoveryService.Describe(exception, new OperatorFailureContext("cash-drawer", DeviceType: LocalHardwareDeviceTypes.CashDrawer)));
+    }
+
+    public void SetConnectivity(PosCoreConnectivityState state)
+    {
+        ConnectivityState = recoveryService.DescribeConnectivity(state);
+        if (state == PosCoreConnectivityState.Online)
+        {
+            SyncVisualStatus = "Conexion restaurada. Sync listo para reintentar eventos pendientes.";
+        }
+        else if (state == PosCoreConnectivityState.Reconnecting)
+        {
+            SyncVisualStatus = "Reconectando sin bloquear ventas offline.";
+        }
+        else
+        {
+            SyncVisualStatus = "Sin conexion. Ventas offline siguen disponibles.";
+        }
+
+        RefreshCommandStates();
+    }
+
+    private void ApplyRecovery(OperatorRecoveryResult recovery)
+    {
+        lastRecovery = recovery;
+        OperatorErrorMessage = recovery.OperatorMessage;
+        LastTechnicalErrorSummary = recovery.TechnicalSummary;
+        RecoveryActionsSummary = string.Join(", ", recovery.Actions);
+        if (recovery.Kind == OperatorFailureKind.Hardware)
+        {
+            HardwareFailureSummary = recovery.OperatorMessage;
+        }
+
+        RefreshCommandStates();
+    }
+
+    private void RetryLastAction()
+    {
+        SaleStatus = "Reintento solicitado usando la misma operacion local.";
+    }
+
+    private void ContinueOffline()
+    {
+        SetConnectivity(PosCoreConnectivityState.Offline);
+        SaleStatus = "Continuando offline sin reiniciar la aplicacion.";
+    }
+
+    private void RetryPrint()
+    {
+        PrintStatus = "Reintento de impresion solicitado para el recibo pendiente.";
+    }
+
+    private void RetryDrawer()
+    {
+        HardwareFailureSummary = "Reintento de apertura de caja solicitado sin duplicar pago.";
+    }
+
+    private void Reconnect()
+    {
+        SetConnectivity(PosCoreConnectivityState.Reconnecting);
+    }
+
+    private void DismissError()
+    {
+        lastRecovery = null;
+        OperatorErrorMessage = "Sin errores activos.";
+        RecoveryActionsSummary = "Acciones de recuperacion no requeridas.";
+        LastTechnicalErrorSummary = "Sin diagnostico tecnico activo.";
         RefreshCommandStates();
     }
 

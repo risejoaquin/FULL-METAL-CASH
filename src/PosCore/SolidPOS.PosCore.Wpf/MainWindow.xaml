@@ -102,6 +102,17 @@
               <TextBlock Text="{Binding Sales.ReceiptStatus}" TextWrapping="Wrap" />
               <TextBlock Text="{Binding Sales.PrintStatus}" TextWrapping="Wrap" />
               <TextBlock Text="{Binding Sales.SyncVisualStatus}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Sales.ConnectivityState}" FontWeight="Bold" Margin="0,12,0,0" />
+              <TextBlock Text="{Binding Sales.OperatorErrorMessage}" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding Sales.RecoveryActionsSummary}" TextWrapping="Wrap" />
+              <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                <Button Content="Retry" Command="{Binding Sales.RetryLastActionCommand}" Width="90" />
+                <Button Content="Offline" Command="{Binding Sales.ContinueOfflineCommand}" Width="90" Margin="8,0,0,0" />
+                <Button Content="Print" Command="{Binding Sales.RetryPrintCommand}" Width="90" Margin="8,0,0,0" />
+                <Button Content="Drawer" Command="{Binding Sales.RetryDrawerCommand}" Width="90" Margin="8,0,0,0" />
+                <Button Content="Reconnect" Command="{Binding Sales.ReconnectCommand}" Width="100" Margin="8,0,0,0" />
+                <Button Content="Dismiss" Command="{Binding Sales.DismissErrorCommand}" Width="90" Margin="8,0,0,0" />
+              </StackPanel>
             </StackPanel>
           </Grid>
         </TabItem>
