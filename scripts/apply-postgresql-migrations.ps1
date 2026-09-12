@@ -29,7 +29,8 @@ $MigrationFiles = @(
     "database/postgresql/017_pos_operational_completion.sql",
     "database/postgresql/018_sync_e2e_contract_hardening.sql",
     "database/postgresql/019_update_release_cohort_targeting.sql",
-    "database/postgresql/020_ga08_complete_tenant_rls.sql"
+    "database/postgresql/020_ga08_complete_tenant_rls.sql",
+    "database/postgresql/020_postgresql_query_hardening.sql"
 )
 
 function Invoke-PostgresScalar {
@@ -151,10 +152,10 @@ if ($SchemaExists -eq "t" -and -not $ResetSchema) {
     # Production databases that already contain the GA-06 cohort-targeting marker
     # have successfully crossed migrations 002-019. Replaying historical migrations
     # against evolved data is unsafe (for example, pre-dead-letter status checks).
-    # Fast-forward such databases to the only pending GA-08 migration.
+    # Fast-forward such databases to GA-08 when required, then apply the idempotent V1.1-04 query-hardening migration.
     $HasGa06Migration = Invoke-PostgresScalar "SELECT to_regclass('pos.update_release_targets') IS NOT NULL;"
     if ($HasGa06Migration -eq "t") {
-        Write-Host "GA-06/019 migration marker detected. Skipping historical migrations 002-019 and evaluating GA-08/020 only."
+        Write-Host "GA-06/019 migration marker detected. Skipping historical migrations 002-019 and evaluating GA-08/020 plus V1.1-04 query hardening."
 
         $Ga08RlsComplete = Invoke-PostgresScalar @"
 SELECT NOT EXISTS (
@@ -170,11 +171,14 @@ SELECT NOT EXISTS (
 );
 "@
         if ($Ga08RlsComplete -eq "t") {
-            Write-Host "GA-08 tenant RLS coverage already complete. No pending PostgreSQL migrations detected."
-            $MigrationFiles = @()
+            Write-Host "GA-08 tenant RLS coverage already complete. Applying idempotent V1.1-04 query hardening."
+            $MigrationFiles = @("database/postgresql/020_postgresql_query_hardening.sql")
         }
         else {
-            $MigrationFiles = @("database/postgresql/020_ga08_complete_tenant_rls.sql")
+            $MigrationFiles = @(
+                "database/postgresql/020_ga08_complete_tenant_rls.sql",
+                "database/postgresql/020_postgresql_query_hardening.sql"
+            )
         }
     }
     else {
@@ -198,7 +202,8 @@ SELECT NOT EXISTS (
             "database/postgresql/017_pos_operational_completion.sql",
             "database/postgresql/018_sync_e2e_contract_hardening.sql",
             "database/postgresql/019_update_release_cohort_targeting.sql",
-            "database/postgresql/020_ga08_complete_tenant_rls.sql"
+            "database/postgresql/020_ga08_complete_tenant_rls.sql",
+            "database/postgresql/020_postgresql_query_hardening.sql"
         )
     }
 }

@@ -11,7 +11,7 @@ public sealed class PrometheusMetricsFormatterTests
     {
         OperationalMetricsResponse metrics = new(
             DateTimeOffset.UnixEpoch,
-            new DatabaseMetricsResponse(true, "solidpos", "16", 2, 0, 7, true, []),
+            new DatabaseMetricsResponse(true, "solidpos", "16", 2, 0, 7, 0, 0, 0, 0, true, []),
             new RequestMetricsResponse(100, 2, 20, 40, []),
             new SyncMetricsResponse(new Dictionary<string, long> { ["received"] = 1, ["processing"] = 0 }, 0, 0, 1, 0),
             new SalesLatencyMetricsResponse(1, 10, 10, 20),
@@ -25,6 +25,8 @@ public sealed class PrometheusMetricsFormatterTests
         Assert.Contains("solidpos_http_error_ratio 0.02", text);
         Assert.Contains("solidpos_postgresql_active_non_client_wait_event 0", text);
         Assert.Contains("solidpos_postgresql_client_read_wait_event 7", text);
+        Assert.Contains("solidpos_postgresql_idle_in_transaction 0", text);
+        Assert.Contains("solidpos_postgresql_long_running_query 0", text);
         Assert.Contains("solidpos_sync_pending 1", text);
         Assert.Contains("solidpos_financial_sale_payment_mismatch 0", text);
         Assert.DoesNotContain("tenant_id", text, StringComparison.OrdinalIgnoreCase);

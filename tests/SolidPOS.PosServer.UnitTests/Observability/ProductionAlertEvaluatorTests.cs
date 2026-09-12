@@ -60,7 +60,7 @@ public sealed class ProductionAlertEvaluatorTests
         long salePaymentMismatch = 0)
         => new(
             DateTimeOffset.UnixEpoch,
-            new DatabaseMetricsResponse(true, "solidpos", "16", 1, activeNonClientWaitEventCount, clientReadWaitEventCount, true, []),
+            new DatabaseMetricsResponse(true, "solidpos", "16", 1, activeNonClientWaitEventCount, clientReadWaitEventCount, 0, 0, 0, 0, true, []),
             new RequestMetricsResponse(100, 0, 10, 20, []),
             new SyncMetricsResponse(new Dictionary<string, long> { ["received"] = 0, ["processing"] = 0 }, 0, 0, deadLetters, 0),
             new SalesLatencyMetricsResponse(1, 10, 10, 20),

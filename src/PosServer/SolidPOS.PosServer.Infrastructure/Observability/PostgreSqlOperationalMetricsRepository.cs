@@ -33,7 +33,7 @@ public sealed class PostgreSqlOperationalMetricsRepository : IOperationalMetrics
     {
         if (string.IsNullOrWhiteSpace(_connectionString))
         {
-            return new DatabaseMetricsResponse(false, string.Empty, string.Empty, 0, 0, 0, false, RequiredTables);
+            return new DatabaseMetricsResponse(false, string.Empty, string.Empty, 0, 0, 0, 0, 0, 0, 0, false, RequiredTables);
         }
 
         await using NpgsqlConnection connection = new(_connectionString);
@@ -49,7 +49,23 @@ public sealed class PostgreSqlOperationalMetricsRepository : IOperationalMetrics
                   AND wait_event IS NOT NULL
                   AND COALESCE(wait_event_type, '') <> 'Client'
               )::int AS active_non_client_wait_event,
-              count(*) FILTER (WHERE wait_event = 'ClientRead')::int AS client_read_wait_event
+              count(*) FILTER (WHERE wait_event = 'ClientRead')::int AS client_read_wait_event,
+              count(*) FILTER (
+                WHERE state = 'idle in transaction'
+                  AND now() - state_change >= interval '5 seconds'
+              )::int AS idle_in_transaction_count,
+              count(*) FILTER (
+                WHERE state = 'active'
+                  AND pid <> pg_backend_pid()
+                  AND query_start IS NOT NULL
+                  AND now() - query_start >= interval '500 milliseconds'
+              )::int AS long_running_query_count,
+              COALESCE(max(EXTRACT(EPOCH FROM (now() - query_start)) * 1000) FILTER (
+                WHERE state = 'active' AND pid <> pg_backend_pid() AND query_start IS NOT NULL
+              ), 0)::bigint AS oldest_active_query_ms,
+              COALESCE(max(EXTRACT(EPOCH FROM (now() - state_change)) * 1000) FILTER (
+                WHERE state = 'idle in transaction'
+              ), 0)::bigint AS oldest_idle_in_transaction_ms
             FROM pg_stat_activity
             WHERE datname = current_database();
             """, connection);
@@ -58,6 +74,10 @@ public sealed class PostgreSqlOperationalMetricsRepository : IOperationalMetrics
         int activeConnections = pressureReader.GetInt32(0);
         int activeNonClientWaitEventCount = pressureReader.GetInt32(1);
         int clientReadWaitEventCount = pressureReader.GetInt32(2);
+        int idleInTransactionCount = pressureReader.GetInt32(3);
+        int longRunningQueryCount = pressureReader.GetInt32(4);
+        long oldestActiveQueryMs = pressureReader.GetInt64(5);
+        long oldestIdleInTransactionMs = pressureReader.GetInt64(6);
         await pressureReader.DisposeAsync();
 
         List<string> missingTables = [];
@@ -72,7 +92,7 @@ public sealed class PostgreSqlOperationalMetricsRepository : IOperationalMetrics
             }
         }
 
-        return new DatabaseMetricsResponse(true, databaseName, serverVersion, activeConnections, activeNonClientWaitEventCount, clientReadWaitEventCount, missingTables.Count == 0, missingTables);
+        return new DatabaseMetricsResponse(true, databaseName, serverVersion, activeConnections, activeNonClientWaitEventCount, clientReadWaitEventCount, idleInTransactionCount, longRunningQueryCount, oldestActiveQueryMs, oldestIdleInTransactionMs, missingTables.Count == 0, missingTables);
     }
 
     public async Task<SyncMetricsResponse> GetSyncMetricsAsync(Guid tenantId, CancellationToken cancellationToken)

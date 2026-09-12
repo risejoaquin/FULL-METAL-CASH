@@ -10,7 +10,7 @@ public sealed class OperationalMetricsContractTests
     {
         OperationalMetricsResponse response = new(
             DateTimeOffset.UnixEpoch,
-            new DatabaseMetricsResponse(true, "solidpos", "16", 1, 0, 4, true, []),
+            new DatabaseMetricsResponse(true, "solidpos", "16", 1, 0, 4, 0, 0, 120, 0, true, []),
             new RequestMetricsResponse(1, 0, 10, 10, []),
             new SyncMetricsResponse(new Dictionary<string, long> { ["processed"] = 1 }, 0, 1, 0, 0),
             new SalesLatencyMetricsResponse(1, 25, 10, 20),

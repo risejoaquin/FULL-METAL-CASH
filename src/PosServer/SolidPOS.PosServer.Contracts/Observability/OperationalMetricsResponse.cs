@@ -18,6 +18,10 @@ public sealed record DatabaseMetricsResponse(
     int ActiveConnections,
     int ActiveNonClientWaitEventCount,
     int ClientReadWaitEventCount,
+    int IdleInTransactionCount,
+    int LongRunningQueryCount,
+    long OldestActiveQueryMs,
+    long OldestIdleInTransactionMs,
     bool RequiredTablesPresent,
     IReadOnlyList<string> MissingRequiredTables);
 

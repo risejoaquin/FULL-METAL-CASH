@@ -400,7 +400,11 @@ public sealed class PostgreSqlSalesRepository : ISalesRepository
             LIMIT @limit;
             """;
 
-        await using var command = new NpgsqlCommand(sql, connection, transaction);
+        await using var command = new NpgsqlCommand(sql, connection, transaction)
+        {
+            // V1.1-04: critical read endpoint query budget; fail fast instead of pinning a pooled session.
+            CommandTimeout = 3
+        };
         command.Parameters.AddWithValue("tenant_id", tenantId);
         AddNullableGuid(command, "store_id", filters.StoreId);
         AddNullableGuid(command, "terminal_id", filters.TerminalId);

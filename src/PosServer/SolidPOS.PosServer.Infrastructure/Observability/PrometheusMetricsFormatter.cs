@@ -21,6 +21,10 @@ public static class PrometheusMetricsFormatter
         Append(output, "solidpos_postgresql_active_connections", metrics.Database.ActiveConnections, "PostgreSQL connections for the current database.", "gauge");
         Append(output, "solidpos_postgresql_active_non_client_wait_event", metrics.Database.ActiveNonClientWaitEventCount, "Active PostgreSQL sessions waiting on non-client server events.", "gauge");
         Append(output, "solidpos_postgresql_client_read_wait_event", metrics.Database.ClientReadWaitEventCount, "PostgreSQL ClientRead waits exposed for diagnostics only; never a blocker by itself.", "gauge");
+        Append(output, "solidpos_postgresql_idle_in_transaction", metrics.Database.IdleInTransactionCount, "PostgreSQL sessions idle in transaction for at least five seconds.", "gauge");
+        Append(output, "solidpos_postgresql_long_running_query", metrics.Database.LongRunningQueryCount, "Active PostgreSQL queries running for at least 500ms, excluding this diagnostics query.", "gauge");
+        Append(output, "solidpos_postgresql_oldest_active_query_ms", metrics.Database.OldestActiveQueryMs, "Age in milliseconds of the oldest active PostgreSQL query.", "gauge");
+        Append(output, "solidpos_postgresql_oldest_idle_in_transaction_ms", metrics.Database.OldestIdleInTransactionMs, "Age in milliseconds of the oldest idle-in-transaction PostgreSQL session.", "gauge");
 
         long pending = Status(metrics.Sync.InboxByStatus, "received");
         long processing = Status(metrics.Sync.InboxByStatus, "processing");

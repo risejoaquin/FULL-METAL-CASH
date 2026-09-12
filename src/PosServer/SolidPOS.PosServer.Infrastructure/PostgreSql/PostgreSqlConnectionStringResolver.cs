@@ -40,25 +40,25 @@ public static class PostgreSqlConnectionStringResolver
         string? configuredConnectionString = configuration.GetConnectionString("Postgres");
         if (!string.IsNullOrWhiteSpace(configuredConnectionString))
         {
-            return Normalize(configuredConnectionString, "ConnectionStrings:Postgres");
+            return Normalize(configuredConnectionString, "ConnectionStrings:Postgres", configuration);
         }
 
         string? databaseUrl = configuration["DATABASE_URL"];
         if (!string.IsNullOrWhiteSpace(databaseUrl))
         {
-            return Normalize(databaseUrl, "DATABASE_URL");
+            return Normalize(databaseUrl, "DATABASE_URL", configuration);
         }
 
         return PostgreSqlConnectionStringResolution.Missing();
     }
 
-    private static PostgreSqlConnectionStringResolution Normalize(string rawConnectionString, string source)
+    private static PostgreSqlConnectionStringResolution Normalize(string rawConnectionString, string source, IConfiguration configuration)
     {
         string trimmed = rawConnectionString.Trim();
         if (trimmed.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase))
         {
-            return ConvertPostgresUri(trimmed, source);
+            return ConvertPostgresUri(trimmed, source, configuration);
         }
 
         try
@@ -88,6 +88,7 @@ public static class PostgreSqlConnectionStringResolver
                     "PostgreSQL connection string is missing Username.");
             }
 
+            ApplyHardeningPolicy(builder, configuration);
             return PostgreSqlConnectionStringResolution.Valid(builder.ConnectionString, source);
         }
         catch (Exception ex) when (ex is ArgumentException or FormatException or KeyNotFoundException)
@@ -99,7 +100,7 @@ public static class PostgreSqlConnectionStringResolver
         }
     }
 
-    private static PostgreSqlConnectionStringResolution ConvertPostgresUri(string databaseUrl, string source)
+    private static PostgreSqlConnectionStringResolution ConvertPostgresUri(string databaseUrl, string source, IConfiguration configuration)
     {
         if (!Uri.TryCreate(databaseUrl, UriKind.Absolute, out Uri? uri))
         {
@@ -144,9 +145,7 @@ public static class PostgreSqlConnectionStringResolver
             Database = database,
             Username = username,
             Password = password,
-            Port = uri.Port > 0 ? uri.Port : 5432,
-            Timeout = 15,
-            CommandTimeout = 30
+            Port = uri.Port > 0 ? uri.Port : 5432
         };
 
         Dictionary<string, string> query = ParseQuery(uri.Query);
@@ -159,7 +158,25 @@ public static class PostgreSqlConnectionStringResolver
             builder.SslMode = SslMode.Require;
         }
 
+        ApplyHardeningPolicy(builder, configuration);
         return PostgreSqlConnectionStringResolution.Valid(builder.ConnectionString, source);
+    }
+
+    private static void ApplyHardeningPolicy(NpgsqlConnectionStringBuilder builder, IConfiguration configuration)
+    {
+        builder.Pooling = true;
+        builder.MinPoolSize = Math.Max(0, configuration.GetValue("PostgreSql:Pool:MinSize", 0));
+        builder.MaxPoolSize = Math.Clamp(configuration.GetValue("PostgreSql:Pool:MaxSize", 20), 1, 200);
+        if (builder.MinPoolSize > builder.MaxPoolSize)
+        {
+            builder.MinPoolSize = builder.MaxPoolSize;
+        }
+
+        builder.Timeout = Math.Clamp(configuration.GetValue("PostgreSql:Timeouts:ConnectSeconds", 10), 1, 60);
+        builder.CommandTimeout = Math.Clamp(configuration.GetValue("PostgreSql:Timeouts:CommandSeconds", 15), 1, 120);
+        builder.ConnectionIdleLifetime = Math.Clamp(configuration.GetValue("PostgreSql:Pool:IdleLifetimeSeconds", 300), 30, 3600);
+        builder.ConnectionPruningInterval = Math.Clamp(configuration.GetValue("PostgreSql:Pool:PruningIntervalSeconds", 10), 1, 60);
+        builder.NoResetOnClose = false;
     }
 
     private static Dictionary<string, string> ParseQuery(string queryString)
