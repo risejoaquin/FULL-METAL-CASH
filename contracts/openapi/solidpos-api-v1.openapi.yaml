@@ -2691,6 +2691,62 @@ paths:
           $ref: '#/components/responses/Conflict'
         '500':
           $ref: '#/components/responses/UnexpectedError'
+  /terminal/heartbeat:
+    post:
+      tags:
+      - Terminal
+      summary: Records terminal heartbeat and device health.
+      operationId: post_terminal_heartbeat
+      responses:
+        '200':
+          description: Heartbeat recorded.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /terminal/remote-config:
+    get:
+      tags:
+      - Terminal
+      summary: Reads remote config metadata for the active terminal.
+      operationId: get_terminal_remote_config
+      responses:
+        '200':
+          description: Remote config metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
   /terminals:
     get:
       tags:
@@ -2774,6 +2830,226 @@ paths:
         required: true
         schema:
           type: string
+  /terminals/{terminalId}:
+    get:
+      tags:
+      - Terminals
+      summary: Reads terminal details by terminal ID.
+      operationId: get_terminal_by_id
+      responses:
+        '200':
+          description: Terminal details.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          type: string
+  /terminals/{terminalId}/disable:
+    post:
+      tags:
+      - Terminals
+      summary: Disables a terminal.
+      operationId: post_terminals_terminalId_disable
+      responses:
+        '204':
+          description: Terminal disabled.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          type: string
+  /terminals/{terminalId}/enable:
+    post:
+      tags:
+      - Terminals
+      summary: Re-enables a disabled terminal.
+      operationId: post_terminals_terminalId_enable
+      responses:
+        '204':
+          description: Terminal enabled.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          type: string
+  /terminals/{terminalId}/health:
+    get:
+      tags:
+      - Terminals
+      summary: Reads the latest device health for a terminal.
+      operationId: get_terminals_terminalId_health
+      responses:
+        '200':
+          description: Device health.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          type: string
+  /terminals/{terminalId}/remote-config:
+    get:
+      tags:
+      - Terminals
+      summary: Reads remote config metadata for a terminal.
+      operationId: get_terminals_terminalId_remote_config
+      responses:
+        '200':
+          description: Remote config metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      tags:
+      - Terminals
+      summary: Updates remote config metadata for a terminal.
+      operationId: put_terminals_terminalId_remote_config
+      responses:
+        '200':
+          description: Updated remote config metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+  /terminals/{terminalId}/store:
+    post:
+      tags:
+      - Terminals
+      summary: Reassigns a terminal to a new store.
+      operationId: post_terminals_terminalId_store
+      responses:
+        '200':
+          description: Terminal reassigned.
+          content:
+            application/json:
+              schema:
+                type: object
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/UnexpectedError'
+      parameters:
+      - name: terminalId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
   /users:
     get:
       tags:

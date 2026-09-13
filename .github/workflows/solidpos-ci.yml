@@ -66,6 +66,10 @@ jobs:
         shell: pwsh
         run: ./scripts/v1.1/validate-v1.1-07-offline-diagnostics-support-bundle.ps1 -StaticOnly
 
+      - name: V1.1-08 terminal device management hardening static contract
+        shell: pwsh
+        run: ./scripts/v1.1/validate-v1.1-08-terminal-device-management-hardening.ps1 -StaticOnly
+
       - name: Restore
         shell: pwsh
         run: dotnet restore solidpos-platform.sln

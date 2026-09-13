@@ -108,6 +108,8 @@ public sealed class OpenApiContractTests
         }
 
         return !path.Equals("/terminals/{terminalId}/revoke", StringComparison.Ordinal)
+            && !path.Equals("/terminals/{terminalId}/disable", StringComparison.Ordinal)
+            && !path.Equals("/terminals/{terminalId}/enable", StringComparison.Ordinal)
             && !path.Equals("/receipts/{saleId}/issue", StringComparison.Ordinal);
     }
 

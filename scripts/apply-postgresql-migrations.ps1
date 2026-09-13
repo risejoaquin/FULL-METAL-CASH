@@ -30,7 +30,8 @@ $MigrationFiles = @(
     "database/postgresql/018_sync_e2e_contract_hardening.sql",
     "database/postgresql/019_update_release_cohort_targeting.sql",
     "database/postgresql/020_ga08_complete_tenant_rls.sql",
-    "database/postgresql/020_postgresql_query_hardening.sql"
+    "database/postgresql/020_postgresql_query_hardening.sql",
+    "database/postgresql/021_terminal_device_management_hardening.sql"
 )
 
 function Invoke-PostgresScalar {
@@ -171,13 +172,17 @@ SELECT NOT EXISTS (
 );
 "@
         if ($Ga08RlsComplete -eq "t") {
-            Write-Host "GA-08 tenant RLS coverage already complete. Applying idempotent V1.1-04 query hardening."
-            $MigrationFiles = @("database/postgresql/020_postgresql_query_hardening.sql")
+            Write-Host "GA-08 tenant RLS coverage already complete. Applying idempotent V1.1-04 query hardening and V1.1-08 terminal hardening."
+            $MigrationFiles = @(
+                "database/postgresql/020_postgresql_query_hardening.sql",
+                "database/postgresql/021_terminal_device_management_hardening.sql"
+            )
         }
         else {
             $MigrationFiles = @(
                 "database/postgresql/020_ga08_complete_tenant_rls.sql",
-                "database/postgresql/020_postgresql_query_hardening.sql"
+                "database/postgresql/020_postgresql_query_hardening.sql",
+                "database/postgresql/021_terminal_device_management_hardening.sql"
             )
         }
     }
@@ -203,7 +208,8 @@ SELECT NOT EXISTS (
             "database/postgresql/018_sync_e2e_contract_hardening.sql",
             "database/postgresql/019_update_release_cohort_targeting.sql",
             "database/postgresql/020_ga08_complete_tenant_rls.sql",
-            "database/postgresql/020_postgresql_query_hardening.sql"
+            "database/postgresql/020_postgresql_query_hardening.sql",
+            "database/postgresql/021_terminal_device_management_hardening.sql"
         )
     }
 }

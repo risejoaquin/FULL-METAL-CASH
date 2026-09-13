@@ -185,4 +185,220 @@ public sealed class TerminalEnrollmentService : ITerminalEnrollmentService
 
         return revoked;
     }
+
+    public async Task<TerminalDetailResponse?> GetTerminalAsync(Guid terminalId, CancellationToken cancellationToken)
+    {
+        Guid? tenantId = _tenantContext.TenantId;
+        if (!tenantId.HasValue)
+        {
+            return null;
+        }
+
+        return await _repository.GetTerminalAsync(tenantId.Value, terminalId, cancellationToken);
+    }
+
+    public async Task<TerminalDetailResponse?> AssignStoreAsync(Guid terminalId, Guid newStoreId, CancellationToken cancellationToken)
+    {
+        Guid? tenantId = _tenantContext.TenantId;
+        if (!tenantId.HasValue)
+        {
+            _logger.LogWarning("Terminal store assignment rejected: missing tenant context");
+            return null;
+        }
+
+        bool storeExists = await _repository.StoreExistsAsync(tenantId.Value, newStoreId, cancellationToken);
+        if (!storeExists)
+        {
+            _logger.LogWarning("Terminal store assignment rejected: store {StoreId} does not exist for tenant {TenantId}", newStoreId, tenantId.Value);
+            return null;
+        }
+
+        bool updated = await _repository.AssignTerminalStoreAsync(tenantId.Value, terminalId, newStoreId, cancellationToken);
+        if (!updated)
+        {
+            _logger.LogWarning("Terminal store assignment failed for terminal {TerminalId}", terminalId);
+            return null;
+        }
+
+        var payload = new
+        {
+            terminalId,
+            tenantId = tenantId.Value,
+            storeId = newStoreId,
+            reassignedAt = _clock.UtcNow
+        };
+
+        await _syncChangeWriter.AppendAsync(
+            tenantId.Value,
+            newStoreId,
+            "terminal.updated",
+            terminalId,
+            "update",
+            1,
+            JsonSerializer.SerializeToElement(payload, JsonOptions),
+            _tenantContext.TerminalId,
+            cancellationToken);
+
+        _logger.LogInformation("Terminal {TerminalId} reassigned to store {StoreId} for tenant {TenantId}; sync change produced",
+            terminalId, newStoreId, tenantId.Value);
+
+        return await _repository.GetTerminalAsync(tenantId.Value, terminalId, cancellationToken);
+    }
+
+    public async Task<bool> DisableTerminalAsync(Guid terminalId, CancellationToken cancellationToken)
+    {
+        Guid? tenantId = _tenantContext.TenantId;
+        if (!tenantId.HasValue)
+        {
+            return false;
+        }
+
+        bool disabled = await _repository.DisableTerminalAsync(tenantId.Value, terminalId, cancellationToken);
+        if (disabled)
+        {
+            var payload = new
+            {
+                terminalId,
+                tenantId = tenantId.Value,
+                status = "blocked",
+                hardLockReason = "disabled",
+                disabledAt = _clock.UtcNow
+            };
+
+            await _syncChangeWriter.AppendAsync(
+                tenantId.Value,
+                null,
+                "terminal.updated",
+                terminalId,
+                "update",
+                1,
+                JsonSerializer.SerializeToElement(payload, JsonOptions),
+                _tenantContext.TerminalId,
+                cancellationToken);
+
+            _logger.LogInformation("Terminal disabled for tenant {TenantId} terminal {TerminalId}; sync change produced", tenantId.Value, terminalId);
+        }
+        else
+        {
+            _logger.LogWarning("Terminal disable requested for unknown or already revoked terminal {TerminalId}", terminalId);
+        }
+
+        return disabled;
+    }
+
+    public async Task<bool> EnableTerminalAsync(Guid terminalId, CancellationToken cancellationToken)
+    {
+        Guid? tenantId = _tenantContext.TenantId;
+        if (!tenantId.HasValue)
+        {
+            return false;
+        }
+
+        bool enabled = await _repository.EnableTerminalAsync(tenantId.Value, terminalId, cancellationToken);
+        if (enabled)
+        {
+            var payload = new
+            {
+                terminalId,
+                tenantId = tenantId.Value,
+                status = "active",
+                hardLockReason = (string?)null,
+                enabledAt = _clock.UtcNow
+            };
+
+            await _syncChangeWriter.AppendAsync(
+                tenantId.Value,
+                null,
+                "terminal.updated",
+                terminalId,
+                "update",
+                1,
+                JsonSerializer.SerializeToElement(payload, JsonOptions),
+                _tenantContext.TerminalId,
+                cancellationToken);
+
+            _logger.LogInformation("Terminal enabled for tenant {TenantId} terminal {TerminalId}; sync change produced", tenantId.Value, terminalId);
+        }
+        else
+        {
+            _logger.LogWarning("Terminal enable failed for terminal {TerminalId} (may be revoked or not found)", terminalId);
+        }
+
+        return enabled;
+    }
+
+    public async Task<TerminalHeartbeatResponse?> RecordHeartbeatAsync(TerminalHeartbeatRequest request, CancellationToken cancellationToken)
+    {
+        Guid? tenantId = _tenantContext.TenantId;
+        Guid? terminalId = _tenantContext.TerminalId;
+
+        if (!tenantId.HasValue || !terminalId.HasValue)
+        {
+            _logger.LogWarning("Heartbeat rejected: missing tenant or terminal context");
+            return null;
+        }
+
+        string? deviceHealthJson = request.DeviceHealth is not null
+            ? JsonSerializer.Serialize(request.DeviceHealth with { ReportedAtUtc = _clock.UtcNow }, JsonOptions)
+            : null;
+
+        TerminalHeartbeatResponse? response = await _repository.RecordHeartbeatAsync(
+            tenantId.Value,
+            terminalId.Value,
+            request.AppVersion,
+            request.LocalDbVersion,
+            request.LastSyncCursor,
+            deviceHealthJson,
+            cancellationToken);
+
+        if (response is not null)
+        {
+            _logger.LogInformation("Heartbeat recorded for tenant {TenantId} terminal {TerminalId}", tenantId.Value, terminalId.Value);
+        }
+
+        return response;
+    }
+
+    public async Task<TerminalDeviceHealthDto?> GetDeviceHealthAsync(Guid terminalId, CancellationToken cancellationToken)
+    {
+        Guid? tenantId = _tenantContext.TenantId;
+        if (!tenantId.HasValue)
+        {
+            return null;
+        }
+
+        return await _repository.GetDeviceHealthAsync(tenantId.Value, terminalId, cancellationToken);
+    }
+
+    public async Task<TerminalRemoteConfigMetadata?> GetRemoteConfigAsync(Guid terminalId, CancellationToken cancellationToken)
+    {
+        Guid? tenantId = _tenantContext.TenantId;
+        if (!tenantId.HasValue)
+        {
+            return null;
+        }
+
+        return await _repository.GetRemoteConfigAsync(tenantId.Value, terminalId, cancellationToken);
+    }
+
+    public async Task<TerminalRemoteConfigMetadata?> UpdateRemoteConfigAsync(Guid terminalId, TerminalRemoteConfigMetadata metadata, CancellationToken cancellationToken)
+    {
+        Guid? tenantId = _tenantContext.TenantId;
+        if (!tenantId.HasValue)
+        {
+            return null;
+        }
+
+        TerminalRemoteConfigMetadata updatedMetadata = metadata with { UpdatedAtUtc = _clock.UtcNow };
+        string json = JsonSerializer.Serialize(updatedMetadata, JsonOptions);
+
+        bool updated = await _repository.UpdateRemoteConfigAsync(tenantId.Value, terminalId, json, cancellationToken);
+        if (!updated)
+        {
+            return null;
+        }
+
+        _logger.LogInformation("Remote config updated for tenant {TenantId} terminal {TerminalId}", tenantId.Value, terminalId);
+        return updatedMetadata;
+    }
 }

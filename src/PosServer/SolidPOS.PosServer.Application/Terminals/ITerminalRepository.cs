@@ -18,4 +18,27 @@ public interface ITerminalRepository
     Task<bool> RevokeTerminalAsync(Guid tenantId, Guid terminalId, CancellationToken cancellationToken);
 
     Task<bool> IsTerminalActiveAsync(Guid tenantId, Guid terminalId, CancellationToken cancellationToken);
+
+    Task<TerminalDetailResponse?> GetTerminalAsync(Guid tenantId, Guid terminalId, CancellationToken cancellationToken);
+
+    Task<bool> AssignTerminalStoreAsync(Guid tenantId, Guid terminalId, Guid storeId, CancellationToken cancellationToken);
+
+    Task<bool> DisableTerminalAsync(Guid tenantId, Guid terminalId, CancellationToken cancellationToken);
+
+    Task<bool> EnableTerminalAsync(Guid tenantId, Guid terminalId, CancellationToken cancellationToken);
+
+    Task<TerminalHeartbeatResponse?> RecordHeartbeatAsync(
+        Guid tenantId,
+        Guid terminalId,
+        string? appVersion,
+        int? localDbVersion,
+        string? lastSyncCursor,
+        string? deviceHealthJson,
+        CancellationToken cancellationToken);
+
+    Task<TerminalDeviceHealthDto?> GetDeviceHealthAsync(Guid tenantId, Guid terminalId, CancellationToken cancellationToken);
+
+    Task<TerminalRemoteConfigMetadata?> GetRemoteConfigAsync(Guid tenantId, Guid terminalId, CancellationToken cancellationToken);
+
+    Task<bool> UpdateRemoteConfigAsync(Guid tenantId, Guid terminalId, string remoteConfigJson, CancellationToken cancellationToken);
 }

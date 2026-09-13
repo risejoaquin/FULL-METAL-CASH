@@ -27,5 +27,8 @@ psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/01
 psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/017_pos_operational_completion.sql"
 psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/018_sync_e2e_contract_hardening.sql"
 psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/019_update_release_cohort_targeting.sql"
+psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/020_ga08_complete_tenant_rls.sql"
+psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/020_postgresql_query_hardening.sql"
+psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${ROOT_DIR}/database/postgresql/021_terminal_device_management_hardening.sql"
 
 echo "PostgreSQL migrations applied."
