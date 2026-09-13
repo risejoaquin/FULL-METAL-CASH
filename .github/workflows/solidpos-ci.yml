@@ -62,6 +62,10 @@ jobs:
         shell: pwsh
         run: ./scripts/v1.1/validate-v1.1-06-sync-self-healing.ps1 -StaticOnly
 
+      - name: V1.1-07 offline diagnostics support bundle static contract
+        shell: pwsh
+        run: ./scripts/v1.1/validate-v1.1-07-offline-diagnostics-support-bundle.ps1 -StaticOnly
+
       - name: Restore
         shell: pwsh
         run: dotnet restore solidpos-platform.sln

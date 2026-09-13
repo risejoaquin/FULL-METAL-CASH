@@ -15,6 +15,7 @@ using SolidPOS.PosCore.Application.Branding;
 using SolidPOS.PosCore.Infrastructure.Branding;
 using SolidPOS.PosCore.Application.Updates;
 using SolidPOS.PosCore.Infrastructure.Updates;
+using SolidPOS.PosCore.Application.Diagnostics;
 
 static string GetOption(string[] args, string name, string? fallback = null)
 {
@@ -74,7 +75,7 @@ static DateTimeOffset? ReadNullableDateTimeOffset(JsonElement root, string name)
 
 if (args.Length == 0)
 {
-    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status, queue-receipt-print, process-print-jobs, open-cash-drawer-hardware, scan-barcode, authorize-payment-terminal, hardware-status, verify-local-integrity, repair-local-runtime, backup-local-db, recovery-journal, seed-resilience-fixture, create-branding-package, validate-branding-package, show-branding-package, create-update-package, validate-update-package, show-update-package, sale-offline-from-cache-cash-with-inventory");
+    Console.WriteLine("SolidPOS PosCore CLI commands: init, bind, sync-catalog, sync-inventory-cache, catalog-status, inventory-status, sale-offline, sale-offline-from-cache, sale-offline-from-cache-with-inventory, queue-health-check, outbox-status, sync-push, retry-failed, requeue-latest-synced, fail-first-pending, inventory-reconcile, open-local-shift, cash-in, cash-out, cash-status, close-local-shift, sale-offline-from-cache-cash, sync-pull, pull-status, save-remote-sale, save-remote-receipt, readmodel-status, sync-local-user, login-local, require-permission-local, whoami-local, logout-local, auth-status, queue-receipt-print, process-print-jobs, open-cash-drawer-hardware, scan-barcode, authorize-payment-terminal, hardware-status, verify-local-integrity, repair-local-runtime, backup-local-db, recovery-journal, seed-resilience-fixture, create-branding-package, validate-branding-package, show-branding-package, create-update-package, validate-update-package, show-update-package, sale-offline-from-cache-cash-with-inventory, export-support-bundle, support-bundle");
     return 0;
 }
 
@@ -936,6 +937,28 @@ switch (command)
         {
             Console.WriteLine($"Recovery journal entry. id={entry.Id}; operation={entry.Operation}; status={entry.Status}; startedAt={entry.StartedAtUtc:O}; completedAt={entry.CompletedAtUtc:O}; message={entry.Message}");
         }
+        return 0;
+    }
+
+    case "export-support-bundle":
+    case "support-bundle":
+    {
+        var output = GetOption(args, "--output", Path.Combine(Environment.CurrentDirectory, $"support-bundle-{DateTimeOffset.UtcNow:yyyyMMddHHmmss}.zip"));
+        var logDir = GetOption(args, "--log-dir", string.Empty);
+        var logFile = GetOption(args, "--log-file", string.Empty);
+        var asDir = GetOption(args, "--as-dir", "false").Equals("true", StringComparison.OrdinalIgnoreCase);
+
+        var service = new SupportBundleService(repository, repository, dbPath, new SystemClock());
+        var options = new SupportBundleExportOptions
+        {
+            OutputPath = output,
+            AsDirectory = asDir,
+            LogDirectory = string.IsNullOrWhiteSpace(logDir) ? null : logDir,
+            LogFiles = string.IsNullOrWhiteSpace(logFile) ? Array.Empty<string>() : new[] { logFile }
+        };
+
+        var result = await service.ExportBundleAsync(options, CancellationToken.None).ConfigureAwait(false);
+        Console.WriteLine($"Support bundle exported. output={result.OutputPath}; format={result.Format}; filesCount={result.FilesCount}; bytes={result.Bytes}; generatedAt={result.GeneratedAtUtc:O}; schemaVersion={result.SchemaVersion}; syncContract={result.SyncContract}");
         return 0;
     }
 
