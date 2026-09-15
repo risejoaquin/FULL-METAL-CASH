@@ -14,9 +14,13 @@ public sealed record UpdatePackageManifest(
     string MinimumPosBuilderVersion,
     string BrandingPackageVersion,
     DateTimeOffset GeneratedAtUtc,
-    string Notes)
+    string Notes,
+    bool IsSigned = false,
+    string? SigningThumbprint = null,
+    string? RollbackVersion = null,
+    string? RollbackPackageHash = null)
 {
-    public const string CurrentManifestVersion = "1.0";
+    public const string CurrentManifestVersion = "1.1";
 }
 
 public sealed record UpdatePackageValidationResult(

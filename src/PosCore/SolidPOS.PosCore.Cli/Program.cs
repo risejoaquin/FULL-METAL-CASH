@@ -169,6 +169,12 @@ switch (command)
         };
         await File.WriteAllLinesAsync(packagePath, packageLines).ConfigureAwait(false);
 
+        var isSignedOption = GetOption(args, "--signed", null);
+        var isSigned = isSignedOption != null && (string.Equals(isSignedOption, "true", StringComparison.OrdinalIgnoreCase) || isSignedOption == "");
+        var signingThumbprint = GetOption(args, "--signing-thumbprint", null);
+        var rollbackVersion = GetOption(args, "--rollback-version", null);
+        var rollbackPackageHash = GetOption(args, "--rollback-package-hash", null);
+
         var service = new UpdatePackageManifestService(new JsonUpdatePackageManifestStore());
         var manifest = service.CreateFromPackageFile(
             tenantId,
@@ -182,7 +188,11 @@ switch (command)
             minimumPosBuilderVersion,
             brandingPackageVersion,
             DateTimeOffset.UtcNow,
-            notes);
+            notes,
+            isSigned: isSigned,
+            signingThumbprint: signingThumbprint,
+            rollbackVersion: rollbackVersion,
+            rollbackPackageHash: rollbackPackageHash);
 
         await service.SaveValidatedAsync(manifest, manifestPath, packagePath).ConfigureAwait(false);
         Console.WriteLine($"Update package created. tenantId={manifest.TenantId}; appName={manifest.AppName}; releaseVersion={manifest.ReleaseVersion}; channel={manifest.Channel}; packageFile={manifest.PackageFileName}; sizeBytes={manifest.PackageSizeBytes}; sha256={manifest.Sha256}; manifest={manifestPath}");
@@ -193,10 +203,17 @@ switch (command)
     {
         var manifestPath = GetOption(args, "--manifest");
         var packagePath = GetOption(args, "--package", string.Empty);
+        var expectedChannel = GetOption(args, "--channel", null);
+        var requireSignatureOption = GetOption(args, "--require-signature", null);
+        var requireSignature = requireSignatureOption != null && (string.Equals(requireSignatureOption, "true", StringComparison.OrdinalIgnoreCase) || requireSignatureOption == "");
         var store = new JsonUpdatePackageManifestStore();
         var service = new UpdatePackageManifestService(store);
         var manifest = await store.LoadAsync(manifestPath).ConfigureAwait(false);
-        var validation = service.Validate(manifest, string.IsNullOrWhiteSpace(packagePath) ? null : packagePath);
+        var validation = service.Validate(
+            manifest,
+            string.IsNullOrWhiteSpace(packagePath) ? null : packagePath,
+            expectedChannel,
+            requireSignature);
         Console.WriteLine($"Update package manifest validation. isValid={validation.IsValid}; errors={validation.Errors.Count}; warnings={validation.Warnings.Count}; releaseVersion={manifest.ReleaseVersion}; channel={manifest.Channel}; sha256={manifest.Sha256}");
         foreach (var error in validation.Errors) Console.WriteLine($"Update package validation error. message={error}");
         foreach (var warning in validation.Warnings) Console.WriteLine($"Update package validation warning. message={warning}");

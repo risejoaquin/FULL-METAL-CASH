@@ -55,20 +55,29 @@ public static class PosBuilderSelfTestRunner
                     $"channel={GetOption(args, "--channel") ?? "stable"}"
                 });
 
+                var channel = GetOption(args, "--channel") ?? "stable";
+                var signedOption = GetOption(args, "--signed");
+                var isSigned = !string.IsNullOrWhiteSpace(signedOption)
+                    ? bool.TryParse(signedOption, out var parsedSigned) && parsedSigned
+                    : !string.Equals(channel, "dev", StringComparison.OrdinalIgnoreCase);
+                var signingThumbprint = GetOption(args, "--signing-thumbprint") ?? (isSigned ? "A1B2C3D4E5F6789012345678901234567890ABCD" : null);
+
                 var updateService = new UpdatePackageManifestService(new JsonUpdatePackageManifestStore());
                 var updateManifest = updateService.CreateFromPackageFile(
                     Guid.Parse(viewModel.TenantId),
                     viewModel.TenantName,
                     viewModel.AppName,
                     GetOption(args, "--release-version") ?? "1.0.0",
-                    GetOption(args, "--channel") ?? "stable",
+                    channel,
                     "local-poscore-package",
                     updatePackagePath,
                     "1.0.0",
                     "1.0.0",
                     "1.0",
                     DateTimeOffset.UtcNow,
-                    "PosBuilder self-test update package.");
+                    "PosBuilder self-test update package.",
+                    isSigned: isSigned,
+                    signingThumbprint: signingThumbprint);
                 updateService.SaveValidatedAsync(updateManifest, updateManifestPath, updatePackagePath).GetAwaiter().GetResult();
                 var updateValidation = updateService.Validate(updateManifest, updatePackagePath);
                 lines.Add($"Update package manifest generated: releaseVersion={updateManifest.ReleaseVersion}; channel={updateManifest.Channel}; packageFile={updateManifest.PackageFileName}; sha256={updateManifest.Sha256}");

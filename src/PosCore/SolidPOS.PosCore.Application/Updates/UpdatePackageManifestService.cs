@@ -13,7 +13,8 @@ public interface IUpdatePackageManifestStore
 public sealed class UpdatePackageManifestService
 {
     private static readonly Regex Sha256Hex = new("^[0-9a-fA-F]{64}$", RegexOptions.Compiled);
-    private static readonly HashSet<string> SupportedChannels = new(StringComparer.OrdinalIgnoreCase) { "stable", "dev" };
+    public static readonly HashSet<string> SupportedChannels = new(StringComparer.OrdinalIgnoreCase) { "stable", "beta", "dev" };
+    public static readonly HashSet<string> ProductionChannels = new(StringComparer.OrdinalIgnoreCase) { "stable", "beta" };
     private readonly IUpdatePackageManifestStore store;
 
     public UpdatePackageManifestService(IUpdatePackageManifestStore store)
@@ -33,7 +34,11 @@ public sealed class UpdatePackageManifestService
         string minimumPosBuilderVersion,
         string brandingPackageVersion,
         DateTimeOffset generatedAtUtc,
-        string notes)
+        string notes,
+        bool isSigned = false,
+        string? signingThumbprint = null,
+        string? rollbackVersion = null,
+        string? rollbackPackageHash = null)
     {
         if (!File.Exists(packagePath)) throw new FileNotFoundException("Update package file not found.", packagePath);
 
@@ -52,10 +57,18 @@ public sealed class UpdatePackageManifestService
             NormalizeRequired(minimumPosBuilderVersion, nameof(minimumPosBuilderVersion)),
             NormalizeRequired(brandingPackageVersion, nameof(brandingPackageVersion)),
             generatedAtUtc,
-            NormalizeOptional(notes));
+            NormalizeOptional(notes),
+            isSigned,
+            NormalizeOptional(signingThumbprint),
+            NormalizeOptional(rollbackVersion),
+            NormalizeOptional(rollbackPackageHash));
     }
 
-    public UpdatePackageValidationResult Validate(UpdatePackageManifest manifest, string? packagePath = null)
+    public UpdatePackageValidationResult Validate(
+        UpdatePackageManifest manifest,
+        string? packagePath = null,
+        string? expectedChannel = null,
+        bool requireSignatureForProduction = false)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -64,15 +77,55 @@ public sealed class UpdatePackageManifestService
         if (string.IsNullOrWhiteSpace(manifest.TenantName)) errors.Add("tenantName is required.");
         if (string.IsNullOrWhiteSpace(manifest.AppName)) errors.Add("appName is required.");
         if (string.IsNullOrWhiteSpace(manifest.ReleaseVersion)) errors.Add("releaseVersion is required.");
-        if (!SupportedChannels.Contains(manifest.Channel)) errors.Add("channel must be stable or dev.");
+        if (string.IsNullOrWhiteSpace(manifest.Channel) || !SupportedChannels.Contains(manifest.Channel))
+        {
+            errors.Add("channel must be stable, beta, or dev.");
+        }
+
         if (string.IsNullOrWhiteSpace(manifest.PackageKind)) errors.Add("packageKind is required.");
         if (string.IsNullOrWhiteSpace(manifest.PackageFileName)) errors.Add("packageFileName is required.");
         if (manifest.PackageSizeBytes <= 0) errors.Add("packageSizeBytes must be greater than zero.");
-        if (!Sha256Hex.IsMatch(manifest.Sha256)) errors.Add("sha256 must be a 64 character hexadecimal string.");
+        if (string.IsNullOrWhiteSpace(manifest.Sha256) || !Sha256Hex.IsMatch(manifest.Sha256)) errors.Add("sha256 must be a 64 character hexadecimal string.");
         if (string.IsNullOrWhiteSpace(manifest.MinimumPosCoreVersion)) errors.Add("minimumPosCoreVersion is required.");
         if (string.IsNullOrWhiteSpace(manifest.MinimumPosBuilderVersion)) errors.Add("minimumPosBuilderVersion is required.");
         if (string.IsNullOrWhiteSpace(manifest.BrandingPackageVersion)) errors.Add("brandingPackageVersion is required.");
         if (manifest.GeneratedAtUtc == default) errors.Add("generatedAtUtc is required.");
+
+        if (!string.IsNullOrWhiteSpace(expectedChannel))
+        {
+            var normalizedExpected = expectedChannel.Trim().ToLowerInvariant();
+            if (!string.Equals(manifest.Channel, normalizedExpected, StringComparison.OrdinalIgnoreCase))
+            {
+                errors.Add($"channel mismatch: manifest channel '{manifest.Channel}' does not match expected channel '{normalizedExpected}'.");
+            }
+        }
+
+        if (manifest.PackageFileName.Contains("-stable-", StringComparison.OrdinalIgnoreCase) && !string.Equals(manifest.Channel, "stable", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"package file name indicates stable channel, but manifest specifies channel '{manifest.Channel}'.");
+        }
+        else if (manifest.PackageFileName.Contains("-beta-", StringComparison.OrdinalIgnoreCase) && !string.Equals(manifest.Channel, "beta", StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"package file name indicates beta channel, but manifest specifies channel '{manifest.Channel}'.");
+        }
+
+        if (manifest.IsSigned && string.IsNullOrWhiteSpace(manifest.SigningThumbprint))
+        {
+            errors.Add("signed package requires a signing thumbprint.");
+        }
+
+        if (requireSignatureForProduction && ProductionChannels.Contains(manifest.Channel))
+        {
+            if (!manifest.IsSigned || string.IsNullOrWhiteSpace(manifest.SigningThumbprint))
+            {
+                errors.Add($"production channel '{manifest.Channel}' requires a signed package artifact.");
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(manifest.RollbackPackageHash) && !Sha256Hex.IsMatch(manifest.RollbackPackageHash))
+        {
+            errors.Add("rollbackPackageHash must be a 64 character hexadecimal string.");
+        }
 
         if (!string.IsNullOrWhiteSpace(packagePath))
         {
@@ -96,9 +149,23 @@ public sealed class UpdatePackageManifestService
         return new UpdatePackageValidationResult(errors.Count == 0, errors, warnings);
     }
 
-    public async Task SaveValidatedAsync(UpdatePackageManifest manifest, string manifestPath, string? packagePath = null, CancellationToken cancellationToken = default)
+    public UpdatePackageValidationResult ValidateProductionPolicy(
+        UpdatePackageManifest manifest,
+        string? packagePath = null,
+        string? expectedChannel = null)
     {
-        var validation = Validate(manifest, packagePath);
+        return Validate(manifest, packagePath, expectedChannel, requireSignatureForProduction: true);
+    }
+
+    public async Task SaveValidatedAsync(
+        UpdatePackageManifest manifest,
+        string manifestPath,
+        string? packagePath = null,
+        string? expectedChannel = null,
+        bool requireSignatureForProduction = false,
+        CancellationToken cancellationToken = default)
+    {
+        var validation = Validate(manifest, packagePath, expectedChannel, requireSignatureForProduction);
         if (!validation.IsValid)
         {
             throw new InvalidOperationException("Update package manifest is invalid: " + string.Join("; ", validation.Errors));
@@ -107,10 +174,15 @@ public sealed class UpdatePackageManifestService
         await store.SaveAsync(manifest, manifestPath, cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task<UpdatePackageManifest> LoadValidatedAsync(string manifestPath, string? packagePath = null, CancellationToken cancellationToken = default)
+    public async Task<UpdatePackageManifest> LoadValidatedAsync(
+        string manifestPath,
+        string? packagePath = null,
+        string? expectedChannel = null,
+        bool requireSignatureForProduction = false,
+        CancellationToken cancellationToken = default)
     {
         var manifest = await store.LoadAsync(manifestPath, cancellationToken).ConfigureAwait(false);
-        var validation = Validate(manifest, packagePath);
+        var validation = Validate(manifest, packagePath, expectedChannel, requireSignatureForProduction);
         if (!validation.IsValid)
         {
             throw new InvalidOperationException("Update package manifest is invalid: " + string.Join("; ", validation.Errors));
@@ -135,7 +207,7 @@ public sealed class UpdatePackageManifestService
     private static string NormalizeChannel(string channel)
     {
         var normalized = NormalizeRequired(channel, nameof(channel)).ToLowerInvariant();
-        if (!SupportedChannels.Contains(normalized)) throw new ArgumentException("channel must be stable or dev.", nameof(channel));
+        if (!SupportedChannels.Contains(normalized)) throw new ArgumentException("channel must be stable, beta, or dev.", nameof(channel));
         return normalized;
     }
 
