@@ -74,6 +74,10 @@ jobs:
         shell: pwsh
         run: ./scripts/v1.1/validate-v1.1-09-update-channel-velopack-hardening.ps1 -StaticOnly
 
+      - name: V1.1-10 crash reporting and safe telemetry static contract
+        shell: pwsh
+        run: ./scripts/v1.1/validate-v1.1-10-crash-reporting-safe-telemetry.ps1 -StaticOnly
+
       - name: Restore
         shell: pwsh
         run: dotnet restore solidpos-platform.sln

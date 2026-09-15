@@ -488,4 +488,35 @@ public sealed class TerminalEnrollmentServiceTests
             Options.Create(new JwtOptions { TerminalAccessTokenDays = 7 }),
             Mock.Of<ILogger<TerminalEnrollmentService>>());
     }
+
+    [Fact]
+    public void TerminalDeviceHealthDto_with_optional_crash_evidence_serializes_compatibly()
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var baselineJson = "{\"batteryStatus\":\"charging\",\"batteryLevelPercent\":90,\"cpuArchitecture\":\"X64\",\"osVersion\":\"Windows 11\"}";
+
+        var deserializedBaseline = JsonSerializer.Deserialize<TerminalDeviceHealthDto>(baselineJson, options);
+        Assert.NotNull(deserializedBaseline);
+        Assert.Null(deserializedBaseline.CrashEvidence);
+        Assert.Null(deserializedBaseline.RecentCrashes);
+
+        var crashEvidence = new CrashReportEvidenceDto(
+            CrashId: Guid.NewGuid(),
+            CorrelationId: "crash-test-999",
+            OccurredAtUtc: DateTimeOffset.UtcNow,
+            ExceptionType: "System.InvalidOperationException",
+            SanitizedMessage: "Test crash message",
+            CrashSource: "DispatcherUnhandledException",
+            IsFatal: false);
+
+        var extended = deserializedBaseline with { CrashEvidence = crashEvidence };
+        var extendedJson = JsonSerializer.Serialize(extended, options);
+        Assert.Contains("crashEvidence", extendedJson);
+        Assert.Contains("crash-test-999", extendedJson);
+
+        var deserializedExtended = JsonSerializer.Deserialize<TerminalDeviceHealthDto>(extendedJson, options);
+        Assert.NotNull(deserializedExtended);
+        Assert.NotNull(deserializedExtended.CrashEvidence);
+        Assert.Equal("crash-test-999", deserializedExtended.CrashEvidence.CorrelationId);
+    }
 }

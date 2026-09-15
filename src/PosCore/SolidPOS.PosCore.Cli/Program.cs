@@ -79,13 +79,15 @@ if (args.Length == 0)
     return 0;
 }
 
-var command = args[0];
-var dbPath = GetOption(args, "--db", Path.Combine(Environment.CurrentDirectory, "solidpos-poscore.local.sqlite"));
-var database = new SQLiteLocalDatabase(dbPath);
-var repository = new SQLiteLocalPosRepository(database);
-await repository.InitializeAsync().ConfigureAwait(false);
+try
+{
+    var command = args[0];
+    var dbPath = GetOption(args, "--db", Path.Combine(Environment.CurrentDirectory, "solidpos-poscore.local.sqlite"));
+    var database = new SQLiteLocalDatabase(dbPath);
+    var repository = new SQLiteLocalPosRepository(database);
+    await repository.InitializeAsync().ConfigureAwait(false);
 
-switch (command)
+    switch (command)
 {
 
     case "create-branding-package":
@@ -981,4 +983,13 @@ switch (command)
 
     default:
         throw new InvalidOperationException($"Unknown command: {command}");
+}
+}
+catch (Exception ex)
+{
+    var reporter = new CrashReportService();
+    var report = reporter.CreateReport(ex, crashSource: "poscore-cli", isFatal: true);
+    reporter.PersistCrashReportSynchronous(report);
+    Console.Error.WriteLine($"[CRASH] Command failed safely. type={report.ExceptionType}; message={report.SanitizedMessage}; crashId={report.CrashId}");
+    return 1;
 }

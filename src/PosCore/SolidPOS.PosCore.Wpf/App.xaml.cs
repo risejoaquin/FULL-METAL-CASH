@@ -2,17 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 using SolidPOS.PosCore.Wpf.Composition;
 using SolidPOS.PosCore.Application.Branding;
 using SolidPOS.PosCore.Infrastructure.Branding;
 using SolidPOS.PosCore.Application.Updates;
 using SolidPOS.PosCore.Infrastructure.Updates;
+using SolidPOS.PosCore.Application.Diagnostics;
 
 namespace SolidPOS.PosCore.Wpf;
 
 public partial class App : System.Windows.Application
 {
+    private static readonly CrashReportService CrashReporter = new();
+    private static int _inCrashHandler;
+
     private static string? GetOption(IReadOnlyList<string> args, string name)
     {
         for (var index = 0; index < args.Count - 1; index++)
@@ -24,6 +30,7 @@ public partial class App : System.Windows.Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        RegisterCrashHandlers();
         base.OnStartup(e);
 
         if (e.Args.Any(arg => string.Equals(arg, "--self-test", StringComparison.OrdinalIgnoreCase)))
@@ -63,6 +70,7 @@ public partial class App : System.Windows.Application
                 $"Sync visual state ready: {viewModel.SyncStatus.QueueSummary}",
                 $"Cash shift view model ready: {viewModel.CashShift.ExpectedCashSummary}",
                 $"QSR totals: totalCents={viewModel.Sales.TotalCents}; tenderedCents={viewModel.Sales.TenderedCents}; changeCents={viewModel.Sales.ChangeCents}; expectedCashCents={viewModel.CashShift.ExpectedCashCents}",
+                "Crash reporting handlers registered: DispatcherUnhandledException, AppDomain.UnhandledException, TaskScheduler.UnobservedTaskException.",
                 "PosCore WPF sales flow QSR validation completed."
             };
 
@@ -97,5 +105,92 @@ public partial class App : System.Windows.Application
         };
 
         shell.Show();
+    }
+
+    private void RegisterCrashHandlers()
+    {
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+        AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+        TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
+    }
+
+    private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        if (System.Threading.Interlocked.CompareExchange(ref _inCrashHandler, 1, 0) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var report = CrashReporter.CreateReport(
+                e.Exception,
+                crashSource: nameof(DispatcherUnhandledException),
+                isFatal: false);
+
+            CrashReporter.PersistCrashReportSynchronous(report);
+            Console.Error.WriteLine($"[CRASH] UI thread exception captured safely. crashId={report.CrashId}; type={report.ExceptionType}; message={report.SanitizedMessage}");
+
+            // Per specification: Only set Handled=true if recovery semantics prove continuation is safe.
+            // Otherwise preserve normal termination semantics.
+            e.Handled = false;
+        }
+        catch
+        {
+            // Defensive failure isolation
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _inCrashHandler, 0);
+        }
+    }
+
+    private void OnAppDomainUnhandledException(object sender, UnhandledExceptionEventArgs e)
+    {
+        if (System.Threading.Interlocked.CompareExchange(ref _inCrashHandler, 1, 0) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var ex = e.ExceptionObject as Exception ?? new InvalidOperationException($"AppDomain unhandled exception: {e.ExceptionObject}");
+            var report = CrashReporter.CreateReport(
+                ex,
+                crashSource: nameof(AppDomain) + ".UnhandledException",
+                isFatal: e.IsTerminating);
+
+            CrashReporter.PersistCrashReportSynchronous(report);
+            Console.Error.WriteLine($"[CRASH] Fatal process exception captured safely. crashId={report.CrashId}; type={report.ExceptionType}; isTerminating={e.IsTerminating}");
+        }
+        catch
+        {
+            // Defensive failure isolation
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _inCrashHandler, 0);
+        }
+    }
+
+    private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
+    {
+        try
+        {
+            var report = CrashReporter.CreateReport(
+                e.Exception,
+                crashSource: nameof(TaskScheduler) + ".UnobservedTaskException",
+                isFatal: false);
+
+            CrashReporter.PersistCrashReportSynchronous(report);
+            Console.Error.WriteLine($"[CRASH] Unobserved task exception captured safely. crashId={report.CrashId}; type={report.ExceptionType}");
+
+            // Mark observed so it does not escalate to AppDomain crash if runtime policy would otherwise terminate
+            e.SetObserved();
+        }
+        catch
+        {
+            // Defensive failure isolation
+        }
     }
 }
