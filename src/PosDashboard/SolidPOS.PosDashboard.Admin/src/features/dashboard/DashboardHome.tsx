@@ -59,18 +59,18 @@ export function DashboardHome({ session, activeSection }: { session: LoginRespon
             <h2 className="text-lg font-semibold">Estado de integración</h2>
             <p className="text-sm text-slate-500">{message}</p>
           </div>
-          <Badge tone="good">Iteration 20</Badge>
+          <Badge tone="good">{snapshot?.versionAdoption?.serverVersion ?? 'Schema v4'}</Badge>
         </div>
         <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3">
           <p>Reports: /api/v1/sales, /api/v1/returns</p>
-          <p>Operations: /health/ready, /api/v1/sync/status</p>
+          <p>Operations: /health/ready, /api/v1/sync/status, /api/v1/observability/alerts, /api/v1/terminals</p>
           <p>Audit: /api/v1/audit/events</p>
         </div>
       </Card>
 
-      {activeSection === 'Overview' && <OperationsDashboard snapshot={snapshot} />}
+      {activeSection === 'Overview' && <OperationsDashboard snapshot={snapshot} session={session} />}
       {activeSection === 'Reports' && <ReportsDashboard snapshot={snapshot} />}
-      {activeSection === 'Operations' && <OperationsDashboard snapshot={snapshot} />}
+      {activeSection === 'Operations' && <OperationsDashboard snapshot={snapshot} session={session} />}
       {activeSection === 'Audit' && <AuditDashboard snapshot={snapshot} />}
     </div>
   );

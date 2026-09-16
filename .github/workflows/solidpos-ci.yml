@@ -78,6 +78,23 @@ jobs:
         shell: pwsh
         run: ./scripts/v1.1/validate-v1.1-10-crash-reporting-safe-telemetry.ps1 -StaticOnly
 
+      - name: V1.1-11 posdashboard operations center static contract
+        shell: pwsh
+        run: ./scripts/v1.1/validate-v1.1-11-posdashboard-operations-center.ps1 -StaticOnly
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: PosDashboard build and test
+        working-directory: src/PosDashboard/SolidPOS.PosDashboard.Admin
+        shell: pwsh
+        run: |
+          npm ci
+          npm run self-test
+          npm run build
+
       - name: Restore
         shell: pwsh
         run: dotnet restore solidpos-platform.sln
