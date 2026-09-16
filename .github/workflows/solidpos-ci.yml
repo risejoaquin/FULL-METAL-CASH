@@ -82,6 +82,10 @@ jobs:
         shell: pwsh
         run: ./scripts/v1.1/validate-v1.1-11-posdashboard-operations-center.ps1 -StaticOnly
 
+      - name: V1.1-12 v1.1 release closure static contract
+        shell: pwsh
+        run: ./scripts/v1.1/validate-v1.1-12-v1-1-release-closure.ps1 -StaticOnly
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
