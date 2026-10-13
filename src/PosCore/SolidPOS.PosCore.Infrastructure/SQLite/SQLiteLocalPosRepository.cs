@@ -87,6 +87,27 @@ CREATE TABLE IF NOT EXISTS local_sync_recovery_runs (
   recovered_count INTEGER NOT NULL,
   has_more INTEGER NOT NULL CHECK (has_more IN (0, 1))
 );
+CREATE TABLE IF NOT EXISTS local_sync_recovery_approvals (
+  recovery_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  approver_user_id TEXT NOT NULL,
+  approver_session_id TEXT NOT NULL,
+  approval_reference TEXT NOT NULL,
+  processing_timeout_seconds INTEGER NOT NULL,
+  max_events INTEGER NOT NULL,
+  reason TEXT NOT NULL,
+  approved_at_utc TEXT NOT NULL,
+  expires_at_utc TEXT NOT NULL,
+  consumed_at_utc TEXT NULL
+);
+CREATE TABLE IF NOT EXISTS local_sync_recovery_executors (
+  recovery_id TEXT PRIMARY KEY,
+  executor_user_id TEXT NOT NULL,
+  executor_session_id TEXT NOT NULL,
+  operated_at_utc TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS local_sync_recovery_candidates (
   recovery_id TEXT NOT NULL,
   outbox_event_id TEXT NOT NULL,
@@ -1006,6 +1027,62 @@ WHERE status = $inFlight
     /// produce an audit record but never mutate claims or event statuses.
     /// Scope is always exactly one tenant, store and terminal.
     /// </summary>
+    /// <summary>
+    /// Write a single-use, time-bound and exactly scoped recovery approval only
+    /// for a live approver session with the dedicated Approve permission.
+    /// The executing user must be someone else (enforced at execution).
+    /// </summary>
+    public Task RegisterRecoveryApprovalAsync(
+        LocalSyncRecoveryApprovalRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.RecoveryId == Guid.Empty || request.TenantId == Guid.Empty ||
+            request.StoreId == Guid.Empty || request.TerminalId == Guid.Empty ||
+            request.ApproverSessionId == Guid.Empty)
+            throw new ArgumentException("Approval requires identifiers, scope and approver session.", nameof(request));
+        if (request.ProcessingTimeout < TimeSpan.FromMinutes(5) ||
+            request.ProcessingTimeout > TimeSpan.FromHours(24) ||
+            request.MaxEvents is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(request), "Invalid recovery bounds.");
+        if (string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 256 ||
+            string.IsNullOrWhiteSpace(request.ApprovalReference) || request.ApprovalReference.Length > 128)
+            throw new ArgumentException("Valid reason and approval reference are required.", nameof(request));
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var now = DateTimeOffset.UtcNow;
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        var approverId = RequireAuthorizedRecoverySession(
+            connection, transaction, request.ApproverSessionId, request.TenantId,
+            request.StoreId, LocalSyncRecoveryPermissions.Approve, now);
+
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+INSERT INTO local_sync_recovery_approvals
+    (recovery_id, tenant_id, store_id, terminal_id, approver_user_id,
+     approver_session_id, approval_reference, processing_timeout_seconds,
+     max_events, reason, approved_at_utc, expires_at_utc, consumed_at_utc)
+VALUES ($id, $tenant, $store, $terminal, $user, $session, $reference,
+        $timeout, $max, $reason, $now, $expires, NULL);
+""";
+        command.Parameters.AddWithValue("$id", request.RecoveryId.ToString());
+        command.Parameters.AddWithValue("$tenant", request.TenantId.ToString());
+        command.Parameters.AddWithValue("$store", request.StoreId.ToString());
+        command.Parameters.AddWithValue("$terminal", request.TerminalId.ToString());
+        command.Parameters.AddWithValue("$user", approverId.ToString());
+        command.Parameters.AddWithValue("$session", request.ApproverSessionId.ToString());
+        command.Parameters.AddWithValue("$reference", request.ApprovalReference);
+        command.Parameters.AddWithValue("$timeout", Convert.ToInt64(request.ProcessingTimeout.TotalSeconds));
+        command.Parameters.AddWithValue("$max", request.MaxEvents);
+        command.Parameters.AddWithValue("$reason", request.Reason);
+        command.Parameters.AddWithValue("$now", now.ToString("O"));
+        command.Parameters.AddWithValue("$expires", now.AddMinutes(15).ToString("O"));
+        command.ExecuteNonQuery();
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
     public Task<LocalSyncRecoveryResult> RecoverStaleClaimsWithAuditAsync(
         LocalSyncRecoveryRequest request, CancellationToken cancellationToken = default)
     {
@@ -1032,6 +1109,18 @@ WHERE status = $inFlight
         var cutoff = (utcNow - request.ProcessingTimeout).ToString("O");
         using var connection = _database.OpenConnection();
         using var transaction = connection.BeginTransaction();
+        // Authorization is verified inside the same write transaction as the
+        // state mutation, so closed sessions/revoked permissions and consumed
+        // approvals cannot pass via a stale preflight check.
+        var securityNow = DateTimeOffset.UtcNow;
+        Guid executorId = RequireAuthorizedRecoverySession(
+            connection, transaction, request.ExecutorSessionId, request.TenantId,
+            request.StoreId, LocalSyncRecoveryPermissions.Execute, securityNow);
+        if (!request.DryRun)
+        {
+            ConsumeRecoveryApproval(
+                connection, transaction, request, executorId, securityNow);
+        }
 
         int eligibleCount;
         using (var count = connection.CreateCommand())
@@ -1146,6 +1235,21 @@ VALUES ($id, $tenant, $store, $terminal, $now,
             run.Parameters.AddWithValue("$recovered", recovered);
             run.Parameters.AddWithValue("$more", eligibleCount > candidates.Count ? 1 : 0);
             run.ExecuteNonQuery();
+        }
+
+        using (var identity = connection.CreateCommand())
+        {
+            identity.Transaction = transaction;
+            identity.CommandText = """
+INSERT INTO local_sync_recovery_executors
+    (recovery_id, executor_user_id, executor_session_id, operated_at_utc)
+VALUES ($id, $user, $session, $now);
+""";
+            identity.Parameters.AddWithValue("$id", request.RecoveryId.ToString());
+            identity.Parameters.AddWithValue("$user", executorId.ToString());
+            identity.Parameters.AddWithValue("$session", request.ExecutorSessionId.ToString());
+            identity.Parameters.AddWithValue("$now", securityNow.ToString("O"));
+            identity.ExecuteNonQuery();
         }
 
         foreach (var candidate in candidates)
@@ -2449,6 +2553,85 @@ LIMIT 1;
         command.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
         var value = command.ExecuteScalar();
         return value is null || value == DBNull.Value ? null : DateTimeOffset.Parse((string)value);
+    }
+
+    private static Guid RequireAuthorizedRecoverySession(
+        SqliteConnection connection, SqliteTransaction transaction, Guid sessionId,
+        Guid tenantId, Guid storeId, string permission, DateTimeOffset now)
+    {
+        if (sessionId == Guid.Empty)
+            throw new UnauthorizedAccessException("A valid authenticated local session is required.");
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+SELECT s.user_id, s.created_at_utc, s.expires_at_utc
+FROM local_sessions s
+JOIN local_users u ON u.user_id = s.user_id
+JOIN local_user_permissions p ON p.user_id = u.user_id
+WHERE s.session_id = $session AND s.status = 'active'
+  AND s.tenant_id = $tenant AND s.store_id = $store
+  AND u.tenant_id = $tenant AND u.store_id = $store AND u.is_active = 1
+  AND p.permission_code = $permission
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$session", sessionId.ToString());
+        command.Parameters.AddWithValue("$tenant", tenantId.ToString());
+        command.Parameters.AddWithValue("$store", storeId.ToString());
+        command.Parameters.AddWithValue("$permission", permission);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+            throw new UnauthorizedAccessException("Local recovery session or permission is invalid for this scope.");
+        var id = Guid.Parse(reader.GetString(0));
+        var issued = DateTimeOffset.Parse(reader.GetString(1));
+        var expires = DateTimeOffset.Parse(reader.GetString(2));
+        if (issued > now || expires <= now)
+            throw new UnauthorizedAccessException("Local recovery session has expired or is not yet valid.");
+        return id;
+    }
+
+    private static void ConsumeRecoveryApproval(
+        SqliteConnection connection, SqliteTransaction transaction,
+        LocalSyncRecoveryRequest request, Guid executorId, DateTimeOffset now)
+    {
+        using var select = connection.CreateCommand();
+        select.Transaction = transaction;
+        select.CommandText = """
+SELECT approver_user_id, approval_reference, expires_at_utc, consumed_at_utc,
+       processing_timeout_seconds, max_events, reason
+FROM local_sync_recovery_approvals
+WHERE recovery_id = $id AND tenant_id = $tenant AND store_id = $store
+  AND terminal_id = $terminal;
+""";
+        select.Parameters.AddWithValue("$id", request.RecoveryId.ToString());
+        select.Parameters.AddWithValue("$tenant", request.TenantId.ToString());
+        select.Parameters.AddWithValue("$store", request.StoreId.ToString());
+        select.Parameters.AddWithValue("$terminal", request.TerminalId.ToString());
+        using (var reader = select.ExecuteReader())
+        {
+            if (!reader.Read())
+                throw new UnauthorizedAccessException("No independently recorded approval exists for this recovery.");
+            if (Guid.Parse(reader.GetString(0)) == executorId)
+                throw new UnauthorizedAccessException("Recovery executor cannot approve their own operation.");
+            if (!string.Equals(reader.GetString(1), request.ApprovalReference, StringComparison.Ordinal) ||
+                reader.IsDBNull(2) || DateTimeOffset.Parse(reader.GetString(2)) <= now ||
+                !reader.IsDBNull(3) ||
+                reader.GetInt64(4) != Convert.ToInt64(request.ProcessingTimeout.TotalSeconds) ||
+                reader.GetInt32(5) != request.MaxEvents ||
+                !string.Equals(reader.GetString(6), request.Reason, StringComparison.Ordinal))
+                throw new UnauthorizedAccessException("Recovery approval expired, consumed or does not match the operation.");
+        }
+
+        using var consume = connection.CreateCommand();
+        consume.Transaction = transaction;
+        consume.CommandText = """
+UPDATE local_sync_recovery_approvals
+SET consumed_at_utc = $now
+WHERE recovery_id = $id AND consumed_at_utc IS NULL;
+""";
+        consume.Parameters.AddWithValue("$now", now.ToString("O"));
+        consume.Parameters.AddWithValue("$id", request.RecoveryId.ToString());
+        if (consume.ExecuteNonQuery() != 1)
+            throw new UnauthorizedAccessException("Recovery approval was already consumed.");
     }
 
     private static void InsertRecoveryJournal(SqliteConnection connection, Guid id, string operation, string status, string message, DateTimeOffset startedAtUtc, DateTimeOffset? completedAtUtc)
