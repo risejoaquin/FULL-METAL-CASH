@@ -73,6 +73,14 @@ and rejection of modified allocations even when the total is unchanged.
 `DiscountRefundFinancialTests`: multiple partial refunds, sub-cent edge cases,
 over-return blocking and invariant conservation.
 
+\`PostgreSqlDiscountCartIntegrationTests\`: real PostgreSQL sale creation,
+database-authoritative item prices, persisted discount and receipt details,
+replay idempotency, rejected per-line tampering even with the same total,
+and tenant/store isolation on a dedicated disposable PostgreSQL service.
+\`solidpos-discount-postgresql-e2e.yml\` runs this acceptance on an ephemeral
+GitHub Actions PostgreSQL 16 instance, using a job-local connection string
+built at runtime (no committed password-bearing Npgsql URL).
+
 ### Reproducible validation
 
 ```powershell
@@ -109,9 +117,11 @@ were cancelled by newer commits are **not** evidence of PASS.
 5. **Refund payment workflows:** reversal calculation is implemented, but
    applying partial refunds to the live provider/ledger must use the
    existing trusted refund APIs, transactional checks, and UAT.
-6. **PostgreSQL end-to-end:** CI's ephemeral PostgreSQL role fixture is not
-   an exercised real PostgreSQL sale+discount acceptance/inventory/payment
-   integration test. That gate remains open.
+6. **PostgreSQL end-to-end:** the new dedicated disposable PostgreSQL sale
+   acceptance exercises persisted cart discount totals, receipt/read model,
+   replay and tampering. Production-grade certification still requires
+   broader cash/inventory/refund UAT, performance and real terminal exercises.
+   The unrelated RBAC PostgreSQL fixture alone is not that evidence.
 7. **Receipt/report rendering, WPF UI, stock and historical backfill:** verify
    behavior in a dedicated acceptance/UAT workflow before expanding release
    scope. No migration or automatic production deployment is authorized.
@@ -119,3 +129,12 @@ were cancelled by newer commits are **not** evidence of PASS.
 **Engineering decision:** do not merge or deploy this unreviewed, partially
 gated commercial change. Prioritize approvals, provenance and an isolated
 full-stack PostgreSQL acceptance test, then request PO GO/NO-GO.
+
+## Governance note
+
+The additional PostgreSQL workflow originally included a full disposable
+connection string with a literal fixture password; the existing Windows secret
+scanner correctly rejected this. The workflow was changed to assemble the
+connection from job-local `PG*` environment variables at runtime; **the scanner
+and all existing governance checks remain enabled**. This is a fixture-only
+change, not a new secret, API credential or production connection.
