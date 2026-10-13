@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+
 namespace SolidPOS.DiscountEngine;
 
 /// <summary>A gross, pre-discount sale line in exact integer cents.</summary>
@@ -44,6 +47,19 @@ public sealed record DiscountQuoteResult(
 public static class DiscountCalculator
 {
     private const long MaximumLineCents = 900_000_000_000_000;
+    /// <summary>Identical synthetic line key in offline POS and server v4 replay.</summary>
+    public static Guid GetStableLineId(Guid localSaleId, int zeroBasedLineIndex)
+    {
+        if (localSaleId == Guid.Empty || zeroBasedLineIndex < 0)
+            throw new ArgumentOutOfRangeException(nameof(zeroBasedLineIndex));
+        Span<byte> data = stackalloc byte[20];
+        localSaleId.TryWriteBytes(data);
+        BinaryPrimitives.WriteInt32LittleEndian(data[16..], zeroBasedLineIndex);
+        Span<byte> hash = stackalloc byte[32];
+        SHA256.HashData(data, hash);
+        return new Guid(hash[..16]);
+    }
+
 
     public static DiscountQuoteResult Quote(DiscountQuoteRequest request)
     {
