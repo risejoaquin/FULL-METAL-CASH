@@ -36,15 +36,11 @@ public sealed class HttpRemoteSyncClient : IRemoteSyncClient, IRemoteSyncPullCli
         var duplicateCount = GetInt(root, "duplicateCount");
         var failedCount = GetInt(root, "failedCount") + GetInt(root, "rejectedCount");
 
+        // Never infer acknowledged IDs from batch order or aggregate counters.
+        // The server's per-event results are the only authoritative ACK source.
+        // RemoteSyncPushService validates the resulting IDs and counts before
+        // changing local outbox state; an incomplete response stays pending.
         Guid[] acknowledged = ExtractAcknowledgedEventIds(root);
-        if (acknowledged.Length == 0 && failedCount == 0)
-        {
-            acknowledged = request.Events.Select(item => item.EventId).ToArray();
-        }
-        else if (acknowledged.Length == 0)
-        {
-            acknowledged = request.Events.Take(acceptedCount + duplicateCount).Select(item => item.EventId).ToArray();
-        }
 
         return new RemoteSyncPushResult(
             request.BatchId,
