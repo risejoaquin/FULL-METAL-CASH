@@ -23,8 +23,8 @@ public sealed class SQLiteControlledSyncRecoveryTests
         await repository.InitializeAsync();
         Guid tenant = Guid.NewGuid(), store = Guid.NewGuid(), terminal = Guid.NewGuid();
         Guid foreignTenant = Guid.NewGuid(), foreignStore = Guid.NewGuid(), foreignTerminal = Guid.NewGuid();
-        var target = NewEvent(tenant, store, terminal);
-        var foreign = NewEvent(foreignTenant, foreignStore, foreignTerminal);
+        var target = NewEvent(tenant, store, terminal, sequence: 1);
+        var foreign = NewEvent(foreignTenant, foreignStore, foreignTerminal, sequence: 100);
         await repository.SaveOutboxEventAsync(target);
         await repository.SaveOutboxEventAsync(foreign);
         Assert.Single(await repository.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
@@ -55,8 +55,8 @@ public sealed class SQLiteControlledSyncRecoveryTests
         await repository.InitializeAsync();
         Guid tenant = Guid.NewGuid(), store = Guid.NewGuid();
         Guid targetTerminal = Guid.NewGuid(), otherTerminal = Guid.NewGuid();
-        var target = NewEvent(tenant, store, targetTerminal);
-        var other = NewEvent(tenant, store, otherTerminal);
+        var target = NewEvent(tenant, store, targetTerminal, sequence: 1);
+        var other = NewEvent(tenant, store, otherTerminal, sequence: 100);
         await repository.SaveOutboxEventAsync(target);
         await repository.SaveOutboxEventAsync(other);
         Assert.Single(await repository.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-10)));
