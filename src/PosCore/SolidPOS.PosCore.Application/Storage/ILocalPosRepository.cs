@@ -29,6 +29,23 @@ public interface ILocalPosRepository
     Task<int> RetryFailedOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default);
     Task<int> RecoverRetryPendingOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default) => RetryFailedOutboxEventsAsync(maxAttempts, reason, cancellationToken);
     Task SaveSyncAcknowledgementsAsync(IEnumerable<LocalSyncAcknowledgement> acknowledgements, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Atomically transitions acknowledged outbox events to Synced and records the
+    /// corresponding local evidence. The SQLite runtime overrides this method with
+    /// one database transaction. The compatibility default keeps existing test
+    /// repositories and other ILocalPosRepository implementations working, but
+    /// does not itself provide transactional guarantees.
+    /// </summary>
+    async Task CommitSyncAcknowledgementsAsync(
+        IReadOnlyCollection<LocalSyncAcknowledgement> acknowledgements,
+        DateTimeOffset syncedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(acknowledgements);
+        if (acknowledgements.Count == 0) return;
+        await MarkOutboxSyncedAsync(acknowledgements.Select(item => item.OutboxEventId), syncedAtUtc, cancellationToken).ConfigureAwait(false);
+        await SaveSyncAcknowledgementsAsync(acknowledgements, cancellationToken).ConfigureAwait(false);
+    }
     Task<int> CountOutboxByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default);
     Task<LocalSyncQueueHealthSummary> GetLocalSyncQueueHealthAsync(DateTimeOffset nowUtc, TimeSpan processingTimeout, CancellationToken cancellationToken = default) =>
         Task.FromResult(new LocalSyncQueueHealthSummary(0, 0, 0, 0, null, null, false, false));
