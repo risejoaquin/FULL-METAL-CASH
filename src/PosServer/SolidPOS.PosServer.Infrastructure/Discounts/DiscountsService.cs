@@ -1,4 +1,5 @@
 using System.Globalization;
+using SolidPOS.DiscountEngine;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using SolidPOS.PosServer.Application.Abstractions.Tenancy;
@@ -159,7 +160,8 @@ public sealed class DiscountsService : IDiscountsService
             return new ValidateDiscountResponse(discount.Id, false, rejection, grossCents, 0, grossCents, Formula);
         }
 
-        long discountCents = CalculateDiscount(discount, grossCents);
+        long discountCents = DiscountCalculator.CalculateAmountCents(
+            grossCents, discount.DiscountType, discount.Value);
         long netCents = Math.Max(0, grossCents - discountCents);
         return new ValidateDiscountResponse(discount.Id, true, null, grossCents, discountCents, netCents, Formula);
     }
@@ -204,16 +206,6 @@ public sealed class DiscountsService : IDiscountsService
         }
 
         return null;
-    }
-
-    private static long CalculateDiscount(DiscountResponse discount, long grossCents)
-    {
-        if (discount.DiscountType == "percentage")
-        {
-            return Math.Min(grossCents, ToCents(grossCents * discount.Value / 100m));
-        }
-
-        return Math.Min(grossCents, ToCents(discount.Value));
     }
 
     private async Task<bool> ScopeExistsAsync(Guid tenantId, Guid? storeId, Guid? categoryId, Guid? productId, CancellationToken cancellationToken)
