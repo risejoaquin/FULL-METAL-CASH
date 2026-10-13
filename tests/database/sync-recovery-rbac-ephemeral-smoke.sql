@@ -1,5 +1,5 @@
 -- Test-only SQL for PostgreSQL 16 on the ephemeral GitHub Actions service.
--- Never run against a pre-existing database. Requires 001,002,003 and 022.
+-- Never run against a pre-existing database. Requires 001, 002, 003 and the unapproved role-recovery SQL proposal.
 SET search_path TO pos, public;
 
 DO $$
