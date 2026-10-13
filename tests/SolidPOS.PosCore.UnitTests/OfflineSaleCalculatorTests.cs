@@ -27,6 +27,60 @@ public sealed class OfflineSaleCalculatorTests
         Assert.Contains("Paid amount", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void Validate_rejects_negative_or_over_gross_discounts_before_persistence()
+    {
+        var baseline = CreateSale(totalPaidCents: 4500);
+        foreach (int altered in new[] { -1, 4501 })
+        {
+            var tampered = baseline with
+            {
+                Lines = [baseline.Lines[0] with
+                {
+                    DiscountCents = altered,
+                    DiscountId = Guid.NewGuid()
+                }]
+            };
+            Assert.Throws<InvalidOperationException>(() =>
+                OfflineSaleCalculator.Validate(tampered));
+        }
+    }
+
+    [Fact]
+    public void Validate_refuses_discount_without_a_rule_reference()
+    {
+        var original = CreateSale(totalPaidCents: 4490);
+        var attempted = original with
+        {
+            Lines = [original.Lines[0] with { DiscountCents = 10 }]
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            OfflineSaleCalculator.Validate(attempted));
+    }
+
+    [Fact]
+    public void Validate_refuses_large_quantities_and_payment_overflow()
+    {
+        var original = CreateSale(totalPaidCents: 4500);
+        var extreme = original with
+        {
+            Lines = [original.Lines[0] with { Quantity = int.MaxValue }]
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            OfflineSaleCalculator.Validate(extreme));
+
+        var paymentOverflow = original with
+        {
+            Payments =
+            [
+                new OfflineSalePaymentDraft("cash", int.MaxValue),
+                new OfflineSalePaymentDraft("transfer", int.MaxValue)
+            ]
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            OfflineSaleCalculator.Validate(paymentOverflow));
+    }
+
     private static OfflineSaleDraft CreateSale(int totalPaidCents) => new(
         Guid.NewGuid(),
         Guid.NewGuid(),
