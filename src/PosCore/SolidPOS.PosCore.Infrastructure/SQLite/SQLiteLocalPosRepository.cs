@@ -1,10 +1,11 @@
 using Microsoft.Data.Sqlite;
 using SolidPOS.PosCore.Application.Storage;
+using SolidPOS.PosCore.Application.Auth;
 using SolidPOS.PosCore.Domain;
 
 namespace SolidPOS.PosCore.Infrastructure.SQLite;
 
-public sealed class SQLiteLocalPosRepository : ILocalPosRepository, ILocalResilienceRepository, ILeasedLocalSyncRepository, IControlledLocalSyncRecoveryRepository
+public sealed class SQLiteLocalPosRepository : ILocalPosRepository, ILocalResilienceRepository, ILeasedLocalSyncRepository, IControlledLocalSyncRecoveryRepository, IAuthoritativePermissionCacheStore
 {
     private readonly SQLiteLocalDatabase _database;
 
@@ -268,6 +269,15 @@ CREATE TABLE IF NOT EXISTS local_users (
   is_active INTEGER NOT NULL,
   last_synced_at_utc TEXT NOT NULL,
   max_offline_hours INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS local_authority_snapshot_state (
+  user_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  authority_version INTEGER NOT NULL CHECK (authority_version > 0),
+  issued_at_utc TEXT NOT NULL,
+  applied_at_utc TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS local_user_permissions (
   user_id TEXT NOT NULL,
@@ -1920,6 +1930,162 @@ VALUES ($id, $localSaleId, $tenantId, $storeId, $terminalId, $productId, $varian
         command.ExecuteNonQuery();
     }
 
+
+
+    /// <summary>
+    /// Apply only snapshots provided by the authenticated authority boundary.
+    /// Never overwrite the locally enrolled password or infer privileges from role.
+    /// State, grants, revoked sessions, replay guard and audit are atomic.
+    /// </summary>
+    public Task ApplyVerifiedPermissionSnapshotAsync(
+        VerifiedPermissionSnapshot snapshot, DateTimeOffset appliedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var binding = connection.CreateCommand())
+        {
+            binding.Transaction = transaction;
+            binding.CommandText = "SELECT tenant_id, store_id, terminal_id FROM terminal_binding WHERE id=1;";
+            using var reader = binding.ExecuteReader();
+            if (!reader.Read() || reader.GetString(0) != snapshot.TenantId.ToString() ||
+                reader.GetString(1) != snapshot.StoreId.ToString() ||
+                reader.GetString(2) != snapshot.TerminalId.ToString())
+                throw new UnauthorizedAccessException("Snapshot does not match enrolled terminal.");
+        }
+
+        string oldRole;
+        bool oldActive;
+        using (var user = connection.CreateCommand())
+        {
+            user.Transaction = transaction;
+            user.CommandText =
+                "SELECT tenant_id, store_id, role_code, is_active FROM local_users WHERE user_id=$id;";
+            user.Parameters.AddWithValue("$id", snapshot.UserId.ToString());
+            using var reader = user.ExecuteReader();
+            if (!reader.Read() || reader.GetString(0) != snapshot.TenantId.ToString() ||
+                reader.GetString(1) != snapshot.StoreId.ToString())
+                throw new UnauthorizedAccessException("Cannot enroll or reassign a local user using a role snapshot.");
+            oldRole = reader.GetString(2);
+            oldActive = reader.GetInt32(3) == 1;
+        }
+
+        using (var version = connection.CreateCommand())
+        {
+            version.Transaction = transaction;
+            version.CommandText =
+                "SELECT authority_version FROM local_authority_snapshot_state WHERE user_id=$id;";
+            version.Parameters.AddWithValue("$id", snapshot.UserId.ToString());
+            object? last = version.ExecuteScalar();
+            if (last is not null && snapshot.AuthorityVersion <= Convert.ToInt64(last))
+                throw new InvalidOperationException("Older or duplicate permission authority version.");
+        }
+
+        var oldGrants = new HashSet<string>(StringComparer.Ordinal);
+        using (var read = connection.CreateCommand())
+        {
+            read.Transaction = transaction;
+            read.CommandText = "SELECT permission_code FROM local_user_permissions WHERE user_id=$id;";
+            read.Parameters.AddWithValue("$id", snapshot.UserId.ToString());
+            using var reader = read.ExecuteReader();
+            while (reader.Read()) oldGrants.Add(reader.GetString(0));
+        }
+        bool privilegesChanged = !oldGrants.SetEquals(snapshot.EffectivePermissions) ||
+            oldRole != snapshot.RoleCode || oldActive != snapshot.IsActive;
+        using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText = """
+UPDATE local_users
+SET role_code=$role, is_active=$active, last_synced_at_utc=$synced
+WHERE user_id=$id AND tenant_id=$tenant AND store_id=$store;
+""";
+            update.Parameters.AddWithValue("$role", snapshot.RoleCode);
+            update.Parameters.AddWithValue("$active", snapshot.IsActive ? 1 : 0);
+            update.Parameters.AddWithValue("$synced", appliedAtUtc.ToUniversalTime().ToString("O"));
+            update.Parameters.AddWithValue("$id", snapshot.UserId.ToString());
+            update.Parameters.AddWithValue("$tenant", snapshot.TenantId.ToString());
+            update.Parameters.AddWithValue("$store", snapshot.StoreId.ToString());
+            if (update.ExecuteNonQuery() != 1)
+                throw new UnauthorizedAccessException("Lost local user ownership during permission refresh.");
+        }
+
+        using (var delete = connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM local_user_permissions WHERE user_id=$id;";
+            delete.Parameters.AddWithValue("$id", snapshot.UserId.ToString());
+            delete.ExecuteNonQuery();
+        }
+        foreach (string permission in snapshot.EffectivePermissions)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText =
+                "INSERT INTO local_user_permissions(user_id, permission_code, synced_at_utc) VALUES($id, $code, $at);";
+            insert.Parameters.AddWithValue("$id", snapshot.UserId.ToString());
+            insert.Parameters.AddWithValue("$code", permission);
+            insert.Parameters.AddWithValue("$at", appliedAtUtc.ToUniversalTime().ToString("O"));
+            insert.ExecuteNonQuery();
+        }
+
+        using (var receipt = connection.CreateCommand())
+        {
+            receipt.Transaction = transaction;
+            receipt.CommandText = """
+INSERT INTO local_authority_snapshot_state
+ (user_id, tenant_id, store_id, terminal_id, authority_version, issued_at_utc, applied_at_utc)
+VALUES ($id, $tenant, $store, $terminal, $version, $issued, $at)
+ON CONFLICT(user_id) DO UPDATE SET
+ authority_version=excluded.authority_version,
+ issued_at_utc=excluded.issued_at_utc,
+ applied_at_utc=excluded.applied_at_utc,
+ terminal_id=excluded.terminal_id;
+""";
+            receipt.Parameters.AddWithValue("$id", snapshot.UserId.ToString());
+            receipt.Parameters.AddWithValue("$tenant", snapshot.TenantId.ToString());
+            receipt.Parameters.AddWithValue("$store", snapshot.StoreId.ToString());
+            receipt.Parameters.AddWithValue("$terminal", snapshot.TerminalId.ToString());
+            receipt.Parameters.AddWithValue("$version", snapshot.AuthorityVersion);
+            receipt.Parameters.AddWithValue("$issued", snapshot.IssuedAtUtc.ToUniversalTime().ToString("O"));
+            receipt.Parameters.AddWithValue("$at", appliedAtUtc.ToUniversalTime().ToString("O"));
+            receipt.ExecuteNonQuery();
+        }
+        if (privilegesChanged)
+        {
+            using var close = connection.CreateCommand();
+            close.Transaction = transaction;
+            close.CommandText =
+                "UPDATE local_sessions SET status='closed' WHERE user_id=$id AND status='active';";
+            close.Parameters.AddWithValue("$id", snapshot.UserId.ToString());
+            close.ExecuteNonQuery();
+        }
+        using (var audit = connection.CreateCommand())
+        {
+            audit.Transaction = transaction;
+            audit.CommandText = """
+INSERT INTO local_audit_events
+ (id, tenant_id, store_id, user_id, session_id, event_type, message, occurred_at_utc)
+VALUES ($id, $tenant, $store, $user, NULL, $type, $message, $at);
+""";
+            audit.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+            audit.Parameters.AddWithValue("$tenant", snapshot.TenantId.ToString());
+            audit.Parameters.AddWithValue("$store", snapshot.StoreId.ToString());
+            audit.Parameters.AddWithValue("$user", snapshot.UserId.ToString());
+            audit.Parameters.AddWithValue("$type", privilegesChanged
+                ? "local.auth.authority_changed_sessions_closed" : "local.auth.authority_refreshed");
+            audit.Parameters.AddWithValue("$message",
+                $"Authorized local role snapshot version {snapshot.AuthorityVersion} recorded.");
+            audit.Parameters.AddWithValue("$at", appliedAtUtc.ToUniversalTime().ToString("O"));
+            audit.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
 
     public Task SaveLocalUserAsync(LocalUser user, IReadOnlyCollection<string> permissions, CancellationToken cancellationToken = default)
     {
