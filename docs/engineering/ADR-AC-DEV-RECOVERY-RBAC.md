@@ -19,7 +19,7 @@ or to existing owners during role reseeding.
 
 1. Register both codes in `PermissionCodes.All` for explicit administrator role
    assignment. **Do not** add them to `TerminalPermissionSet.Default`.
-2. Add `database/postgresql/022_sync_recovery_rbac_registration.sql`, never
+2. Keep the proposed SQL under `docs/engineering/proposals/pos-sync-recovery-rbac.proposed.sql`, outside the production migration chain until separately approved. Never
    modify an existing applied numbered migration. This transaction only
    registers two permission descriptions and replaces `pos.seed_mvp_roles`
    to exclude these two codes from the owner's formerly unrestricted seed rule.
@@ -74,3 +74,7 @@ or to existing owners during role reseeding.
   schema and original seed, additive migration repeated twice, smoke assertions.
 
 **GO/NO-GO:** PR remains draft until tests and approval review. No production execution.
+
+## Governance gate discovered during CI
+
+The existing V1.1-10 static contract explicitly rejects `database/postgresql/022_*.sql` as unauthorized. The first attempt added such a numbered migration and **failed** Windows CI. We restored the invariant by removing it from `database/postgresql` and keeping the reviewed SQL only as a non-deployable proposal, used by a disposable PostgreSQL fixture. The static gate is preserved and was never bypassed. A future release requires an explicit ADR/PO decision to extend the approved migration sequence in its own controlled change.
