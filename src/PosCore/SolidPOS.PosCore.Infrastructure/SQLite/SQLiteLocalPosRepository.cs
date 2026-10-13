@@ -987,7 +987,7 @@ WHERE status = $inFlight
         return Task.CompletedTask;
     }
 
-    public Task<int> RecoverStaleClaimsAsync(
+    internal Task<int> RecoverStaleClaimsAsync(
         DateTimeOffset nowUtc, TimeSpan processingTimeout, CancellationToken cancellationToken = default)
     {
         if (processingTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(processingTimeout));
