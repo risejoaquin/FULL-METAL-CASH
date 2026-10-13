@@ -148,6 +148,22 @@ public static class DiscountCalculator
         return new DiscountQuoteResult(gross, discount, net, totals, allocations);
     }
 
+    /// <summary>
+    /// Compatibility helper for legacy one-line server validation. Uses
+    /// exactly the same rounding and cap policy as multi-line cart quotes.
+    /// </summary>
+    public static long CalculateAmountCents(long grossCents, string kind, decimal amount)
+    {
+        if (grossCents < 0 || grossCents > MaximumLineCents ||
+            kind is not ("percentage" or "fixed_amount") ||
+            (kind == "percentage" && amount is not (> 0m and <= 100m)) ||
+            (kind == "fixed_amount" && (amount <= 0m ||
+                amount != decimal.Truncate(amount) || amount > MaximumLineCents)))
+            throw new InvalidOperationException("Invalid discount computation parameters.");
+        return CalculateCents(grossCents, new DiscountRule(
+            Guid.Empty, "cart", kind, amount));
+    }
+
     private static long CalculateCents(long available, DiscountRule rule)
     {
         if (available <= 0) return 0;
