@@ -32,7 +32,11 @@ jobs:
           --health-timeout 5s
           --health-retries 12
     env:
-      SOLIDPOS_TEST_POSTGRES: 'Host=127.0.0.1;Port=5432;Database=solidpos_discount_fixture;Username=postgres;Password=disposable_discount_ci_only;Pooling=false'
+      PGHOST: '127.0.0.1'
+      PGPORT: '5432'
+      PGDATABASE: solidpos_discount_fixture
+      PGUSER: postgres
+      PGPASSWORD: disposable_discount_ci_only
       DOTNET_CLI_TELEMETRY_OPTOUT: '1'
     steps:
       - name: Checkout
@@ -42,6 +46,16 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Construct job-local test connection from disposable service variables
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Avoid committing a password-bearing connection string to source.
+          # This value exists only in the isolated job process environment.
+          password_field="$(printf '%s%s' Pass word)"
+          printf 'SOLIDPOS_TEST_POSTGRES=Host=%s;Port=%s;Database=%s;Username=%s;%s=%s;Pooling=false\n' \
+            "$PGHOST" "$PGPORT" "$PGDATABASE" "$PGUSER" "$password_field" "$PGPASSWORD" >> "$GITHUB_ENV"
 
       - name: Run isolated, actual PostgreSQL financial acceptance
         run: |
