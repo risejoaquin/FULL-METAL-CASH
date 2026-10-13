@@ -23,6 +23,9 @@ or to existing owners during role reseeding.
    modify an existing applied numbered migration. This transaction only
    registers two permission descriptions and replaces `pos.seed_mvp_roles`
    to exclude these two codes from the owner's formerly unrestricted seed rule.
+   The new definition explicitly sets `search_path = pos, public` on the
+   function, repairing a discovered legacy session-dependent name resolution
+   issue; the original 003 script is deliberately unchanged.
    Existing `pos.role_permissions` is never changed, including no automatic
    grants to old owners/admins/managers/cashiers.
 3. An authenticated, authorized central RBAC administrator must independently
