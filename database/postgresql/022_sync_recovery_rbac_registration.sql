@@ -14,7 +14,7 @@ CREATE OR REPLACE FUNCTION pos.seed_mvp_roles(p_tenant_id uuid)
 RETURNS void
 LANGUAGE plpgsql
 SET search_path = pos, public
-AS $
+AS $$
 DECLARE
   owner_role_id uuid;
   admin_role_id uuid;
