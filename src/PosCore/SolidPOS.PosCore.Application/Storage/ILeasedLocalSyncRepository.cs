@@ -23,11 +23,4 @@ public interface ILeasedLocalSyncRepository
     /// <summary>Releases only events still owned by this claim; never modifies another claim.</summary>
     Task ReleaseClaimAsync(Guid claimId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Explicit recovery for abandoned claims after a conservative processing timeout.
-    /// Call only when the original worker is presumed dead; server-side idempotency
-    /// by stable event ID remains necessary when a slow worker was still active.
-    /// </summary>
-    Task<int> RecoverStaleClaimsAsync(
-        DateTimeOffset nowUtc, TimeSpan processingTimeout, CancellationToken cancellationToken = default);
 }
