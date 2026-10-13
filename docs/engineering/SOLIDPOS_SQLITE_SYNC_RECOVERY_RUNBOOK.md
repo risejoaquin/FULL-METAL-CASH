@@ -22,6 +22,8 @@ This procedure is for disposable SQLite QA and future operator-controlled recove
 ## Sequence (manual only)
 
 1. **Inspect:** use `GetLocalSyncQueueHealthAsync` and confirm stale `InFlight` count. Select a conservative timeout (allowed: **5 minutes through 24 hours**). The default minimum is a safety floor, not a recommendation to reclaim while a network request may still be in progress.
+**Time-source safeguard:** the recovery cutoff is calculated from the trusted local system UTC clock, not the request's supplied timestamp. A request timestamp differing by over **2 minutes** is rejected, including attempts to fast-forward the clock to release healthy events. Before performing any live action, validate the computer's secure time synchronization; local clock compromise is outside the SQLite-only threat model.
+
 2. **Preview:** call `IControlledLocalSyncRecoveryRepository.RecoverStaleClaimsWithAuditAsync` with `DryRun=true`, a new `RecoveryId`, an active `ExecutorSessionId`, and explicit `TenantId`, `StoreId`, `TerminalId`. The executor must have `sync.recovery.execute`. Specify `MaxEvents` between **1 and 100**.
 3. **Review:** check the returned eligible count, listed event IDs and `HasMoreEligible`; reconcile the terminal scope and remote server before approving. The preview creates audit records but **does not** release any claim.
 4. **Authorize:** obtain independent review and use the reviewer's authenticated `ApproverSessionId` to call `RegisterRecoveryApprovalAsync` with the exact request parameters and external incident/change reference. Use a **new `RecoveryId`** for execution; IDs are one-use even for previews. A second local user must hold `sync.recovery.approve`; never accept a bare string typed by the executor as proof.
