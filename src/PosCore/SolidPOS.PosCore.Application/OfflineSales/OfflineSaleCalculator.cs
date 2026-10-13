@@ -17,6 +17,7 @@ public static class OfflineSaleCalculator
         // multiplication, discount tampering or receipt/payment overflow must
         // never turn an offline sale into a financially inconsistent event.
         long net = 0;
+        long grossTotal = 0;
         foreach (OfflineSaleLineDraft line in sale.Lines)
         {
             long gross = checked((long)line.Quantity * line.UnitPriceCents);
@@ -28,6 +29,9 @@ public static class OfflineSaleCalculator
                 throw new InvalidOperationException("Discount rule identifier cannot be empty.");
             if (gross > int.MaxValue)
                 throw new InvalidOperationException("Offline line gross exceeds supported cent range.");
+            grossTotal = checked(grossTotal + gross);
+            if (grossTotal > int.MaxValue)
+                throw new InvalidOperationException("Offline subtotal exceeds supported cent range.");
             net = checked(net + gross - line.DiscountCents);
         }
         if (sale.TipCents < 0 || sale.TipCents > int.MaxValue ||
