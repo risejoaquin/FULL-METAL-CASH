@@ -635,7 +635,7 @@ public sealed class SQLiteLocalPersistenceTests
         Assert.Single(acquiredOne);
         Assert.Single(acquiredTwo);
         Assert.NotEqual(acquiredOne[0].Id, acquiredTwo[0].Id);
-        Assert.Equal(new HashSet<Guid> { first.Id, second.Id }, acquiredOne.Concat(acquiredTwo).Select(e => e.Id).ToHashSet());
+        Assert.True(new HashSet<Guid> { first.Id, second.Id }.SetEquals(acquiredOne.Concat(acquiredTwo).Select(e => e.Id)));
         Assert.Equal(2, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
         Assert.Equal(2, CountRows(fixture.Database, "local_sync_claims"));
 
