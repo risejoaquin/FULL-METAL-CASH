@@ -807,6 +807,75 @@ SELECT changes();
         return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
     }
 
+
+    /// <summary>
+    /// A remote success must not become Synced without its local acknowledgement.
+    /// Both records are committed in the same SQLite transaction. Any insert or
+    /// update failure rolls back all events in this batch, leaving them pending
+    /// for a safe, server-idempotent replay.
+    /// </summary>
+    public Task CommitSyncAcknowledgementsAsync(
+        IReadOnlyCollection<LocalSyncAcknowledgement> acknowledgements,
+        DateTimeOffset syncedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(acknowledgements);
+        if (acknowledgements.Count == 0) return Task.CompletedTask;
+        if (acknowledgements.Select(item => item.OutboxEventId).Distinct().Count() != acknowledgements.Count)
+        {
+            throw new InvalidOperationException("A sync commit cannot acknowledge an outbox event twice.");
+        }
+
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        foreach (LocalSyncAcknowledgement acknowledgement in acknowledgements)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (acknowledgement.OutboxEventId == Guid.Empty || acknowledgement.Id == Guid.Empty)
+            {
+                throw new InvalidOperationException("A sync acknowledgement requires nonempty identifiers.");
+            }
+
+            using (var update = connection.CreateCommand())
+            {
+                update.Transaction = transaction;
+                update.CommandText = """
+UPDATE local_outbox_events
+SET status = $synced, synced_at_utc = $syncedAt, last_error = NULL
+WHERE id = $eventId AND status = $pending;
+""";
+                update.Parameters.AddWithValue("$synced", (int)LocalOutboxStatus.Synced);
+                update.Parameters.AddWithValue("$syncedAt", syncedAtUtc.ToString("O"));
+                update.Parameters.AddWithValue("$eventId", acknowledgement.OutboxEventId.ToString());
+                update.Parameters.AddWithValue("$pending", (int)LocalOutboxStatus.Pending);
+                if (update.ExecuteNonQuery() != 1)
+                {
+                    throw new InvalidOperationException(
+                        "Cannot commit sync acknowledgement: outbox event is missing or no longer pending.");
+                }
+            }
+
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = """
+INSERT INTO local_sync_acknowledgements
+    (id, batch_id, outbox_event_id, remote_status, remote_response_json, acknowledged_at_utc)
+VALUES ($id, $batchId, $eventId, $status, $response, $acknowledgedAt);
+""";
+            insert.Parameters.AddWithValue("$id", acknowledgement.Id.ToString());
+            insert.Parameters.AddWithValue("$batchId", acknowledgement.BatchId.ToString());
+            insert.Parameters.AddWithValue("$eventId", acknowledgement.OutboxEventId.ToString());
+            insert.Parameters.AddWithValue("$status", acknowledgement.RemoteStatus);
+            insert.Parameters.AddWithValue("$response", acknowledgement.RemoteResponseJson);
+            insert.Parameters.AddWithValue("$acknowledgedAt", acknowledgement.AcknowledgedAtUtc.ToString("O"));
+            insert.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
     public Task SaveSyncAcknowledgementsAsync(IEnumerable<LocalSyncAcknowledgement> acknowledgements, CancellationToken cancellationToken = default)
     {
         using var connection = _database.OpenConnection();
