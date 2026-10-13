@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Infrastructure.SQLite;
 using Xunit;
@@ -86,6 +87,10 @@ public sealed class SQLiteLocalPersistenceTests
 
         public void Dispose()
         {
+            // Microsoft.Data.Sqlite uses connection pooling by default. Even disposed
+            // connections can keep the DB/WAL files locked on GitHub's Windows runner.
+            // This fixture owns only disposable files and never touches real data.
+            SqliteConnection.ClearAllPools();
             if (Directory.Exists(_directory))
             {
                 Directory.Delete(_directory, recursive: true);
