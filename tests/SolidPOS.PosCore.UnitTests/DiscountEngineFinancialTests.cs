@@ -55,7 +55,10 @@ public sealed class DiscountEngineFinancialTests
         Assert.Equal(101, q.GrossCents);
         Assert.Equal(56, q.DiscountCents);
         Assert.Equal(45, q.NetCents);
-        Assert.Equal(q, reversed);
+        Assert.Equal(q.GrossCents, reversed.GrossCents);
+        Assert.Equal(q.DiscountCents, reversed.DiscountCents);
+        Assert.Equal(q.NetCents, reversed.NetCents);
+        Assert.Equal(q.Allocations.ToArray(), reversed.Allocations.ToArray());
     }
 
     [Fact]
@@ -115,14 +118,14 @@ public sealed class DiscountEngineFinancialTests
     }
 
     [Theory]
-    [InlineData(-1, "fixed_amount")]
-    [InlineData(1.1, "fixed_amount")]
-    [InlineData(101, "percentage")]
-    [InlineData(0, "percentage")]
-    public void Invalid_financial_values_are_rejected(decimal amount, string kind)
+    [InlineData("-1", "fixed_amount")]
+    [InlineData("1.1", "fixed_amount")]
+    [InlineData("101", "percentage")]
+    [InlineData("0", "percentage")]
+    public void Invalid_financial_values_are_rejected(string amount, string kind)
     {
         Assert.Throws<InvalidOperationException>(() => DiscountCalculator.Quote(Request(
-            [new(LineA, 100)], [new(Guid.NewGuid(), "line", kind, amount, LineA)])));
+            [new(LineA, 100)], [new(Guid.NewGuid(), "line", kind, decimal.Parse(amount, System.Globalization.CultureInfo.InvariantCulture), LineA)])));
     }
 
     [Fact]
