@@ -64,6 +64,52 @@ public sealed class OfflineDiscountQuoteTests
     }
 
     [Fact]
+    public void Cart_checkout_materializes_in_original_sync_v4_line_fields_without_extra_metadata()
+    {
+        var draft = Draft(Guid.NewGuid());
+        var rule = new DiscountRule(Guid.NewGuid(), "cart", "percentage", 15);
+        var adjusted = OfflineDiscountQuoteService.ApplyCartDiscount(draft, rule,
+            [new OfflineSalePaymentDraft("cash", 259)]);
+        Assert.Equal(305, adjusted.SubtotalCents);
+        Assert.Equal(46, adjusted.DiscountCents);
+        Assert.Equal(259, adjusted.TotalCents);
+        Assert.Equal(259, adjusted.PaidCents);
+        Assert.All(adjusted.Lines, line => Assert.Equal(rule.Id, line.DiscountId));
+        Assert.Equal(adjusted.DiscountCents, adjusted.Lines.Sum(x => x.DiscountCents));
+        Assert.All(draft.Lines, line => Assert.Null(line.DiscountId));
+        OfflineSaleCalculator.Validate(adjusted);
+    }
+
+    [Fact]
+    public void Cart_checkout_cannot_finalize_self_approved_or_mismatched_payments()
+    {
+        var draft = Draft(Guid.NewGuid());
+        var discount = new DiscountRule(Guid.NewGuid(), "cart", "fixed_amount", 10);
+        Assert.Throws<InvalidOperationException>(() =>
+            OfflineDiscountQuoteService.ApplyCartDiscount(draft, discount,
+                [new OfflineSalePaymentDraft("cash", 305)]));
+        Assert.Throws<UnauthorizedAccessException>(() =>
+            OfflineDiscountQuoteService.ApplyCartDiscount(draft,
+                discount with { RequiresApproval = true },
+                [new OfflineSalePaymentDraft("cash", 295)]));
+    }
+
+    [Fact]
+    public void Existing_line_discount_and_cart_discount_cannot_be_silently_stacked()
+    {
+        var draft = Draft(Guid.NewGuid());
+        var discounted = draft with
+        {
+            Lines = [draft.Lines[0] with { DiscountCents = 10, DiscountId = Guid.NewGuid() },
+                draft.Lines[1]]
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            OfflineDiscountQuoteService.ApplyCartDiscount(discounted,
+                new DiscountRule(Guid.NewGuid(), "cart", "percentage", 10),
+                [new OfflineSalePaymentDraft("cash", 265)]));
+    }
+
+    [Fact]
     public void Offline_preview_rejects_pre_discounted_or_unidentified_cashier()
     {
         var sale = Draft(Guid.NewGuid());
