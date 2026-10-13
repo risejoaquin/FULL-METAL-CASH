@@ -13,7 +13,8 @@ ON CONFLICT (code) DO UPDATE SET description = EXCLUDED.description;
 CREATE OR REPLACE FUNCTION pos.seed_mvp_roles(p_tenant_id uuid)
 RETURNS void
 LANGUAGE plpgsql
-AS $$
+SET search_path = pos, public
+AS $
 DECLARE
   owner_role_id uuid;
   admin_role_id uuid;
