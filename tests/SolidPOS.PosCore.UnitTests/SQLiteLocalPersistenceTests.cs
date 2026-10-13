@@ -432,6 +432,180 @@ public sealed class SQLiteLocalPersistenceTests
         Assert.Equal(2, remote.CallCount);
     }
 
+
+    [Fact]
+    public async Task Successful_remote_batch_commits_every_status_and_acknowledgement_together()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+        DateTimeOffset at = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var terminalId = Guid.NewGuid();
+        var first = CreateOutbox(tenantId, storeId, terminalId, at);
+        var second = CreateOutbox(tenantId, storeId, terminalId, at) with { SequenceNumber = 2 };
+        await repository.SaveOutboxEventAsync(first);
+        await repository.SaveOutboxEventAsync(second);
+
+        var remote = new IdempotentRemoteSyncClient();
+        var result = await new RemoteSyncPushService(repository, remote, new FixedClock(at))
+            .PushPendingAsync(10, Guid.NewGuid(), "fixture-token");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.AcceptedCount);
+        Assert.Equal(2, remote.BusinessSideEffects);
+        var reopened = new SQLiteLocalPosRepository(new SQLiteLocalDatabase(fixture.DatabasePath));
+        Assert.Equal(2, await reopened.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
+        Assert.Equal(0, await reopened.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(2, CountRows(fixture.Database, "local_sync_acknowledgements"));
+        Assert.Null(await new RemoteSyncPushService(reopened, remote, new FixedClock(at))
+            .PushPendingAsync(10, Guid.NewGuid(), "fixture-token"));
+        Assert.Equal(1, remote.CallCount);
+    }
+
+    [Fact]
+    public async Task Failure_during_second_acknowledgement_rolls_back_entire_batch_then_replays_idempotently()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+        DateTimeOffset at = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var tenantId = Guid.NewGuid();
+        var storeId = Guid.NewGuid();
+        var terminalId = Guid.NewGuid();
+        var first = CreateOutbox(tenantId, storeId, terminalId, at);
+        var second = CreateOutbox(tenantId, storeId, terminalId, at) with { SequenceNumber = 2 };
+        await repository.SaveOutboxEventAsync(first);
+        await repository.SaveOutboxEventAsync(second);
+
+        // Simulate a local disk/journal failure only on the second ACK insertion.
+        // The remote has already accepted both events when this trigger fires.
+        using (var connection = fixture.Database.OpenConnection())
+        using (var trigger = connection.CreateCommand())
+        {
+            trigger.CommandText =
+                "CREATE TRIGGER fixture_fail_second_ack BEFORE INSERT ON local_sync_acknowledgements " +
+                "WHEN NEW.outbox_event_id = '" + second.Id + "' " +
+                "BEGIN SELECT RAISE(ABORT, 'fixture_ack_write_failed'); END;";
+            trigger.ExecuteNonQuery();
+        }
+
+        var remote = new IdempotentRemoteSyncClient();
+        var push = new RemoteSyncPushService(repository, remote, new FixedClock(at));
+        await Assert.ThrowsAsync<SqliteException>(
+            () => push.PushPendingAsync(10, Guid.NewGuid(), "fixture-token"));
+
+        Assert.Equal(2, remote.BusinessSideEffects);
+        Assert.Equal(2, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(0, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
+        Assert.Equal(0, CountRows(fixture.Database, "local_sync_acknowledgements"));
+
+        using (var connection = fixture.Database.OpenConnection())
+        using (var drop = connection.CreateCommand())
+        {
+            drop.CommandText = "DROP TRIGGER fixture_fail_second_ack;";
+            drop.ExecuteNonQuery();
+        }
+
+        // After a local process restart, replay the exact same event IDs.
+        // The simulated server recognizes both as duplicates; no new sale is made.
+        var restarted = new SQLiteLocalPosRepository(new SQLiteLocalDatabase(fixture.DatabasePath));
+        var recovered = await new RemoteSyncPushService(restarted, remote, new FixedClock(at))
+            .PushPendingAsync(10, Guid.NewGuid(), "fixture-token");
+
+        Assert.NotNull(recovered);
+        Assert.Equal(2, recovered.DuplicateCount);
+        Assert.Equal(0, recovered.AcceptedCount);
+        Assert.Equal(2, remote.BusinessSideEffects);
+        Assert.Equal(2, remote.CallCount);
+        Assert.Equal(2, await restarted.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
+        Assert.Equal(0, await restarted.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(2, CountRows(fixture.Database, "local_sync_acknowledgements"));
+    }
+
+    [Fact]
+    public async Task Duplicate_acknowledgement_primary_key_rolls_back_all_local_sync_transitions()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+        DateTimeOffset at = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var first = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        var second = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        await repository.SaveOutboxEventAsync(first);
+        await repository.SaveOutboxEventAsync(second);
+
+        Guid collidingAckId = Guid.NewGuid();
+        Guid batchId = Guid.NewGuid();
+        LocalSyncAcknowledgement[] acknowledgements =
+        [
+            new(collidingAckId, batchId, first.Id, "acknowledged", "{}", at),
+            new(collidingAckId, batchId, second.Id, "acknowledged", "{}", at)
+        ];
+
+        await Assert.ThrowsAsync<SqliteException>(
+            () => repository.CommitSyncAcknowledgementsAsync(acknowledgements, at));
+
+        Assert.Equal(2, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(0, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
+        Assert.Equal(0, CountRows(fixture.Database, "local_sync_acknowledgements"));
+    }
+
+    [Fact]
+    public async Task Unknown_or_repeated_outbox_id_is_rejected_without_creating_false_sync_evidence()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+        DateTimeOffset at = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var real = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        await repository.SaveOutboxEventAsync(real);
+
+        var invalid = new LocalSyncAcknowledgement(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "acknowledged", "{}", at);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => repository.CommitSyncAcknowledgementsAsync(new[] { invalid }, at));
+
+        var valid = new LocalSyncAcknowledgement(Guid.NewGuid(), Guid.NewGuid(), real.Id, "acknowledged", "{}", at);
+        await repository.CommitSyncAcknowledgementsAsync(new[] { valid }, at);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => repository.CommitSyncAcknowledgementsAsync(new[] { valid }, at));
+
+        Assert.Equal(0, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
+        Assert.Equal(1, CountRows(fixture.Database, "local_sync_acknowledgements"));
+    }
+
+    private sealed class IdempotentRemoteSyncClient : IRemoteSyncClient
+    {
+        private readonly HashSet<Guid> _acceptedEventIds = new();
+        public int CallCount { get; private set; }
+        public int BusinessSideEffects { get; private set; }
+
+        public Task<RemoteSyncPushResult> PushAsync(
+            RemoteSyncPushRequest request, string terminalAccessToken, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            int accepted = 0;
+            int duplicated = 0;
+            foreach (var item in request.Events)
+            {
+                if (_acceptedEventIds.Add(item.EventId))
+                {
+                    BusinessSideEffects++;
+                    accepted++;
+                }
+                else
+                {
+                    duplicated++;
+                }
+            }
+            return Task.FromResult(new RemoteSyncPushResult(
+                request.BatchId, request.Events.Count, accepted, duplicated, 0,
+                "{\"fixture\":true}", request.Events.Select(item => item.EventId).ToArray()));
+        }
+    }
+
     private sealed class JsonResponseHandler(string json) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(
