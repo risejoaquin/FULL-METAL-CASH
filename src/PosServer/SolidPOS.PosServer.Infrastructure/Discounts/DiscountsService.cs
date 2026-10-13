@@ -160,8 +160,17 @@ public sealed class DiscountsService : IDiscountsService
             return new ValidateDiscountResponse(discount.Id, false, rejection, grossCents, 0, grossCents, Formula);
         }
 
-        long discountCents = DiscountCalculator.CalculateAmountCents(
-            grossCents, discount.DiscountType, discount.Value);
+        long discountCents;
+        try
+        {
+            discountCents = DiscountCalculator.CalculateAmountCents(
+                grossCents, discount.DiscountType, discount.Value);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or OverflowException)
+        {
+            return new ValidateDiscountResponse(
+                discount.Id, false, "INVALID_STORED_DISCOUNT", grossCents, 0, grossCents, Formula);
+        }
         long netCents = Math.Max(0, grossCents - discountCents);
         return new ValidateDiscountResponse(discount.Id, true, null, grossCents, discountCents, netCents, Formula);
     }
@@ -379,7 +388,8 @@ public sealed class DiscountsService : IDiscountsService
             return value is > 0 and <= 100;
         }
 
-        return type?.Trim() == "fixed_amount" && value > 0;
+        return type?.Trim() == "fixed_amount" && value > 0
+            && value == decimal.Truncate(value);
     }
 
     private static bool ScopeIsValid(Guid? storeId, Guid? categoryId, Guid? productId)
