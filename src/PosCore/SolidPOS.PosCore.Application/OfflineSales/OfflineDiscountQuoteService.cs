@@ -39,6 +39,46 @@ public static class OfflineDiscountQuoteService
             lines, cachedRules, verifiedApprovals));
     }
 
+    /// <summary>
+    /// Materialize ONLY one globally scoped cart rule into existing v4 line
+    /// discount fields. The server independently verifies exact allocation.
+    /// Approval-required rules are refused until authenticated offline
+    /// supervisor authorization exists end-to-end.
+    /// </summary>
+    public static OfflineSaleDraft ApplyCartDiscount(
+        OfflineSaleDraft sale, DiscountRule trustedCachedRule,
+        IReadOnlyList<OfflineSalePaymentDraft> payments)
+    {
+        ArgumentNullException.ThrowIfNull(sale);
+        ArgumentNullException.ThrowIfNull(trustedCachedRule);
+        ArgumentNullException.ThrowIfNull(payments);
+        if (trustedCachedRule.Scope != "cart" || trustedCachedRule.LineId.HasValue ||
+            trustedCachedRule.RequiresApproval)
+            throw new UnauthorizedAccessException(
+                "Only non-approval cart rules can be finalized through the current v4 contract.");
+        if (sale.Lines.Any(line => line.DiscountId.HasValue || line.DiscountCents != 0))
+            throw new InvalidOperationException("Cannot combine cart discount with existing line discounts in v4.");
+
+        DiscountQuoteResult quote = Preview(sale, [trustedCachedRule], []);
+        long totalDue = checked(quote.NetCents + sale.TipCents);
+        if (totalDue < 0 || totalDue > int.MaxValue ||
+            quote.Lines.Any(x => x.CartDiscountCents > int.MaxValue) ||
+            payments.Count == 0 ||
+            payments.Any(x => x.AmountCents < 0) ||
+            payments.Sum(x => (long)x.AmountCents) != totalDue)
+            throw new InvalidOperationException("Payment must equal the discounted total including tips.");
+
+        var updatedLines = sale.Lines.Select((line, index) =>
+            line with
+            {
+                DiscountId = trustedCachedRule.Id,
+                DiscountCents = checked((int)quote.Lines[index].CartDiscountCents)
+            }).ToArray();
+        var completed = sale with { Lines = updatedLines, Payments = payments };
+        OfflineSaleCalculator.Validate(completed);
+        return completed;
+    }
+
     /// <summary>Stable line identity across restarts without changing the v4 payload.</summary>
     public static Guid GetStableLineId(Guid localSaleId, int zeroBasedLineIndex) =>
         DiscountCalculator.GetStableLineId(localSaleId, zeroBasedLineIndex);
