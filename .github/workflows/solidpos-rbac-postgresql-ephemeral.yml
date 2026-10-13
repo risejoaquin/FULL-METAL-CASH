@@ -5,12 +5,12 @@ on:
     branches:
       - AC-DEV
     paths:
-      - 'database/postgresql/022_sync_recovery_rbac_registration.sql'
+      - 'docs/engineering/proposals/pos-sync-recovery-rbac.proposed.sql'
       - 'tests/database/sync-recovery-rbac-ephemeral-smoke.sql'
       - '.github/workflows/solidpos-rbac-postgresql-ephemeral.yml'
   pull_request:
     paths:
-      - 'database/postgresql/022_sync_recovery_rbac_registration.sql'
+      - 'docs/engineering/proposals/pos-sync-recovery-rbac.proposed.sql'
       - 'tests/database/sync-recovery-rbac-ephemeral-smoke.sql'
       - '.github/workflows/solidpos-rbac-postgresql-ephemeral.yml'
   workflow_dispatch:
@@ -65,8 +65,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          psql -X -v ON_ERROR_STOP=1 -f database/postgresql/022_sync_recovery_rbac_registration.sql
-          psql -X -v ON_ERROR_STOP=1 -f database/postgresql/022_sync_recovery_rbac_registration.sql
+          psql -X -v ON_ERROR_STOP=1 -f docs/engineering/proposals/pos-sync-recovery-rbac.proposed.sql
+          psql -X -v ON_ERROR_STOP=1 -f docs/engineering/proposals/pos-sync-recovery-rbac.proposed.sql
 
       - name: Validate no implicit role grants and explicit RBAC compatibility
         shell: bash
