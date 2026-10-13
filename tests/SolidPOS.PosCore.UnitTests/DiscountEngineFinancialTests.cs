@@ -51,7 +51,7 @@ public sealed class DiscountEngineFinancialTests
             new DiscountRule(second, "line", "percentage", 50, LineA)
         };
         var q = DiscountCalculator.Quote(Request([new(LineA, 101)], rules));
-        var reversed = DiscountCalculator.Quote(Request([new(LineA, 101)], rules.Reverse().ToArray()));
+        var reversed = DiscountCalculator.Quote(Request([new(LineA, 101)], rules.AsEnumerable().Reverse().ToArray()));
         Assert.Equal(101, q.GrossCents);
         Assert.Equal(56, q.DiscountCents);
         Assert.Equal(45, q.NetCents);
