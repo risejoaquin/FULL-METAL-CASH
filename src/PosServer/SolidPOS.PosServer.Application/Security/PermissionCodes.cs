@@ -34,6 +34,8 @@ public static class PermissionCodes
     public const string SyncPull = "sync.pull";
     public const string SyncConflictsRead = "sync.conflicts.read";
     public const string SyncConflictsResolve = "sync.conflicts.resolve";
+    public const string SyncRecoveryExecute = "sync.recovery.execute";
+    public const string SyncRecoveryApprove = "sync.recovery.approve";
     public const string BuilderManage = "builder.manage";
     public const string UpdatesManage = "updates.manage";
     public const string AuditRead = "audit.read";
@@ -72,6 +74,8 @@ public static class PermissionCodes
         SyncPull,
         SyncConflictsRead,
         SyncConflictsResolve,
+        SyncRecoveryExecute,
+        SyncRecoveryApprove,
         BuilderManage,
         UpdatesManage,
         AuditRead
