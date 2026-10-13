@@ -1,0 +1,78 @@
+using SolidPOS.DiscountEngine;
+using SolidPOS.PosCore.Application.OfflineSales;
+using SolidPOS.PosCore.Domain;
+using Xunit;
+
+namespace SolidPOS.PosCore.UnitTests;
+
+public sealed class OfflineDiscountQuoteTests
+{
+    private static OfflineSaleDraft Draft(Guid saleId) =>
+        new(saleId, Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            DateTimeOffset.UtcNow,
+            [
+                new OfflineSaleLineDraft(Guid.NewGuid(), null, "SKU-ONE", "One", 2, 101),
+                new OfflineSaleLineDraft(Guid.NewGuid(), null, "SKU-TWO", "Two", 1, 103)
+            ],
+            [new OfflineSalePaymentDraft("cash", 305)], "MXN",
+            CashierUserId: Guid.NewGuid());
+
+    [Fact]
+    public void Offline_and_server_shared_quote_conserve_identical_financial_totals()
+    {
+        var draft = Draft(Guid.NewGuid());
+        var cart = new DiscountRule(Guid.NewGuid(), "cart", "percentage", 15);
+        var offline = OfflineDiscountQuoteService.Preview(draft, [cart], []);
+        var raw = new DiscountQuoteRequest(
+            draft.TenantId, draft.StoreId, draft.CashierUserId!.Value,
+            draft.Lines.Select((line, index) => new DiscountLine(
+                OfflineDiscountQuoteService.GetStableLineId(draft.LocalSaleId, index),
+                (long)line.Quantity * line.UnitPriceCents)).ToArray(),
+            [cart], []);
+        var online = DiscountCalculator.Quote(raw);
+        Assert.Equal(online.GrossCents, offline.GrossCents);
+        Assert.Equal(online.DiscountCents, offline.DiscountCents);
+        Assert.Equal(online.NetCents, offline.NetCents);
+        Assert.Equal(online.Allocations.ToArray(), offline.Allocations.ToArray());
+        Assert.Equal(305, offline.GrossCents);
+        Assert.Equal(46, offline.DiscountCents);
+        Assert.Equal(259, offline.NetCents);
+    }
+
+    [Fact]
+    public void Stable_line_keys_survive_multiple_offline_restarts()
+    {
+        Guid sale = Guid.NewGuid();
+        var first = OfflineDiscountQuoteService.GetStableLineId(sale, 0);
+        var repeated = OfflineDiscountQuoteService.GetStableLineId(sale, 0);
+        Assert.Equal(first, repeated);
+        Assert.NotEqual(first, OfflineDiscountQuoteService.GetStableLineId(sale, 1));
+        Assert.NotEqual(first, OfflineDiscountQuoteService.GetStableLineId(Guid.NewGuid(), 0));
+    }
+
+    [Fact]
+    public void Offline_preview_does_not_mutate_sale_payments_or_sale_event()
+    {
+        var sale = Draft(Guid.NewGuid());
+        long previous = sale.TotalCents;
+        var quote = OfflineDiscountQuoteService.Preview(sale,
+            [new DiscountRule(Guid.NewGuid(), "cart", "fixed_amount", 10)], []);
+        Assert.Equal(295, quote.NetCents);
+        Assert.Equal(305, sale.PaidCents);
+        Assert.Equal(previous, sale.TotalCents);
+        Assert.All(sale.Lines, line => Assert.Equal(0, line.DiscountCents));
+    }
+
+    [Fact]
+    public void Offline_preview_rejects_pre_discounted_or_unidentified_cashier()
+    {
+        var sale = Draft(Guid.NewGuid());
+        Assert.Throws<InvalidOperationException>(() =>
+            OfflineDiscountQuoteService.Preview(sale with { CashierUserId = null }, [], []));
+        var bad = sale with
+        {
+            Lines = [sale.Lines[0] with { DiscountCents = 99 }, sale.Lines[1]]
+        };
+        Assert.Throws<InvalidOperationException>(() => OfflineDiscountQuoteService.Preview(bad, [], []));
+    }
+}
