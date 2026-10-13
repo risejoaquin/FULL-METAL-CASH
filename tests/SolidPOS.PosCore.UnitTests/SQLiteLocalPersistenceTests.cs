@@ -250,7 +250,7 @@ public sealed class SQLiteLocalPersistenceTests
     private static int CountRows(SQLiteLocalDatabase database, string tableName)
     {
         // Names below are test constants, never derived from external input.
-        if (tableName is not ("local_sync_acknowledgements" or "local_outbox_events"))
+        if (tableName is not ("local_sync_acknowledgements" or "local_outbox_events" or "local_sync_claims"))
             throw new ArgumentException("Unsupported fixture table.", nameof(tableName));
         using var connection = database.OpenConnection();
         using var command = connection.CreateCommand();
@@ -574,6 +574,150 @@ public sealed class SQLiteLocalPersistenceTests
         Assert.Equal(0, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
         Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
         Assert.Equal(1, CountRows(fixture.Database, "local_sync_acknowledgements"));
+    }
+
+
+    [Fact]
+    public async Task Two_SQLite_workers_cannot_send_the_same_pending_event_concurrently()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var workerOneRepo = new SQLiteLocalPosRepository(fixture.Database);
+        await workerOneRepo.InitializeAsync();
+        var at = new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var message = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        await workerOneRepo.SaveOutboxEventAsync(message);
+
+        var remote = new BlockingRemoteSyncClient();
+        var first = new RemoteSyncPushService(workerOneRepo, remote, new FixedClock(at));
+        var workerTwoRepo = new SQLiteLocalPosRepository(new SQLiteLocalDatabase(fixture.DatabasePath));
+        var second = new RemoteSyncPushService(workerTwoRepo, remote, new FixedClock(at));
+
+        Task<RemoteSyncPushResult?> firstRun = first.PushPendingAsync(10, Guid.NewGuid(), "fixture-token");
+        try
+        {
+            await remote.WaitUntilEnteredAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.Equal(1, await workerTwoRepo.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+            Assert.Null(await second.PushPendingAsync(10, Guid.NewGuid(), "fixture-token"));
+            Assert.Equal(1, remote.CallCount);
+        }
+        finally
+        {
+            remote.Unblock();
+        }
+
+        var result = await firstRun.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.NotNull(result);
+        Assert.Equal(1, remote.CallCount);
+        Assert.Equal(1, await workerTwoRepo.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
+        Assert.Equal(0, await workerTwoRepo.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+        Assert.Equal(0, CountRows(fixture.Database, "local_sync_claims"));
+        Assert.Equal(1, CountRows(fixture.Database, "local_sync_acknowledgements"));
+    }
+
+    [Fact]
+    public async Task SQLite_claims_split_terminal_scopes_without_cross_tenant_batches()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+        var at = new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var first = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        var second = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        await repository.SaveOutboxEventAsync(first);
+        await repository.SaveOutboxEventAsync(second);
+
+        Guid firstClaim = Guid.NewGuid();
+        Guid secondClaim = Guid.NewGuid();
+        var acquiredOne = await repository.ClaimPendingOutboxEventsAsync(10, firstClaim, at);
+        var acquiredTwo = await new SQLiteLocalPosRepository(new SQLiteLocalDatabase(fixture.DatabasePath))
+            .ClaimPendingOutboxEventsAsync(10, secondClaim, at);
+
+        Assert.Single(acquiredOne);
+        Assert.Single(acquiredTwo);
+        Assert.NotEqual(acquiredOne[0].Id, acquiredTwo[0].Id);
+        Assert.Equal(new HashSet<Guid> { first.Id, second.Id }, acquiredOne.Concat(acquiredTwo).Select(e => e.Id).ToHashSet());
+        Assert.Equal(2, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+        Assert.Equal(2, CountRows(fixture.Database, "local_sync_claims"));
+
+        await repository.ReleaseClaimAsync(firstClaim);
+        await repository.ReleaseClaimAsync(secondClaim);
+        Assert.Equal(0, CountRows(fixture.Database, "local_sync_claims"));
+        Assert.Equal(2, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+    }
+
+    [Fact]
+    public async Task Expired_claim_can_be_recovered_but_stale_worker_cannot_commit_or_release_new_owner()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var initial = new SQLiteLocalPosRepository(fixture.Database);
+        await initial.InitializeAsync();
+        var at = new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var message = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        await initial.SaveOutboxEventAsync(message);
+
+        Guid staleClaimId = Guid.NewGuid();
+        Assert.Single(await initial.ClaimPendingOutboxEventsAsync(10, staleClaimId, at));
+        var current = new SQLiteLocalPosRepository(new SQLiteLocalDatabase(fixture.DatabasePath));
+        Assert.Equal(0, await current.RecoverStaleClaimsAsync(at.AddMinutes(4), TimeSpan.FromMinutes(5)));
+        Assert.Equal(1, await current.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+
+        Assert.Equal(1, await current.RecoverStaleClaimsAsync(at.AddMinutes(6), TimeSpan.FromMinutes(5)));
+        Assert.Equal(1, await current.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Guid currentClaimId = Guid.NewGuid();
+        Assert.Single(await current.ClaimPendingOutboxEventsAsync(10, currentClaimId, at.AddMinutes(6)));
+
+        var staleAck = new LocalSyncAcknowledgement(Guid.NewGuid(), staleClaimId, message.Id, "acknowledged", "{}", at);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => initial.CommitClaimedSyncAcknowledgementsAsync(staleClaimId, new[] { staleAck }, at));
+        await initial.ReleaseClaimAsync(staleClaimId);
+
+        Assert.Equal(1, await current.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+        Assert.Equal(1, CountRows(fixture.Database, "local_sync_claims"));
+        var currentAck = new LocalSyncAcknowledgement(Guid.NewGuid(), currentClaimId, message.Id, "acknowledged", "{}", at);
+        await current.CommitClaimedSyncAcknowledgementsAsync(currentClaimId, new[] { currentAck }, at);
+        Assert.Equal(1, await initial.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
+        Assert.Equal(0, CountRows(fixture.Database, "local_sync_claims"));
+        Assert.Equal(1, CountRows(fixture.Database, "local_sync_acknowledgements"));
+    }
+
+    [Fact]
+    public async Task Malformed_remote_ACK_releases_claim_without_losing_pending_event()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+        var at = new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        await repository.SaveOutboxEventAsync(CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at));
+
+        var badClient = new CallbackRemoteSyncClient(request => new RemoteSyncPushResult(
+            request.BatchId, request.Events.Count, 1, 0, 0, "{}", new[] { Guid.NewGuid() }));
+        var service = new RemoteSyncPushService(repository, badClient, new FixedClock(at));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.PushPendingAsync(10, Guid.NewGuid(), "fixture-token"));
+        Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(0, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+        Assert.Equal(0, CountRows(fixture.Database, "local_sync_claims"));
+    }
+
+    private sealed class BlockingRemoteSyncClient : IRemoteSyncClient
+    {
+        private readonly TaskCompletionSource<bool> _entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource<bool> _resume = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int CallCount { get; private set; }
+        public Task WaitUntilEnteredAsync() => _entered.Task;
+        public void Unblock() => _resume.TrySetResult(true);
+
+        public async Task<RemoteSyncPushResult> PushAsync(
+            RemoteSyncPushRequest request, string terminalAccessToken, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            _entered.TrySetResult(true);
+            await _resume.Task.WaitAsync(cancellationToken);
+            return new RemoteSyncPushResult(
+                request.BatchId, request.Events.Count, request.Events.Count, 0, 0, "{}",
+                request.Events.Select(item => item.EventId).ToArray());
+        }
     }
 
     private sealed class IdempotentRemoteSyncClient : IRemoteSyncClient
