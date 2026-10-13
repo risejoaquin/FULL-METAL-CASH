@@ -365,6 +365,68 @@ BEGIN SELECT RAISE(ABORT, 'fixture_execution_journal_failed'); END;
         Assert.Equal(1, (await repo.RecoverStaleClaimsWithAuditAsync(request)).RecoveredCount);
     }
 
+
+    [Fact]
+    public async Task Revoking_approval_permission_after_signing_blocks_execution()
+    {
+        using var fixture = new DatabaseFixture();
+        var repository = fixture.NewRepository();
+        await repository.InitializeAsync();
+        Guid tenant = Guid.NewGuid(), store = Guid.NewGuid(), terminal = Guid.NewGuid();
+        await repository.SaveOutboxEventAsync(NewEvent(tenant, store, terminal));
+        Assert.Single(await repository.ClaimPendingOutboxEventsAsync(
+            10, Guid.NewGuid(), Now.AddMinutes(-6)));
+
+        var request = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true);
+        string approverId = fixture.ScalarString(
+            "SELECT approver_user_id FROM local_sync_recovery_approvals LIMIT 1");
+        fixture.Execute($"DELETE FROM local_user_permissions WHERE user_id = '{approverId}';");
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => repository.RecoverStaleClaimsWithAuditAsync(request));
+
+        Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+        Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
+        Assert.Equal(1, fixture.ScalarInt(
+            "SELECT COUNT(*) FROM local_sync_recovery_approvals WHERE consumed_at_utc IS NULL"));
+    }
+
+    [Fact]
+    public async Task Closed_approver_session_invalidates_recovery_approval()
+    {
+        using var fixture = new DatabaseFixture();
+        var repository = fixture.NewRepository();
+        await repository.InitializeAsync();
+        Guid tenant = Guid.NewGuid(), store = Guid.NewGuid(), terminal = Guid.NewGuid();
+        var request = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true);
+        string approverSession = fixture.ScalarString(
+            "SELECT approver_session_id FROM local_sync_recovery_approvals LIMIT 1");
+        await repository.CloseLocalSessionAsync(Guid.Parse(approverSession), DateTimeOffset.UtcNow);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => repository.RecoverStaleClaimsWithAuditAsync(request));
+        Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
+    }
+
+    [Fact]
+    public async Task Expired_approval_is_rejected_even_if_both_sessions_are_active()
+    {
+        using var fixture = new DatabaseFixture();
+        var repository = fixture.NewRepository();
+        await repository.InitializeAsync();
+        Guid tenant = Guid.NewGuid(), store = Guid.NewGuid(), terminal = Guid.NewGuid();
+        var request = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true);
+        fixture.Execute("UPDATE local_sync_recovery_approvals SET expires_at_utc = '2000-01-01T00:00:00.0000000+00:00';");
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => repository.RecoverStaleClaimsWithAuditAsync(request));
+        Assert.Equal(1, fixture.Count("local_sync_recovery_approvals"));
+        Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
+    }
+
     private static LocalSyncRecoveryRequest Request(
         Guid tenant, Guid store, Guid terminal, bool dryRun) =>
         new(Guid.NewGuid(), tenant, store, terminal, Now, Timeout, 10,
