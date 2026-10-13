@@ -54,33 +54,32 @@ public sealed class RemoteSyncPushService
         // local events pending allows a later idempotent replay by event ID.
         ValidateResult(request, result);
 
-        if (result.FailedCount == 0)
+        // Failed or rejected events stay retryable; acknowledged events commit
+        // their state change and durable evidence atomically in SQLite.
+        if (result.FailedCount > 0)
         {
-            await _repository.MarkOutboxSyncedAsync(result.AcknowledgedEventIds, _clock.UtcNow, cancellationToken).ConfigureAwait(false);
-        }
-        else
-        {
-            foreach (var failed in batch.Events.Where(item => !result.AcknowledgedEventIds.Contains(item.Id)))
+            var acknowledgedIds = result.AcknowledgedEventIds.ToHashSet();
+            foreach (var failed in batch.Events.Where(item => !acknowledgedIds.Contains(item.Id)))
             {
                 var decision = _retryPolicy.EvaluateRemoteFailure(failed, "Remote sync push returned rejected or failed events.");
                 await ApplyRetryDecisionAsync(failed, decision, cancellationToken).ConfigureAwait(false);
             }
-
-            if (result.AcknowledgedEventIds.Count > 0)
-            {
-                await _repository.MarkOutboxSyncedAsync(result.AcknowledgedEventIds, _clock.UtcNow, cancellationToken).ConfigureAwait(false);
-            }
         }
 
-        await _repository.SaveSyncAcknowledgementsAsync(
-            result.AcknowledgedEventIds.Select(eventId => new LocalSyncAcknowledgement(
+        if (result.AcknowledgedEventIds.Count > 0)
+        {
+            DateTimeOffset acknowledgedAt = _clock.UtcNow;
+            var acknowledgements = result.AcknowledgedEventIds.Select(eventId => new LocalSyncAcknowledgement(
                 Guid.NewGuid(),
                 result.BatchId,
                 eventId,
                 result.FailedCount == 0 ? "acknowledged" : "partial_acknowledged",
                 result.RawResponseJson,
-                _clock.UtcNow)),
-            cancellationToken).ConfigureAwait(false);
+                acknowledgedAt)).ToArray();
+
+            await _repository.CommitSyncAcknowledgementsAsync(
+                acknowledgements, acknowledgedAt, cancellationToken).ConfigureAwait(false);
+        }
 
         return result;
     }
