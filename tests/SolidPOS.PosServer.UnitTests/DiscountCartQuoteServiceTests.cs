@@ -114,6 +114,22 @@ public sealed class DiscountCartQuoteServiceTests
     }
 
     [Fact]
+    public async Task Partial_update_cannot_introduce_fractional_fixed_amount_when_type_is_omitted()
+    {
+        var original = Stored(Guid.NewGuid(), "fixed_amount", 100, storeId: _store);
+        _discounts.Setup(x => x.GetByIdAsync(_tenant, original.Id,
+            It.IsAny<CancellationToken>())).ReturnsAsync(original);
+        var service = Service();
+        var updated = await service.UpdateAsync(original.Id, new UpdateDiscountRequest(
+            null, null, null, 1.5m, null, null, null, null, null, null),
+            CancellationToken.None);
+        Assert.Null(updated);
+        _discounts.Verify(x => x.UpdateAsync(
+            It.IsAny<Guid>(), It.IsAny<Guid>(), It.IsAny<UpdateDiscountRequest>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Repeated_rules_across_lines_are_rejected_not_double_counted()
     {
         var rule = Stored(Guid.NewGuid(), "percentage", 10, _product, _store);
