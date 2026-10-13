@@ -76,7 +76,18 @@ Protect `main` using GitHub Settings → Rules → Rulesets (or Branch protectio
 4. Add Windows desktop smoke automation where feasible; reserve real peripherals for a later hardware gate.
 5. Review package version drift, security scanning and reproducible builds. No dependency or contract upgrade merely for novelty.
 
-## 8. Report format for each ChatGPT increment
+## 8. SQLite outbox concurrency and crash recovery (AC-DEV only)
+
+SQLite's internal `local_sync_claims` table is a **local additive implementation detail**; it does not change the remote `schemaVersion=4` or `syncContract=schema_version_4`. The PosServer PostgreSQL model is unchanged. Initialization uses `CREATE TABLE IF NOT EXISTS` for existing disposable and developer SQLite files.
+
+- The real `SQLiteLocalPosRepository` now implements `ILeasedLocalSyncRepository`. `ClaimPendingOutboxEventsAsync` reserves one tenant/store/terminal-scoped batch with `BEGIN IMMEDIATE` semantics and persists the `InFlight` state and the owning `claim_id` atomically. A second worker sees no claimable event from that batch while it is in-flight.
+- Every remote acknowledgement is applied with **owner verification** and an atomic update of `Synced` plus its acknowledgement journal. Retry/dead-letter transitions likewise require the owning claim.
+- An unsuccessful or ambiguous response releases any still-owned events to `Pending`; remote timeouts follow the retry policy. A late worker **cannot** commit or release a claim recovered and acquired by another worker.
+- If a process dies before cleanup, an external recovery step must invoke `RecoverStaleClaimsAsync(nowUtc, processingTimeout)` after a conservative timeout selected for the deployment. **There is deliberately no hidden automatic recovery timer**. Do not recover claims that may still be actively processed. Since slow original workers might still have reached the server, event-level server idempotency remains a required independent safeguard.
+- The existing non-leased `ILocalPosRepository` contract still supports older in-memory fakes; it does not offer the same concurrency guarantees. The SQLite test suite covers two workers, scope isolation, expired-claim recovery, fencing of stale owners, malformed remote responses and ACK transactions.
+- QA remains restricted to the disposable Windows Actions runner. No branch merge, Railway changes, production data or external WhatsApp/payment providers were involved.
+
+## 9. Report format for each ChatGPT increment
 
 ```text
 Task:
