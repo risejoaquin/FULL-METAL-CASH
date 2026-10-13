@@ -45,11 +45,14 @@ contract and existing `/auth/login` wire format are frozen and unchanged.
    does not prove that a payload is genuine. A genuine online integration and
    explicit authority-version contract must be designed and approved first.
 2. Existing `SaveLocalUserAsync` and development CLI `sync-local-user` are
-   older local provisioning paths that do not require proof of central
-   authority and could overwrite cached grants. They MUST be gated/replaced
-   for elevated recovery permissions in the production path; current local
-   tests do not prove resistance to a malicious process with SQLite write
-   access.
+   legacy provisioning paths without proof of central authority. The SQLite
+   repository now **rejects all legacy updates for users who already have a
+   versioned central-authority receipt**, preventing the old CLI from
+   resurrecting revoked grants after enrollment. Legacy initial provisioning
+   is still possible before the first verified snapshot (needed for offline
+   credential enrollment and current fixtures). This bootstrap path must be
+   separately secured for elevated recovery permissions in production.
+   A malicious process with direct SQLite write access is still out of scope.
 3. Server role store access and immediate role revocation have not yet been
    synchronized end-to-end. Time-bounded offline cache mitigates but cannot
    eliminate stale-authority risk. For high-risk recovery, require a policy
