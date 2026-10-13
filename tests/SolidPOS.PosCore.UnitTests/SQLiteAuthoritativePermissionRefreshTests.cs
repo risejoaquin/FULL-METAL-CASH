@@ -132,6 +132,24 @@ BEGIN SELECT RAISE(ABORT,'test_audit_fault'); END;
     }
 
     [Fact]
+    public async Task Legacy_local_provisioning_cannot_restore_permissions_after_verified_authority_refresh()
+    {
+        using var fx = new Fixture();
+        await fx.InitializeAsync();
+        await fx.Service(fx.Source(8, true, "cashier", "sales.read"))
+            .RefreshAsync(fx.TenantId, fx.StoreId, fx.TerminalId, fx.UserId);
+
+        var user = (await fx.Repository.GetLocalUserByEmailAsync(fx.Email))!;
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            fx.Repository.SaveLocalUserAsync(user with { RoleCode = "owner" },
+                ["sync.recovery.approve", "sync.recovery.execute"]));
+
+        Assert.False(await fx.Repository.LocalUserHasPermissionAsync(fx.UserId, "sync.recovery.approve"));
+        Assert.True(await fx.Repository.LocalUserHasPermissionAsync(fx.UserId, "sales.read"));
+        Assert.Equal(8, fx.Scalar("SELECT authority_version FROM local_authority_snapshot_state;"));
+    }
+
+    [Fact]
     public async Task Same_grants_newer_version_refreshes_cache_without_closing_unchanged_session()
     {
         using var fx = new Fixture();
