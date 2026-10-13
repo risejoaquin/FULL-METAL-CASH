@@ -28,60 +28,80 @@ public sealed class RemoteSyncPushService
     {
         if (string.IsNullOrWhiteSpace(terminalAccessToken)) throw new InvalidOperationException("Terminal access token is required for remote sync push.");
         if (limit <= 0) throw new ArgumentOutOfRangeException(nameof(limit), "Limit must be greater than zero.");
+        if (batchId == Guid.Empty) throw new ArgumentException("Batch ID is required.", nameof(batchId));
 
-        var pending = await _repository.GetPendingOutboxEventsAsync(limit, cancellationToken).ConfigureAwait(false);
+        // SQLite implements an opt-in durable claim. Fake repositories keep the
+        // existing API for compatibility with established unit tests.
+        var claimedRepository = _repository as ILeasedLocalSyncRepository;
+        var pending = claimedRepository is null
+            ? await _repository.GetPendingOutboxEventsAsync(limit, cancellationToken).ConfigureAwait(false)
+            : await claimedRepository.ClaimPendingOutboxEventsAsync(limit, batchId, _clock.UtcNow, cancellationToken).ConfigureAwait(false);
         if (pending.Count == 0) return null;
 
-        var batch = LocalOutboxBatchPlanner.CreateBatch(batchId, pending);
-        var request = RemoteSyncPushMapper.Map(batch);
-        RemoteSyncPushResult result;
         try
         {
-            result = await _remoteClient.PushAsync(request, terminalAccessToken, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            foreach (var pendingEvent in batch.Events)
+            var batch = LocalOutboxBatchPlanner.CreateBatch(batchId, pending);
+            var request = RemoteSyncPushMapper.Map(batch);
+            RemoteSyncPushResult result;
+            try
             {
-                await ApplyRetryDecisionAsync(pendingEvent, _retryPolicy.EvaluateException(pendingEvent, exception), cancellationToken).ConfigureAwait(false);
+                result = await _remoteClient.PushAsync(request, terminalAccessToken, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                foreach (var pendingEvent in batch.Events)
+                {
+                    var decision = _retryPolicy.EvaluateException(pendingEvent, exception);
+                    await ApplyRetryDecisionAsync(pendingEvent, decision, claimedRepository, batchId, cancellationToken).ConfigureAwait(false);
+                }
+                throw;
             }
 
-            throw;
-        }
+            // Malformed ACKs must not change claimed event state. Finally releases
+            // the claim for safe replay using the same idempotent event IDs.
+            ValidateResult(request, result);
 
-        // Fail closed on malformed or ambiguous acknowledgements. The remote server
-        // may have committed a side effect before a malformed response; keeping
-        // local events pending allows a later idempotent replay by event ID.
-        ValidateResult(request, result);
-
-        // Failed or rejected events stay retryable; acknowledged events commit
-        // their state change and durable evidence atomically in SQLite.
-        if (result.FailedCount > 0)
-        {
-            var acknowledgedIds = result.AcknowledgedEventIds.ToHashSet();
-            foreach (var failed in batch.Events.Where(item => !acknowledgedIds.Contains(item.Id)))
+            if (result.FailedCount > 0)
             {
-                var decision = _retryPolicy.EvaluateRemoteFailure(failed, "Remote sync push returned rejected or failed events.");
-                await ApplyRetryDecisionAsync(failed, decision, cancellationToken).ConfigureAwait(false);
+                var acknowledgedIds = result.AcknowledgedEventIds.ToHashSet();
+                foreach (var failed in batch.Events.Where(item => !acknowledgedIds.Contains(item.Id)))
+                {
+                    var decision = _retryPolicy.EvaluateRemoteFailure(failed, "Remote sync push returned rejected or failed events.");
+                    await ApplyRetryDecisionAsync(failed, decision, claimedRepository, batchId, cancellationToken).ConfigureAwait(false);
+                }
             }
-        }
 
-        if (result.AcknowledgedEventIds.Count > 0)
+            if (result.AcknowledgedEventIds.Count > 0)
+            {
+                DateTimeOffset acknowledgedAt = _clock.UtcNow;
+                var acknowledgements = result.AcknowledgedEventIds.Select(eventId => new LocalSyncAcknowledgement(
+                    Guid.NewGuid(),
+                    result.BatchId,
+                    eventId,
+                    result.FailedCount == 0 ? "acknowledged" : "partial_acknowledged",
+                    result.RawResponseJson,
+                    acknowledgedAt)).ToArray();
+
+                if (claimedRepository is null)
+                {
+                    await _repository.CommitSyncAcknowledgementsAsync(
+                        acknowledgements, acknowledgedAt, cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    await claimedRepository.CommitClaimedSyncAcknowledgementsAsync(
+                        batchId, acknowledgements, acknowledgedAt, cancellationToken).ConfigureAwait(false);
+                }
+            }
+            return result;
+        }
+        finally
         {
-            DateTimeOffset acknowledgedAt = _clock.UtcNow;
-            var acknowledgements = result.AcknowledgedEventIds.Select(eventId => new LocalSyncAcknowledgement(
-                Guid.NewGuid(),
-                result.BatchId,
-                eventId,
-                result.FailedCount == 0 ? "acknowledged" : "partial_acknowledged",
-                result.RawResponseJson,
-                acknowledgedAt)).ToArray();
-
-            await _repository.CommitSyncAcknowledgementsAsync(
-                acknowledgements, acknowledgedAt, cancellationToken).ConfigureAwait(false);
+            // Release only outstanding rows still owned by this batch. Never
+            // requeue another worker's claim, even after a crash/recovery race.
+            if (claimedRepository is not null)
+                await claimedRepository.ReleaseClaimAsync(batchId, CancellationToken.None).ConfigureAwait(false);
         }
-
-        return result;
     }
 
     private static void ValidateResult(RemoteSyncPushRequest request, RemoteSyncPushResult result)
@@ -113,18 +133,25 @@ public sealed class RemoteSyncPushService
         }
     }
 
-    private Task ApplyRetryDecisionAsync(LocalOutboxEvent outboxEvent, LocalSyncRetryDecision decision, CancellationToken cancellationToken)
+    private Task ApplyRetryDecisionAsync(
+        LocalOutboxEvent outboxEvent, LocalSyncRetryDecision decision,
+        ILeasedLocalSyncRepository? claimedRepository, Guid batchId, CancellationToken cancellationToken)
     {
-        if (decision.ShouldDeadLetter)
-        {
-            return _repository.MarkOutboxDeadLetterAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken);
-        }
+        LocalOutboxStatus status = decision.ShouldDeadLetter
+            ? LocalOutboxStatus.DeadLetter
+            : decision.ShouldRetry ? LocalOutboxStatus.RetryPending : LocalOutboxStatus.Failed;
 
-        if (decision.ShouldRetry)
-        {
-            return _repository.MarkOutboxRetryPendingAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken);
-        }
+        if (claimedRepository is not null)
+            return claimedRepository.MarkClaimedOutboxFailureAsync(
+                batchId, outboxEvent.Id, status, decision.DiagnosticReason, cancellationToken);
 
-        return _repository.MarkOutboxFailedAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken);
+        return status switch
+        {
+            LocalOutboxStatus.DeadLetter =>
+                _repository.MarkOutboxDeadLetterAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken),
+            LocalOutboxStatus.RetryPending =>
+                _repository.MarkOutboxRetryPendingAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken),
+            _ => _repository.MarkOutboxFailedAsync(outboxEvent.Id, decision.DiagnosticReason, cancellationToken)
+        };
     }
 }
