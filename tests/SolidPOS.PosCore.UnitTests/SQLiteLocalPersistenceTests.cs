@@ -1,4 +1,6 @@
 using Microsoft.Data.Sqlite;
+using SolidPOS.PosCore.Application.Abstractions;
+using SolidPOS.PosCore.Application.Sync;
 using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Infrastructure.SQLite;
 using Xunit;
@@ -139,6 +141,151 @@ public sealed class SQLiteLocalPersistenceTests
         using var outboxCount = connection.CreateCommand();
         outboxCount.CommandText = "SELECT COUNT(*) FROM local_outbox_events;";
         Assert.Equal(1L, (long?)outboxCount.ExecuteScalar());
+    }
+
+
+    [Fact]
+    public async Task Transient_remote_timeout_recovers_from_SQLite_without_resending_synced_event()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+
+        var at = new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var outboxEvent = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        await repository.SaveOutboxEventAsync(outboxEvent);
+
+        var client = new FailOnceRemoteSyncClient();
+        var service = new RemoteSyncPushService(repository, client, new FixedClock(at));
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            () => service.PushPendingAsync(10, Guid.NewGuid(), "fixture-terminal-token"));
+
+        Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.RetryPending));
+        Assert.Empty(await repository.GetPendingOutboxEventsAsync(10));
+        var retrying = await repository.GetLatestOutboxEventByStatusAsync(LocalOutboxStatus.RetryPending);
+        Assert.NotNull(retrying);
+        Assert.Equal(outboxEvent.Id, retrying.Id);
+        Assert.Equal(1, retrying.Attempts);
+
+        // Simulate the next sync cycle using a new repository instance on the same file.
+        var reopened = new SQLiteLocalPosRepository(new SQLiteLocalDatabase(fixture.DatabasePath));
+        Assert.Equal(1, await reopened.RecoverRetryPendingOutboxEventsAsync(5, "connection_recovered"));
+        var restoredService = new RemoteSyncPushService(reopened, client, new FixedClock(at));
+        var result = await restoredService.PushPendingAsync(10, Guid.NewGuid(), "fixture-terminal-token");
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.AcceptedCount);
+        Assert.Equal(1, await reopened.CountOutboxByStatusAsync(LocalOutboxStatus.Synced));
+        Assert.Equal(0, await reopened.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(0, await reopened.CountOutboxByStatusAsync(LocalOutboxStatus.RetryPending));
+
+        // No pending events remain; replaying the pump cannot resend an acknowledged event.
+        Assert.Null(await restoredService.PushPendingAsync(10, Guid.NewGuid(), "fixture-terminal-token"));
+        Assert.Equal(2, client.CallCount);
+        Assert.Equal(1, CountRows(fixture.Database, "local_sync_acknowledgements"));
+    }
+
+    [Fact]
+    public async Task Permanent_remote_failure_stays_in_dead_letter_and_queue_health_requires_recovery()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+
+        var at = new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var outboxEvent = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        await repository.SaveOutboxEventAsync(outboxEvent);
+        var service = new RemoteSyncPushService(repository, new InvalidPayloadRemoteSyncClient(), new FixedClock(at));
+
+        await Assert.ThrowsAsync<FormatException>(
+            () => service.PushPendingAsync(10, Guid.NewGuid(), "fixture-terminal-token"));
+
+        var reopened = new SQLiteLocalPosRepository(new SQLiteLocalDatabase(fixture.DatabasePath));
+        Assert.Equal(1, await reopened.CountOutboxByStatusAsync(LocalOutboxStatus.DeadLetter));
+        Assert.Equal(0, await reopened.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(0, await reopened.RecoverRetryPendingOutboxEventsAsync(5, "network_recovered"));
+        Assert.Equal(0, await reopened.RetryFailedOutboxEventsAsync(5, "retry_failures"));
+
+        var latest = await reopened.GetLatestOutboxEventByStatusAsync(LocalOutboxStatus.DeadLetter);
+        Assert.NotNull(latest);
+        Assert.Equal(1, latest.Attempts);
+        Assert.Contains("dead_letter", latest.LastError);
+
+        var health = await reopened.GetLocalSyncQueueHealthAsync(at.AddMinutes(1), TimeSpan.FromMinutes(5));
+        Assert.Equal(1, health.DeadLetterCount);
+        Assert.True(health.RequiresRecovery);
+        Assert.Empty(await reopened.GetPendingOutboxEventsAsync(10));
+    }
+
+    [Fact]
+    public async Task Failed_outbox_recovery_enforces_attempt_limit_and_does_not_duplicate_pending_events()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+
+        var at = new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var outboxEvent = CreateOutbox(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), at);
+        await repository.SaveOutboxEventAsync(outboxEvent);
+        await repository.MarkOutboxFailedAsync(outboxEvent.Id, "temporary_failure");
+        await repository.MarkOutboxFailedAsync(outboxEvent.Id, "second_failure");
+
+        Assert.Equal(0, await repository.RetryFailedOutboxEventsAsync(2, "retry_limit"));
+        Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Failed));
+        Assert.Equal(1, await repository.RetryFailedOutboxEventsAsync(3, "operator_approved_retry"));
+        Assert.Equal(0, await repository.RetryFailedOutboxEventsAsync(3, "repeat_retry"));
+
+        var pending = await repository.GetPendingOutboxEventsAsync(10);
+        Assert.Single(pending);
+        Assert.Equal(outboxEvent.Id, pending[0].Id);
+        Assert.Equal(2, pending[0].Attempts);
+        Assert.Equal(1, CountRows(fixture.Database, "local_outbox_events"));
+    }
+
+    private static int CountRows(SQLiteLocalDatabase database, string tableName)
+    {
+        // Names below are test constants, never derived from external input.
+        if (tableName is not ("local_sync_acknowledgements" or "local_outbox_events"))
+            throw new ArgumentException("Unsupported fixture table.", nameof(tableName));
+        using var connection = database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {tableName};";
+        return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    private sealed class FixedClock(DateTimeOffset now) : IClock
+    {
+        public DateTimeOffset UtcNow => now;
+    }
+
+    private sealed class FailOnceRemoteSyncClient : IRemoteSyncClient
+    {
+        public int CallCount { get; private set; }
+
+        public Task<RemoteSyncPushResult> PushAsync(
+            RemoteSyncPushRequest request, string terminalAccessToken, CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            if (CallCount == 1)
+                throw new TimeoutException("fixture transient timeout");
+
+            return Task.FromResult(new RemoteSyncPushResult(
+                request.BatchId,
+                request.Events.Count,
+                request.Events.Count,
+                0,
+                0,
+                "{\"acceptedCount\":1}",
+                request.Events.Select(item => item.EventId).ToArray()));
+        }
+    }
+
+    private sealed class InvalidPayloadRemoteSyncClient : IRemoteSyncClient
+    {
+        public Task<RemoteSyncPushResult> PushAsync(
+            RemoteSyncPushRequest request, string terminalAccessToken, CancellationToken cancellationToken = default) =>
+            throw new FormatException("fixture invalid contract");
     }
 
     private static OfflineSaleDraft CreateSale(
