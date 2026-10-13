@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-using System.Security.Cryptography;
 using SolidPOS.DiscountEngine;
 using SolidPOS.PosCore.Domain;
 
@@ -42,15 +40,6 @@ public static class OfflineDiscountQuoteService
     }
 
     /// <summary>Stable line identity across restarts without changing the v4 payload.</summary>
-    public static Guid GetStableLineId(Guid localSaleId, int zeroBasedLineIndex)
-    {
-        if (localSaleId == Guid.Empty || zeroBasedLineIndex < 0)
-            throw new ArgumentOutOfRangeException(nameof(zeroBasedLineIndex));
-        Span<byte> data = stackalloc byte[20];
-        localSaleId.TryWriteBytes(data);
-        BinaryPrimitives.WriteInt32LittleEndian(data[16..], zeroBasedLineIndex);
-        Span<byte> hash = stackalloc byte[32];
-        SHA256.HashData(data, hash);
-        return new Guid(hash[..16]);
-    }
+    public static Guid GetStableLineId(Guid localSaleId, int zeroBasedLineIndex) =>
+        DiscountCalculator.GetStableLineId(localSaleId, zeroBasedLineIndex);
 }
