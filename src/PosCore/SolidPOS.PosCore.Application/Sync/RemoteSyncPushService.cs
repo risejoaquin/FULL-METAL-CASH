@@ -49,6 +49,11 @@ public sealed class RemoteSyncPushService
             throw;
         }
 
+        // Fail closed on malformed or ambiguous acknowledgements. The remote server
+        // may have committed a side effect before a malformed response; keeping
+        // local events pending allows a later idempotent replay by event ID.
+        ValidateResult(request, result);
+
         if (result.FailedCount == 0)
         {
             await _repository.MarkOutboxSyncedAsync(result.AcknowledgedEventIds, _clock.UtcNow, cancellationToken).ConfigureAwait(false);
@@ -78,6 +83,35 @@ public sealed class RemoteSyncPushService
             cancellationToken).ConfigureAwait(false);
 
         return result;
+    }
+
+    private static void ValidateResult(RemoteSyncPushRequest request, RemoteSyncPushResult result)
+    {
+        if (result.BatchId != request.BatchId || result.AttemptedCount != request.Events.Count)
+        {
+            throw new InvalidOperationException("Remote sync response batch identity/count mismatch.");
+        }
+
+        if (result.AcceptedCount < 0 || result.DuplicateCount < 0 || result.FailedCount < 0 ||
+            (long)result.AcceptedCount + result.DuplicateCount + result.FailedCount != request.Events.Count)
+        {
+            throw new InvalidOperationException("Remote sync response counters do not reconcile.");
+        }
+
+        if (result.AcknowledgedEventIds is null)
+        {
+            throw new InvalidOperationException("Remote sync response is missing per-event acknowledgements.");
+        }
+
+        var requestedIds = request.Events.Select(item => item.EventId).ToHashSet();
+        var acknowledgedIds = result.AcknowledgedEventIds.ToHashSet();
+        if (requestedIds.Count != request.Events.Count ||
+            acknowledgedIds.Count != result.AcknowledgedEventIds.Count ||
+            acknowledgedIds.Count != (long)result.AcceptedCount + result.DuplicateCount ||
+            !acknowledgedIds.IsSubsetOf(requestedIds))
+        {
+            throw new InvalidOperationException("Remote sync response has missing, duplicate, or foreign acknowledgements.");
+        }
     }
 
     private Task ApplyRetryDecisionAsync(LocalOutboxEvent outboxEvent, LocalSyncRetryDecision decision, CancellationToken cancellationToken)
