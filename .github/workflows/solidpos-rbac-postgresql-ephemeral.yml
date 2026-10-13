@@ -1,0 +1,75 @@
+name: SolidPOS Recovery RBAC PostgreSQL Fixture
+
+on:
+  push:
+    branches:
+      - AC-DEV
+    paths:
+      - 'database/postgresql/022_sync_recovery_rbac_registration.sql'
+      - 'tests/database/sync-recovery-rbac-ephemeral-smoke.sql'
+      - '.github/workflows/solidpos-rbac-postgresql-ephemeral.yml'
+  pull_request:
+    paths:
+      - 'database/postgresql/022_sync_recovery_rbac_registration.sql'
+      - 'tests/database/sync-recovery-rbac-ephemeral-smoke.sql'
+      - '.github/workflows/solidpos-rbac-postgresql-ephemeral.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-postgres:
+    name: PostgreSQL 16 recovery RBAC disposable smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: solidpos_ci_disposable
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable_ci_not_a_real_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d solidpos_ci_disposable"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGDATABASE: solidpos_ci_disposable
+      PGUSER: postgres
+      PGPASSWORD: disposable_ci_not_a_real_secret
+    steps:
+      - name: Checkout development branch
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client on ephemeral runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+
+      - name: Apply base disposable schema and role seed
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 -f database/postgresql/001_initial_schema_postgresql.sql
+          psql -X -v ON_ERROR_STOP=1 -f database/postgresql/002_seed_permissions.sql
+          psql -X -v ON_ERROR_STOP=1 -f database/postgresql/003_seed_mvp_defaults.sql
+          psql -X -v ON_ERROR_STOP=1 -c "INSERT INTO pos.tenants (id, name) VALUES ('9b6619c1-f236-47c7-bcd8-2cfe15654321', 'RBAC test old tenant'); SELECT pos.seed_mvp_roles('9b6619c1-f236-47c7-bcd8-2cfe15654321'::uuid);"
+
+      - name: Apply additive recovery permission registration twice
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 -f database/postgresql/022_sync_recovery_rbac_registration.sql
+          psql -X -v ON_ERROR_STOP=1 -f database/postgresql/022_sync_recovery_rbac_registration.sql
+
+      - name: Validate no implicit role grants and explicit RBAC compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -X -v ON_ERROR_STOP=1 -f tests/database/sync-recovery-rbac-ephemeral-smoke.sql
