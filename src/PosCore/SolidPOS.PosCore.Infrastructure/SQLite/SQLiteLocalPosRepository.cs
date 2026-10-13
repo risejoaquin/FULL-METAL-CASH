@@ -1105,14 +1105,19 @@ VALUES ($id, $tenant, $store, $terminal, $user, $session, $reference,
             throw new ArgumentOutOfRangeException(nameof(request), "Approval reference must be at most 128 characters.");
 
         cancellationToken.ThrowIfCancellationRequested();
-        var utcNow = request.NowUtc.ToUniversalTime();
+        // Never let a caller fast-forward the recovery clock to classify
+        // recently claimed events as stale. The system clock is authoritative.
+        var securityNow = DateTimeOffset.UtcNow;
+        if (Math.Abs((request.NowUtc.ToUniversalTime() - securityNow).TotalSeconds) > 120)
+            throw new ArgumentOutOfRangeException(nameof(request),
+                "Recovery request clock differs from the trusted system UTC clock by more than two minutes.");
+        var utcNow = securityNow;
         var cutoff = (utcNow - request.ProcessingTimeout).ToString("O");
         using var connection = _database.OpenConnection();
         using var transaction = connection.BeginTransaction();
         // Authorization is verified inside the same write transaction as the
         // state mutation, so closed sessions/revoked permissions and consumed
         // approvals cannot pass via a stale preflight check.
-        var securityNow = DateTimeOffset.UtcNow;
         Guid executorId = RequireAuthorizedRecoverySession(
             connection, transaction, request.ExecutorSessionId, request.TenantId,
             request.StoreId, LocalSyncRecoveryPermissions.Execute, securityNow);
