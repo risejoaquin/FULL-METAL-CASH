@@ -2596,7 +2596,7 @@ LIMIT 1;
         using var select = connection.CreateCommand();
         select.Transaction = transaction;
         select.CommandText = """
-SELECT approver_user_id, approval_reference, expires_at_utc, consumed_at_utc,
+SELECT approver_user_id, approver_session_id, approval_reference, expires_at_utc, consumed_at_utc,
        processing_timeout_seconds, max_events, reason
 FROM local_sync_recovery_approvals
 WHERE recovery_id = $id AND tenant_id = $tenant AND store_id = $store
@@ -2606,20 +2606,32 @@ WHERE recovery_id = $id AND tenant_id = $tenant AND store_id = $store
         select.Parameters.AddWithValue("$tenant", request.TenantId.ToString());
         select.Parameters.AddWithValue("$store", request.StoreId.ToString());
         select.Parameters.AddWithValue("$terminal", request.TerminalId.ToString());
+        Guid approverId;
+        Guid approverSessionId;
         using (var reader = select.ExecuteReader())
         {
             if (!reader.Read())
                 throw new UnauthorizedAccessException("No independently recorded approval exists for this recovery.");
-            if (Guid.Parse(reader.GetString(0)) == executorId)
+            approverId = Guid.Parse(reader.GetString(0));
+            approverSessionId = Guid.Parse(reader.GetString(1));
+            if (approverId == executorId)
                 throw new UnauthorizedAccessException("Recovery executor cannot approve their own operation.");
-            if (!string.Equals(reader.GetString(1), request.ApprovalReference, StringComparison.Ordinal) ||
-                reader.IsDBNull(2) || DateTimeOffset.Parse(reader.GetString(2)) <= now ||
-                !reader.IsDBNull(3) ||
-                reader.GetInt64(4) != Convert.ToInt64(request.ProcessingTimeout.TotalSeconds) ||
-                reader.GetInt32(5) != request.MaxEvents ||
-                !string.Equals(reader.GetString(6), request.Reason, StringComparison.Ordinal))
+            if (!string.Equals(reader.GetString(2), request.ApprovalReference, StringComparison.Ordinal) ||
+                reader.IsDBNull(3) || DateTimeOffset.Parse(reader.GetString(3)) <= now ||
+                !reader.IsDBNull(4) ||
+                reader.GetInt64(5) != Convert.ToInt64(request.ProcessingTimeout.TotalSeconds) ||
+                reader.GetInt32(6) != request.MaxEvents ||
+                !string.Equals(reader.GetString(7), request.Reason, StringComparison.Ordinal))
                 throw new UnauthorizedAccessException("Recovery approval expired, consumed or does not match the operation.");
         }
+
+        // A revoked approver or closed session invalidates even an unexpired approval.
+        // Recheck permission under the same DB transaction before consuming it.
+        Guid currentApprover = RequireAuthorizedRecoverySession(
+            connection, transaction, approverSessionId, request.TenantId,
+            request.StoreId, LocalSyncRecoveryPermissions.Approve, now);
+        if (currentApprover != approverId)
+            throw new UnauthorizedAccessException("Recovery approval signer no longer matches the active session.");
 
         using var consume = connection.CreateCommand();
         consume.Transaction = transaction;
