@@ -670,6 +670,9 @@ public sealed class SQLiteLocalPersistenceTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => initial.CommitClaimedSyncAcknowledgementsAsync(staleClaimId, new[] { staleAck }, at));
         await initial.ReleaseClaimAsync(staleClaimId);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => initial.MarkClaimedOutboxFailureAsync(
+                staleClaimId, message.Id, LocalOutboxStatus.RetryPending, "stale_failure"));
 
         Assert.Equal(1, await current.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
         Assert.Equal(1, CountRows(fixture.Database, "local_sync_claims"));
@@ -698,6 +701,37 @@ public sealed class SQLiteLocalPersistenceTests
         Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
         Assert.Equal(0, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
         Assert.Equal(0, CountRows(fixture.Database, "local_sync_claims"));
+    }
+
+
+    [Fact]
+    public async Task Processing_health_tracks_claim_age_not_historic_offline_sale_age()
+    {
+        using var fixture = new DisposableSQLiteDatabase();
+        var repository = new SQLiteLocalPosRepository(fixture.Database);
+        await repository.InitializeAsync();
+        var now = new DateTimeOffset(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+        var eventCreatedTwoDaysAgo = CreateOutbox(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), now.AddDays(-2));
+        await repository.SaveOutboxEventAsync(eventCreatedTwoDaysAgo);
+
+        Guid claimId = Guid.NewGuid();
+        Assert.Single(await repository.ClaimPendingOutboxEventsAsync(10, claimId, now));
+        var healthy = await repository.GetLocalSyncQueueHealthAsync(
+            now.AddMinutes(1), TimeSpan.FromMinutes(5));
+        Assert.Equal(1, healthy.ProcessingCount);
+        Assert.False(healthy.HasStuckProcessing);
+        Assert.False(healthy.RequiresRecovery);
+
+        var expired = await repository.GetLocalSyncQueueHealthAsync(
+            now.AddMinutes(6), TimeSpan.FromMinutes(5));
+        Assert.True(expired.HasStuckProcessing);
+        Assert.True(expired.RequiresRecovery);
+
+        Assert.Equal(1, await repository.RecoverStaleClaimsAsync(
+            now.AddMinutes(6), TimeSpan.FromMinutes(5)));
+        Assert.Equal(0, CountRows(fixture.Database, "local_sync_claims"));
+        Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
     }
 
     private sealed class BlockingRemoteSyncClient : IRemoteSyncClient
