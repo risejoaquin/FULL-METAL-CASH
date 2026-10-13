@@ -110,6 +110,13 @@ public sealed class DiscountsService : IDiscountsService
         {
             return null;
         }
+        // Update payload may omit the type, in which case the existing type
+        // controls the new value. Do not let fractional cents enter a fixed
+        // amount rule through an otherwise-valid partial update.
+        string effectiveType = request.DiscountType ?? before.DiscountType;
+        decimal effectiveAmount = request.Value ?? before.Value;
+        if (!DiscountValueIsValid(effectiveType, effectiveAmount))
+            return null;
 
         UpdateDiscountRequest normalized = request with
         {
