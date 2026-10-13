@@ -4,7 +4,7 @@ using SolidPOS.PosCore.Domain;
 
 namespace SolidPOS.PosCore.Infrastructure.SQLite;
 
-public sealed class SQLiteLocalPosRepository : ILocalPosRepository, ILocalResilienceRepository, ILeasedLocalSyncRepository
+public sealed class SQLiteLocalPosRepository : ILocalPosRepository, ILocalResilienceRepository, ILeasedLocalSyncRepository, IControlledLocalSyncRecoveryRepository
 {
     private readonly SQLiteLocalDatabase _database;
 
@@ -71,6 +71,30 @@ CREATE TABLE IF NOT EXISTS local_sync_claim_history (
 -- One-time additive initialization imports any claims created by older AC-DEV builds.
 INSERT OR IGNORE INTO local_sync_claim_history (claim_id, first_claimed_at_utc)
 SELECT claim_id, MIN(claimed_at_utc) FROM local_sync_claims GROUP BY claim_id;
+CREATE TABLE IF NOT EXISTS local_sync_recovery_runs (
+  recovery_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  requested_at_utc TEXT NOT NULL,
+  timeout_seconds INTEGER NOT NULL,
+  max_events INTEGER NOT NULL,
+  actor TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  approval_reference TEXT NULL,
+  dry_run INTEGER NOT NULL CHECK (dry_run IN (0, 1)),
+  eligible_count INTEGER NOT NULL,
+  recovered_count INTEGER NOT NULL,
+  has_more INTEGER NOT NULL CHECK (has_more IN (0, 1))
+);
+CREATE TABLE IF NOT EXISTS local_sync_recovery_candidates (
+  recovery_id TEXT NOT NULL,
+  outbox_event_id TEXT NOT NULL,
+  original_claim_id TEXT NOT NULL,
+  PRIMARY KEY (recovery_id, outbox_event_id),
+  FOREIGN KEY (recovery_id) REFERENCES local_sync_recovery_runs(recovery_id)
+);
+CREATE INDEX IF NOT EXISTS idx_local_sync_recovery_runs_time ON local_sync_recovery_runs(requested_at_utc);
 CREATE TABLE IF NOT EXISTS local_sync_acknowledgements (
   id TEXT PRIMARY KEY,
   batch_id TEXT NOT NULL,
@@ -973,6 +997,176 @@ WHERE status = $inFlight
         }
         transaction.Commit();
         return Task.FromResult(recovered);
+    }
+
+
+    /// <summary>
+    /// Operator-controlled recovery. Both the event transitions and the durable
+    /// audit journal are committed in one SQLite write transaction. Dry-runs also
+    /// produce an audit record but never mutate claims or event statuses.
+    /// Scope is always exactly one tenant, store and terminal.
+    /// </summary>
+    public Task<LocalSyncRecoveryResult> RecoverStaleClaimsWithAuditAsync(
+        LocalSyncRecoveryRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.RecoveryId == Guid.Empty || request.TenantId == Guid.Empty ||
+            request.StoreId == Guid.Empty || request.TerminalId == Guid.Empty)
+            throw new ArgumentException("Recovery ID and complete terminal scope are required.", nameof(request));
+        if (request.ProcessingTimeout < TimeSpan.FromMinutes(5) ||
+            request.ProcessingTimeout > TimeSpan.FromHours(24))
+            throw new ArgumentOutOfRangeException(nameof(request), "Recovery timeout must be between 5 minutes and 24 hours.");
+        if (request.MaxEvents is < 1 or > 100)
+            throw new ArgumentOutOfRangeException(nameof(request), "Recovery batch must contain 1 to 100 events.");
+        if (string.IsNullOrWhiteSpace(request.Actor) || request.Actor.Length > 128 ||
+            string.IsNullOrWhiteSpace(request.Reason) || request.Reason.Length > 256)
+            throw new ArgumentException("Recovery actor (max 128) and reason (max 256) are required.", nameof(request));
+        if (!request.DryRun && (string.IsNullOrWhiteSpace(request.ApprovalReference) ||
+            request.ApprovalReference.Length > 128))
+            throw new InvalidOperationException("Explicit recovery requires an approval reference.");
+        if (request.ApprovalReference?.Length > 128)
+            throw new ArgumentOutOfRangeException(nameof(request), "Approval reference must be at most 128 characters.");
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var utcNow = request.NowUtc.ToUniversalTime();
+        var cutoff = (utcNow - request.ProcessingTimeout).ToString("O");
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        int eligibleCount;
+        using (var count = connection.CreateCommand())
+        {
+            count.Transaction = transaction;
+            count.CommandText = """
+SELECT COUNT(*)
+FROM local_sync_claims c
+JOIN local_outbox_events e ON e.id = c.outbox_event_id
+WHERE e.status = $inFlight AND c.claimed_at_utc <= $cutoff
+  AND e.tenant_id = $tenant AND e.store_id = $store AND e.terminal_id = $terminal;
+""";
+            count.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
+            count.Parameters.AddWithValue("$cutoff", cutoff);
+            count.Parameters.AddWithValue("$tenant", request.TenantId.ToString());
+            count.Parameters.AddWithValue("$store", request.StoreId.ToString());
+            count.Parameters.AddWithValue("$terminal", request.TerminalId.ToString());
+            eligibleCount = Convert.ToInt32(count.ExecuteScalar());
+        }
+
+        var candidates = new List<(Guid EventId, Guid ClaimId)>();
+        using (var select = connection.CreateCommand())
+        {
+            select.Transaction = transaction;
+            select.CommandText = """
+SELECT e.id, c.claim_id
+FROM local_sync_claims c
+JOIN local_outbox_events e ON e.id = c.outbox_event_id
+WHERE e.status = $inFlight AND c.claimed_at_utc <= $cutoff
+  AND e.tenant_id = $tenant AND e.store_id = $store AND e.terminal_id = $terminal
+ORDER BY c.claimed_at_utc, e.id
+LIMIT $limit;
+""";
+            select.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
+            select.Parameters.AddWithValue("$cutoff", cutoff);
+            select.Parameters.AddWithValue("$tenant", request.TenantId.ToString());
+            select.Parameters.AddWithValue("$store", request.StoreId.ToString());
+            select.Parameters.AddWithValue("$terminal", request.TerminalId.ToString());
+            select.Parameters.AddWithValue("$limit", request.MaxEvents);
+            using var reader = select.ExecuteReader();
+            while (reader.Read())
+                candidates.Add((Guid.Parse(reader.GetString(0)), Guid.Parse(reader.GetString(1))));
+        }
+
+        int recovered = 0;
+        if (!request.DryRun)
+        {
+            foreach (var candidate in candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using (var update = connection.CreateCommand())
+                {
+                    update.Transaction = transaction;
+                    update.CommandText = """
+UPDATE local_outbox_events SET status = $pending
+WHERE id = $eventId AND status = $inFlight
+  AND tenant_id = $tenant AND store_id = $store AND terminal_id = $terminal
+  AND EXISTS (
+      SELECT 1 FROM local_sync_claims c
+      WHERE c.outbox_event_id = $eventId AND c.claim_id = $claimId
+        AND c.claimed_at_utc <= $cutoff);
+""";
+                    update.Parameters.AddWithValue("$pending", (int)LocalOutboxStatus.Pending);
+                    update.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
+                    update.Parameters.AddWithValue("$eventId", candidate.EventId.ToString());
+                    update.Parameters.AddWithValue("$claimId", candidate.ClaimId.ToString());
+                    update.Parameters.AddWithValue("$tenant", request.TenantId.ToString());
+                    update.Parameters.AddWithValue("$store", request.StoreId.ToString());
+                    update.Parameters.AddWithValue("$terminal", request.TerminalId.ToString());
+                    update.Parameters.AddWithValue("$cutoff", cutoff);
+                    if (update.ExecuteNonQuery() != 1)
+                        throw new InvalidOperationException("Stale claim changed during controlled recovery.");
+                }
+                using (var remove = connection.CreateCommand())
+                {
+                    remove.Transaction = transaction;
+                    remove.CommandText =
+                        "DELETE FROM local_sync_claims WHERE outbox_event_id = $eventId AND claim_id = $claimId;";
+                    remove.Parameters.AddWithValue("$eventId", candidate.EventId.ToString());
+                    remove.Parameters.AddWithValue("$claimId", candidate.ClaimId.ToString());
+                    if (remove.ExecuteNonQuery() != 1)
+                        throw new InvalidOperationException("Stale claim ownership changed during recovery.");
+                }
+                recovered++;
+            }
+        }
+
+        using (var run = connection.CreateCommand())
+        {
+            run.Transaction = transaction;
+            run.CommandText = """
+INSERT INTO local_sync_recovery_runs
+    (recovery_id, tenant_id, store_id, terminal_id, requested_at_utc,
+     timeout_seconds, max_events, actor, reason, approval_reference,
+     dry_run, eligible_count, recovered_count, has_more)
+VALUES ($id, $tenant, $store, $terminal, $now,
+        $timeout, $max, $actor, $reason, $approval,
+        $dry, $eligible, $recovered, $more);
+""";
+            run.Parameters.AddWithValue("$id", request.RecoveryId.ToString());
+            run.Parameters.AddWithValue("$tenant", request.TenantId.ToString());
+            run.Parameters.AddWithValue("$store", request.StoreId.ToString());
+            run.Parameters.AddWithValue("$terminal", request.TerminalId.ToString());
+            run.Parameters.AddWithValue("$now", utcNow.ToString("O"));
+            run.Parameters.AddWithValue("$timeout", Convert.ToInt64(request.ProcessingTimeout.TotalSeconds));
+            run.Parameters.AddWithValue("$max", request.MaxEvents);
+            run.Parameters.AddWithValue("$actor", request.Actor);
+            run.Parameters.AddWithValue("$reason", request.Reason);
+            run.Parameters.AddWithValue("$approval", request.ApprovalReference is null ? DBNull.Value : request.ApprovalReference);
+            run.Parameters.AddWithValue("$dry", request.DryRun ? 1 : 0);
+            run.Parameters.AddWithValue("$eligible", eligibleCount);
+            run.Parameters.AddWithValue("$recovered", recovered);
+            run.Parameters.AddWithValue("$more", eligibleCount > candidates.Count ? 1 : 0);
+            run.ExecuteNonQuery();
+        }
+
+        foreach (var candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using var detail = connection.CreateCommand();
+            detail.Transaction = transaction;
+            detail.CommandText = """
+INSERT INTO local_sync_recovery_candidates (recovery_id, outbox_event_id, original_claim_id)
+VALUES ($recoveryId, $eventId, $claimId);
+""";
+            detail.Parameters.AddWithValue("$recoveryId", request.RecoveryId.ToString());
+            detail.Parameters.AddWithValue("$eventId", candidate.EventId.ToString());
+            detail.Parameters.AddWithValue("$claimId", candidate.ClaimId.ToString());
+            detail.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.FromResult(new LocalSyncRecoveryResult(
+            request.RecoveryId, request.DryRun, eligibleCount, recovered,
+            eligibleCount > candidates.Count, candidates.Select(x => x.EventId).ToArray()));
     }
 
     public Task<IReadOnlyList<LocalOutboxEvent>> GetPendingOutboxEventsAsync(int limit, CancellationToken cancellationToken = default)
