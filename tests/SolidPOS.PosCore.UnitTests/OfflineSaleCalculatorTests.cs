@@ -79,6 +79,30 @@ public sealed class OfflineSaleCalculatorTests
         };
         Assert.Throws<InvalidOperationException>(() =>
             OfflineSaleCalculator.Validate(paymentOverflow));
+
+        var aggregateOverflow = original with
+        {
+            Lines =
+            [
+                original.Lines[0] with
+                {
+                    Quantity = 1,
+                    UnitPriceCents = 1_500_000_000,
+                    DiscountCents = 1_499_999_900,
+                    DiscountId = Guid.NewGuid()
+                },
+                original.Lines[0] with
+                {
+                    Quantity = 1,
+                    UnitPriceCents = 1_500_000_000,
+                    DiscountCents = 1_499_999_900,
+                    DiscountId = Guid.NewGuid()
+                }
+            ],
+            Payments = [new OfflineSalePaymentDraft("cash", 200)]
+        };
+        Assert.Throws<InvalidOperationException>(() =>
+            OfflineSaleCalculator.Validate(aggregateOverflow));
     }
 
     private static OfflineSaleDraft CreateSale(int totalPaidCents) => new(
