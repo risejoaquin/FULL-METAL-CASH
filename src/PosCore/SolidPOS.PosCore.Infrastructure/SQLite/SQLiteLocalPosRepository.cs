@@ -64,6 +64,13 @@ CREATE INDEX IF NOT EXISTS idx_local_sync_claims_expiry
   ON local_sync_claims(claimed_at_utc);
 CREATE INDEX IF NOT EXISTS idx_local_sync_claims_batch
   ON local_sync_claims(claim_id);
+CREATE TABLE IF NOT EXISTS local_sync_claim_history (
+  claim_id TEXT PRIMARY KEY,
+  first_claimed_at_utc TEXT NOT NULL
+);
+-- One-time additive initialization imports any claims created by older AC-DEV builds.
+INSERT OR IGNORE INTO local_sync_claim_history (claim_id, first_claimed_at_utc)
+SELECT claim_id, MIN(claimed_at_utc) FROM local_sync_claims GROUP BY claim_id;
 CREATE TABLE IF NOT EXISTS local_sync_acknowledgements (
   id TEXT PRIMARY KEY,
   batch_id TEXT NOT NULL,
@@ -693,11 +700,11 @@ ORDER BY product_id, movement_type;
         using (var existing = connection.CreateCommand())
         {
             existing.Transaction = transaction;
-            existing.CommandText = "SELECT COUNT(*) FROM local_sync_claims WHERE claim_id = $claimId;";
+            existing.CommandText = "SELECT COUNT(*) FROM local_sync_claim_history WHERE claim_id = $claimId;";
             existing.Parameters.AddWithValue("$claimId", claimId.ToString());
             if (Convert.ToInt32(existing.ExecuteScalar()) != 0)
             {
-                throw new InvalidOperationException("Sync claim ID is already active.");
+                throw new InvalidOperationException("Sync claim ID was already used; a new batch ID is required.");
             }
         }
 
@@ -751,6 +758,21 @@ ORDER BY e.sequence_number, e.id LIMIT $limit;
             {
                 selected.Add(ReadOutboxEvent(reader));
             }
+        }
+
+        // Preserve all issued claim IDs. If an expired claim were reused, a
+        // delayed worker could otherwise masquerade as its new owner.
+        if (selected.Count > 0)
+        {
+            using var history = connection.CreateCommand();
+            history.Transaction = transaction;
+            history.CommandText = """
+INSERT INTO local_sync_claim_history (claim_id, first_claimed_at_utc)
+VALUES ($claimId, $claimedAtUtc);
+""";
+            history.Parameters.AddWithValue("$claimId", claimId.ToString());
+            history.Parameters.AddWithValue("$claimedAtUtc", claimedAtUtc.ToUniversalTime().ToString("O"));
+            history.ExecuteNonQuery();
         }
 
         foreach (var item in selected)
