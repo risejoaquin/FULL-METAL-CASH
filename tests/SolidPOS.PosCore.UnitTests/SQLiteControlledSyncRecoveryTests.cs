@@ -12,7 +12,7 @@ namespace SolidPOS.PosCore.UnitTests;
 /// </summary>
 public sealed class SQLiteControlledSyncRecoveryTests
 {
-    private static readonly DateTimeOffset Now = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = DateTimeOffset.UtcNow;
     private static readonly TimeSpan Timeout = TimeSpan.FromMinutes(5);
 
     [Fact]
@@ -365,6 +365,33 @@ BEGIN SELECT RAISE(ABORT, 'fixture_execution_journal_failed'); END;
         Assert.Equal(1, (await repo.RecoverStaleClaimsWithAuditAsync(request)).RecoveredCount);
     }
 
+
+    [Fact]
+    public async Task Recovery_cannot_fast_forward_client_clock_to_release_recent_claims()
+    {
+        using var fixture = new DatabaseFixture();
+        var repository = fixture.NewRepository();
+        await repository.InitializeAsync();
+        Guid tenant = Guid.NewGuid(), store = Guid.NewGuid(), terminal = Guid.NewGuid();
+        await repository.SaveOutboxEventAsync(NewEvent(tenant, store, terminal));
+        Assert.Single(await repository.ClaimPendingOutboxEventsAsync(
+            10, Guid.NewGuid(), Now.AddMinutes(-1)));
+
+        var request = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => repository.RecoverStaleClaimsWithAuditAsync(
+                request with { NowUtc = DateTimeOffset.UtcNow.AddDays(1) }));
+
+        Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+        Assert.Equal(1, fixture.Count("local_sync_recovery_approvals"));
+        Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
+        Assert.Equal(1, fixture.ScalarInt(
+            "SELECT COUNT(*) FROM local_sync_recovery_approvals WHERE consumed_at_utc IS NULL"));
+        var normal = await repository.RecoverStaleClaimsWithAuditAsync(request);
+        Assert.Equal(0, normal.RecoveredCount);
+        Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+    }
 
     [Fact]
     public async Task Revoking_approval_permission_after_signing_blocks_execution()
