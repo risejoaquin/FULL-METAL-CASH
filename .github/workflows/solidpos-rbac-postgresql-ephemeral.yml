@@ -59,7 +59,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f database/postgresql/001_initial_schema_postgresql.sql
           psql -X -v ON_ERROR_STOP=1 -f database/postgresql/002_seed_permissions.sql
           psql -X -v ON_ERROR_STOP=1 -f database/postgresql/003_seed_mvp_defaults.sql
-          psql -X -v ON_ERROR_STOP=1 -c "INSERT INTO pos.tenants (id, name) VALUES ('9b6619c1-f236-47c7-bcd8-2cfe15654321', 'RBAC test old tenant'); SELECT pos.seed_mvp_roles('9b6619c1-f236-47c7-bcd8-2cfe15654321'::uuid);"
+          psql -X -v ON_ERROR_STOP=1 -c "SET search_path TO pos, public; INSERT INTO pos.tenants (id, name) VALUES ('9b6619c1-f236-47c7-bcd8-2cfe15654321', 'RBAC test old tenant'); SELECT pos.seed_mvp_roles('9b6619c1-f236-47c7-bcd8-2cfe15654321'::uuid);"
 
       - name: Apply additive recovery permission registration twice
         shell: bash
