@@ -1205,7 +1205,7 @@ VALUES ($id, $batchId, $outboxEventId, $remoteStatus, $remoteResponseJson, $ackn
         int deadLetter = CountOutboxStatus(connection, LocalOutboxStatus.DeadLetter);
         DateTimeOffset? oldestPending = ReadOldestOutboxCreatedAt(connection, LocalOutboxStatus.Pending);
         DateTimeOffset? oldestRetryPending = ReadOldestOutboxCreatedAt(connection, LocalOutboxStatus.RetryPending);
-        DateTimeOffset? oldestProcessing = ReadOldestOutboxCreatedAt(connection, LocalOutboxStatus.InFlight);
+        DateTimeOffset? oldestProcessing = ReadOldestClaimedProcessingAt(connection);
         bool hasStuckProcessing = oldestProcessing.HasValue && nowUtc - oldestProcessing.Value > processingTimeout;
         bool requiresRecovery = retryPending > 0 || deadLetter > 0 || hasStuckProcessing;
 
@@ -2212,6 +2212,25 @@ VALUES ($id, $shiftId, $tenantId, $storeId, $terminalId, $movementType, $amountC
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT created_at_utc FROM local_outbox_events WHERE status = $status ORDER BY created_at_utc LIMIT 1;";
         command.Parameters.AddWithValue("$status", (int)status);
+        var value = command.ExecuteScalar();
+        return value is null || value == DBNull.Value ? null : DateTimeOffset.Parse((string)value);
+    }
+
+    private static DateTimeOffset? ReadOldestClaimedProcessingAt(SqliteConnection connection)
+    {
+        // Processing age begins when a worker claims a row, not when the
+        // offline sale was originally created (possibly days earlier).
+        // The fallback supports older InFlight rows without claim metadata.
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT COALESCE(c.claimed_at_utc, e.created_at_utc)
+FROM local_outbox_events e
+LEFT JOIN local_sync_claims c ON c.outbox_event_id = e.id
+WHERE e.status = $inFlight
+ORDER BY COALESCE(c.claimed_at_utc, e.created_at_utc)
+LIMIT 1;
+""";
+        command.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
         var value = command.ExecuteScalar();
         return value is null || value == DBNull.Value ? null : DateTimeOffset.Parse((string)value);
     }
