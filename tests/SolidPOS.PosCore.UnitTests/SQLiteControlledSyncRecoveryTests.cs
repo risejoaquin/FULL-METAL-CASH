@@ -30,7 +30,7 @@ public sealed class SQLiteControlledSyncRecoveryTests
         Assert.Single(await repository.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
         Assert.Single(await repository.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
 
-        var request = Request(tenant, store, terminal, dryRun: true);
+        var request = await fixture.AuthorizeAsync(Request(tenant, store, terminal, dryRun: true));
         var output = await fixture.NewRepository().RecoverStaleClaimsWithAuditAsync(request);
         Assert.True(output.DryRun);
         Assert.Equal(1, output.EligibleCount);
@@ -67,7 +67,7 @@ public sealed class SQLiteControlledSyncRecoveryTests
             () => repository.RecoverStaleClaimsWithAuditAsync(unauthorized));
         Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
 
-        var approved = Request(tenant, store, targetTerminal, dryRun: false);
+        var approved = await fixture.AuthorizeAsync(Request(tenant, store, targetTerminal, dryRun: false), approve: true);
         var result = await repository.RecoverStaleClaimsWithAuditAsync(approved);
         Assert.Equal(1, result.EligibleCount);
         Assert.Equal(1, result.RecoveredCount);
@@ -98,8 +98,9 @@ public sealed class SQLiteControlledSyncRecoveryTests
             Assert.Single(await repository.ClaimPendingOutboxEventsAsync(1, Guid.NewGuid(), Now.AddMinutes(-10)));
         }
 
-        var first = await repository.RecoverStaleClaimsWithAuditAsync(
-            Request(tenant, store, terminal, dryRun: false) with { MaxEvents = 2 });
+        var firstRequest = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false) with { MaxEvents = 2 }, approve: true);
+        var first = await repository.RecoverStaleClaimsWithAuditAsync(firstRequest);
         Assert.Equal(3, first.EligibleCount);
         Assert.Equal(2, first.RecoveredCount);
         Assert.True(first.HasMoreEligible);
@@ -108,8 +109,9 @@ public sealed class SQLiteControlledSyncRecoveryTests
         Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
 
         var reopened = fixture.NewRepository();
-        var second = await reopened.RecoverStaleClaimsWithAuditAsync(
-            Request(tenant, store, terminal, dryRun: false) with { MaxEvents = 2 });
+        var secondRequest = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false) with { MaxEvents = 2 }, approve: true);
+        var second = await reopened.RecoverStaleClaimsWithAuditAsync(secondRequest);
         Assert.Equal(1, second.EligibleCount);
         Assert.Equal(1, second.RecoveredCount);
         Assert.False(second.HasMoreEligible);
@@ -132,7 +134,7 @@ public sealed class SQLiteControlledSyncRecoveryTests
         await repository.SaveOutboxEventAsync(evt);
         Assert.Single(await repository.ClaimPendingOutboxEventsAsync(1, Guid.NewGuid(), Now.AddMinutes(-6)));
 
-        var request = Request(tenant, store, terminal, dryRun: true);
+        var request = await fixture.AuthorizeAsync(Request(tenant, store, terminal, dryRun: true));
         await repository.RecoverStaleClaimsWithAuditAsync(request);
         await Assert.ThrowsAsync<SqliteException>(
             () => repository.RecoverStaleClaimsWithAuditAsync(
@@ -156,6 +158,7 @@ public sealed class SQLiteControlledSyncRecoveryTests
         await repository.SaveOutboxEventAsync(evt);
         Assert.Single(await repository.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
 
+        var authorized = await fixture.AuthorizeAsync(Request(tenant, store, terminal, dryRun: false), approve: true);
         fixture.Execute("""
 CREATE TRIGGER fixture_block_recovery_audit
 BEFORE INSERT ON local_sync_recovery_candidates
@@ -164,8 +167,7 @@ BEGIN SELECT RAISE(ABORT, 'fixture_audit_failed'); END;
         try
         {
             await Assert.ThrowsAsync<SqliteException>(
-                () => repository.RecoverStaleClaimsWithAuditAsync(
-                    Request(tenant, store, terminal, dryRun: false)));
+                () => repository.RecoverStaleClaimsWithAuditAsync(authorized));
         }
         finally
         {
@@ -178,8 +180,7 @@ BEGIN SELECT RAISE(ABORT, 'fixture_audit_failed'); END;
         Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
         Assert.Equal(0, fixture.Count("local_sync_recovery_candidates"));
 
-        var result = await repository.RecoverStaleClaimsWithAuditAsync(
-            Request(tenant, store, terminal, dryRun: false));
+        var result = await repository.RecoverStaleClaimsWithAuditAsync(authorized);
         Assert.Equal(1, result.RecoveredCount);
         Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
     }
@@ -235,6 +236,56 @@ BEGIN SELECT RAISE(ABORT, 'fixture_audit_failed'); END;
 
         private SQLiteLocalDatabase Database { get; }
         public SQLiteLocalPosRepository NewRepository() => new(Database);
+
+        public async Task<LocalSyncRecoveryRequest> AuthorizeAsync(
+            LocalSyncRecoveryRequest request, bool approve = false, bool sameUser = false,
+            bool omitExecutePermission = false, bool omitApprovePermission = false,
+            bool expiredExecutor = false, bool differentStore = false)
+        {
+            var repository = NewRepository();
+            Guid executorId = Guid.NewGuid(), approverId = sameUser ? executorId : Guid.NewGuid();
+            Guid executorSessionId = Guid.NewGuid(), approverSessionId = Guid.NewGuid();
+            var now = DateTimeOffset.UtcNow;
+            Guid executorStore = differentStore ? Guid.NewGuid() : request.StoreId;
+            var executor = new LocalUser(executorId, request.TenantId, executorStore,
+                $"executor-{executorId:N}@fixture.invalid", "Executor", "fixture-password-not-used",
+                "operator", true, now, 12);
+            await repository.SaveLocalUserAsync(executor,
+                omitExecutePermission ? [] : [LocalSyncRecoveryPermissions.Execute]);
+            await repository.CreateLocalSessionAsync(new LocalSession(
+                executorSessionId, executorId, request.TenantId, executorStore, executor.Email,
+                executor.DisplayName, executor.RoleCode, now.AddMinutes(-5),
+                expiredExecutor ? now.AddMinutes(-1) : now.AddMinutes(30), "active"));
+
+            if (approve)
+            {
+                if (!sameUser)
+                {
+                    var approver = new LocalUser(approverId, request.TenantId, request.StoreId,
+                        $"approver-{approverId:N}@fixture.invalid", "Approver",
+                        "fixture-password-not-used", "supervisor", true, now, 12);
+                    await repository.SaveLocalUserAsync(approver,
+                        omitApprovePermission ? [] : [LocalSyncRecoveryPermissions.Approve]);
+                }
+                else
+                {
+                    await repository.SaveLocalUserAsync(executor,
+                        omitApprovePermission ? [LocalSyncRecoveryPermissions.Execute]
+                            : [LocalSyncRecoveryPermissions.Execute, LocalSyncRecoveryPermissions.Approve]);
+                }
+
+                await repository.CreateLocalSessionAsync(new LocalSession(
+                    approverSessionId, approverId, request.TenantId, request.StoreId,
+                    $"approver-{approverId:N}@fixture.invalid", "Approver", "supervisor",
+                    now.AddMinutes(-5), now.AddMinutes(30), "active"));
+                await repository.RegisterRecoveryApprovalAsync(new LocalSyncRecoveryApprovalRequest(
+                    request.RecoveryId, request.TenantId, request.StoreId, request.TerminalId,
+                    approverSessionId, request.ProcessingTimeout, request.MaxEvents,
+                    request.Reason, request.ApprovalReference!));
+            }
+
+            return request with { ExecutorSessionId = executorSessionId };
+        }
 
         public int Count(string table)
         {
