@@ -4,7 +4,7 @@ using SolidPOS.PosCore.Domain;
 
 namespace SolidPOS.PosCore.Infrastructure.SQLite;
 
-public sealed class SQLiteLocalPosRepository : ILocalPosRepository, ILocalResilienceRepository
+public sealed class SQLiteLocalPosRepository : ILocalPosRepository, ILocalResilienceRepository, ILeasedLocalSyncRepository
 {
     private readonly SQLiteLocalDatabase _database;
 
@@ -55,6 +55,15 @@ CREATE TABLE IF NOT EXISTS local_outbox_events (
   last_error TEXT NULL,
   attempts INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS local_sync_claims (
+  outbox_event_id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL,
+  claimed_at_utc TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_local_sync_claims_expiry
+  ON local_sync_claims(claimed_at_utc);
+CREATE INDEX IF NOT EXISTS idx_local_sync_claims_batch
+  ON local_sync_claims(claim_id);
 CREATE TABLE IF NOT EXISTS local_sync_acknowledgements (
   id TEXT PRIMARY KEY,
   batch_id TEXT NOT NULL,
@@ -664,6 +673,284 @@ ORDER BY product_id, movement_type;
         InsertOutboxEvent(connection, transaction, outboxEvent);
         transaction.Commit();
         return Task.CompletedTask;
+    }
+
+
+    /// <summary>
+    /// SQLite uses an IMMEDIATE write transaction, so concurrent repositories
+    /// cannot claim the same pending row. Only one terminal scope enters a batch.
+    /// The claim owner is recorded durably alongside the InFlight status.
+    /// </summary>
+    public Task<IReadOnlyList<LocalOutboxEvent>> ClaimPendingOutboxEventsAsync(
+        int limit, Guid claimId, DateTimeOffset claimedAtUtc, CancellationToken cancellationToken = default)
+    {
+        if (limit <= 0) throw new ArgumentOutOfRangeException(nameof(limit));
+        if (claimId == Guid.Empty) throw new ArgumentException("Claim ID is required.", nameof(claimId));
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        using (var existing = connection.CreateCommand())
+        {
+            existing.Transaction = transaction;
+            existing.CommandText = "SELECT COUNT(*) FROM local_sync_claims WHERE claim_id = $claimId;";
+            existing.Parameters.AddWithValue("$claimId", claimId.ToString());
+            if (Convert.ToInt32(existing.ExecuteScalar()) != 0)
+            {
+                throw new InvalidOperationException("Sync claim ID is already active.");
+            }
+        }
+
+        string? tenantId;
+        string? storeId;
+        string? terminalId;
+        using (var first = connection.CreateCommand())
+        {
+            first.Transaction = transaction;
+            first.CommandText = """
+SELECT e.tenant_id, e.store_id, e.terminal_id
+FROM local_outbox_events e
+WHERE e.status = $pending
+  AND NOT EXISTS (SELECT 1 FROM local_sync_claims c WHERE c.outbox_event_id = e.id)
+ORDER BY e.sequence_number, e.id LIMIT 1;
+""";
+            first.Parameters.AddWithValue("$pending", (int)LocalOutboxStatus.Pending);
+            using var reader = first.ExecuteReader();
+            if (!reader.Read())
+            {
+                transaction.Commit();
+                return Task.FromResult<IReadOnlyList<LocalOutboxEvent>>([]);
+            }
+
+            tenantId = reader.GetString(0);
+            storeId = reader.GetString(1);
+            terminalId = reader.GetString(2);
+        }
+
+        var selected = new List<LocalOutboxEvent>();
+        using (var read = connection.CreateCommand())
+        {
+            read.Transaction = transaction;
+            read.CommandText = """
+SELECT e.id, e.tenant_id, e.store_id, e.terminal_id, e.event_type,
+       e.schema_version, e.sequence_number, e.payload_json, e.status,
+       e.created_at_utc, e.synced_at_utc, e.last_error, e.attempts
+FROM local_outbox_events e
+WHERE e.status = $pending
+  AND e.tenant_id = $tenantId AND e.store_id = $storeId AND e.terminal_id = $terminalId
+  AND NOT EXISTS (SELECT 1 FROM local_sync_claims c WHERE c.outbox_event_id = e.id)
+ORDER BY e.sequence_number, e.id LIMIT $limit;
+""";
+            read.Parameters.AddWithValue("$pending", (int)LocalOutboxStatus.Pending);
+            read.Parameters.AddWithValue("$tenantId", tenantId);
+            read.Parameters.AddWithValue("$storeId", storeId);
+            read.Parameters.AddWithValue("$terminalId", terminalId);
+            read.Parameters.AddWithValue("$limit", limit);
+            using var reader = read.ExecuteReader();
+            while (reader.Read())
+            {
+                selected.Add(ReadOutboxEvent(reader));
+            }
+        }
+
+        foreach (var item in selected)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            using (var update = connection.CreateCommand())
+            {
+                update.Transaction = transaction;
+                update.CommandText =
+                    "UPDATE local_outbox_events SET status = $inFlight WHERE id = $id AND status = $pending;";
+                update.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
+                update.Parameters.AddWithValue("$pending", (int)LocalOutboxStatus.Pending);
+                update.Parameters.AddWithValue("$id", item.Id.ToString());
+                if (update.ExecuteNonQuery() != 1)
+                    throw new InvalidOperationException("Pending event was changed during claim.");
+            }
+            using var insert = connection.CreateCommand();
+            insert.Transaction = transaction;
+            insert.CommandText = """
+INSERT INTO local_sync_claims (outbox_event_id, claim_id, claimed_at_utc)
+VALUES ($eventId, $claimId, $claimedAtUtc);
+""";
+            insert.Parameters.AddWithValue("$eventId", item.Id.ToString());
+            insert.Parameters.AddWithValue("$claimId", claimId.ToString());
+            insert.Parameters.AddWithValue("$claimedAtUtc", claimedAtUtc.ToUniversalTime().ToString("O"));
+            insert.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return Task.FromResult<IReadOnlyList<LocalOutboxEvent>>(
+            selected.Select(item => item with { Status = LocalOutboxStatus.InFlight }).ToArray());
+    }
+
+    public Task CommitClaimedSyncAcknowledgementsAsync(
+        Guid claimId, IReadOnlyCollection<LocalSyncAcknowledgement> acknowledgements,
+        DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(acknowledgements);
+        if (claimId == Guid.Empty) throw new ArgumentException("Claim ID is required.", nameof(claimId));
+        if (acknowledgements.Count == 0) return Task.CompletedTask;
+        if (acknowledgements.Select(item => item.OutboxEventId).Distinct().Count() != acknowledgements.Count)
+            throw new InvalidOperationException("Repeated event acknowledgement in claimed batch.");
+
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        foreach (var ack in acknowledgements)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (ack.BatchId != claimId || ack.Id == Guid.Empty || ack.OutboxEventId == Guid.Empty)
+                throw new InvalidOperationException("Claim acknowledgement identifiers do not match.");
+
+            using (var update = connection.CreateCommand())
+            {
+                update.Transaction = transaction;
+                update.CommandText = """
+UPDATE local_outbox_events
+SET status = $synced, synced_at_utc = $syncedAt, last_error = NULL
+WHERE id = $eventId AND status = $inFlight
+  AND EXISTS (SELECT 1 FROM local_sync_claims c
+              WHERE c.outbox_event_id = $eventId AND c.claim_id = $claimId);
+""";
+                update.Parameters.AddWithValue("$synced", (int)LocalOutboxStatus.Synced);
+                update.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
+                update.Parameters.AddWithValue("$syncedAt", syncedAtUtc.ToString("O"));
+                update.Parameters.AddWithValue("$eventId", ack.OutboxEventId.ToString());
+                update.Parameters.AddWithValue("$claimId", claimId.ToString());
+                if (update.ExecuteNonQuery() != 1)
+                    throw new InvalidOperationException("Sync claim is missing or no longer owned by this batch.");
+            }
+            using (var insert = connection.CreateCommand())
+            {
+                insert.Transaction = transaction;
+                insert.CommandText = """
+INSERT INTO local_sync_acknowledgements
+    (id, batch_id, outbox_event_id, remote_status, remote_response_json, acknowledged_at_utc)
+VALUES ($id, $batchId, $eventId, $status, $response, $acknowledgedAt);
+""";
+                insert.Parameters.AddWithValue("$id", ack.Id.ToString());
+                insert.Parameters.AddWithValue("$batchId", ack.BatchId.ToString());
+                insert.Parameters.AddWithValue("$eventId", ack.OutboxEventId.ToString());
+                insert.Parameters.AddWithValue("$status", ack.RemoteStatus);
+                insert.Parameters.AddWithValue("$response", ack.RemoteResponseJson);
+                insert.Parameters.AddWithValue("$acknowledgedAt", ack.AcknowledgedAtUtc.ToString("O"));
+                insert.ExecuteNonQuery();
+            }
+            using var release = connection.CreateCommand();
+            release.Transaction = transaction;
+            release.CommandText = """
+DELETE FROM local_sync_claims WHERE outbox_event_id = $eventId AND claim_id = $claimId;
+""";
+            release.Parameters.AddWithValue("$eventId", ack.OutboxEventId.ToString());
+            release.Parameters.AddWithValue("$claimId", claimId.ToString());
+            if (release.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Sync claim disappeared before acknowledgement was committed.");
+        }
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task MarkClaimedOutboxFailureAsync(
+        Guid claimId, Guid eventId, LocalOutboxStatus status, string reason,
+        CancellationToken cancellationToken = default)
+    {
+        if (status is not (LocalOutboxStatus.Failed or LocalOutboxStatus.RetryPending or LocalOutboxStatus.DeadLetter))
+            throw new ArgumentOutOfRangeException(nameof(status));
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText = """
+UPDATE local_outbox_events
+SET status = $status, attempts = attempts + 1, last_error = $reason
+WHERE id = $eventId AND status = $inFlight
+  AND EXISTS (SELECT 1 FROM local_sync_claims c
+              WHERE c.outbox_event_id = $eventId AND c.claim_id = $claimId);
+""";
+            update.Parameters.AddWithValue("$status", (int)status);
+            update.Parameters.AddWithValue("$reason", reason);
+            update.Parameters.AddWithValue("$eventId", eventId.ToString());
+            update.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
+            update.Parameters.AddWithValue("$claimId", claimId.ToString());
+            if (update.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Cannot mark failure: sync claim is no longer owned.");
+        }
+        using (var release = connection.CreateCommand())
+        {
+            release.Transaction = transaction;
+            release.CommandText = "DELETE FROM local_sync_claims WHERE outbox_event_id = $eventId AND claim_id = $claimId;";
+            release.Parameters.AddWithValue("$eventId", eventId.ToString());
+            release.Parameters.AddWithValue("$claimId", claimId.ToString());
+            if (release.ExecuteNonQuery() != 1)
+                throw new InvalidOperationException("Sync failure transition lost its claim.");
+        }
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task ReleaseClaimAsync(Guid claimId, CancellationToken cancellationToken = default)
+    {
+        if (claimId == Guid.Empty) throw new ArgumentException("Claim ID is required.", nameof(claimId));
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText = """
+UPDATE local_outbox_events SET status = $pending
+WHERE status = $inFlight
+  AND id IN (SELECT outbox_event_id FROM local_sync_claims WHERE claim_id = $claimId);
+""";
+            update.Parameters.AddWithValue("$pending", (int)LocalOutboxStatus.Pending);
+            update.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
+            update.Parameters.AddWithValue("$claimId", claimId.ToString());
+            update.ExecuteNonQuery();
+        }
+        using (var delete = connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM local_sync_claims WHERE claim_id = $claimId;";
+            delete.Parameters.AddWithValue("$claimId", claimId.ToString());
+            delete.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return Task.CompletedTask;
+    }
+
+    public Task<int> RecoverStaleClaimsAsync(
+        DateTimeOffset nowUtc, TimeSpan processingTimeout, CancellationToken cancellationToken = default)
+    {
+        if (processingTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(processingTimeout));
+        cancellationToken.ThrowIfCancellationRequested();
+        var cutoff = (nowUtc - processingTimeout).ToUniversalTime().ToString("O");
+        using var connection = _database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+        int recovered;
+        using (var update = connection.CreateCommand())
+        {
+            update.Transaction = transaction;
+            update.CommandText = """
+UPDATE local_outbox_events SET status = $pending
+WHERE status = $inFlight
+  AND id IN (SELECT outbox_event_id FROM local_sync_claims WHERE claimed_at_utc <= $cutoff);
+""";
+            update.Parameters.AddWithValue("$pending", (int)LocalOutboxStatus.Pending);
+            update.Parameters.AddWithValue("$inFlight", (int)LocalOutboxStatus.InFlight);
+            update.Parameters.AddWithValue("$cutoff", cutoff);
+            recovered = update.ExecuteNonQuery();
+        }
+        using (var delete = connection.CreateCommand())
+        {
+            delete.Transaction = transaction;
+            delete.CommandText = "DELETE FROM local_sync_claims WHERE claimed_at_utc <= $cutoff;";
+            delete.Parameters.AddWithValue("$cutoff", cutoff);
+            delete.ExecuteNonQuery();
+        }
+        transaction.Commit();
+        return Task.FromResult(recovered);
     }
 
     public Task<IReadOnlyList<LocalOutboxEvent>> GetPendingOutboxEventsAsync(int limit, CancellationToken cancellationToken = default)
