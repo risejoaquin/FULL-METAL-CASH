@@ -2091,6 +2091,17 @@ VALUES ($id, $tenant, $store, $user, NULL, $type, $message, $at);
     {
         using var connection = _database.OpenConnection();
         using var transaction = connection.BeginTransaction();
+        // Legacy development/CLI provisioning must never overwrite privileges
+        // once a user has been enrolled under monotonic central authority.
+        using (var guard = connection.CreateCommand())
+        {
+            guard.Transaction = transaction;
+            guard.CommandText = "SELECT COUNT(*) FROM local_authority_snapshot_state WHERE user_id=$id;";
+            guard.Parameters.AddWithValue("$id", user.UserId.ToString());
+            if (Convert.ToInt32(guard.ExecuteScalar()) != 0)
+                throw new UnauthorizedAccessException(
+                    "Versioned central permission cache cannot be replaced by legacy local provisioning.");
+        }
         using (var command = connection.CreateCommand())
         {
             command.Transaction = transaction;
