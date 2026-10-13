@@ -1,6 +1,6 @@
 # SolidPOS / FULL-METAL-CASH — ChatGPT → GitHub → GitHub Actions
 
-**Adoption date:** 2026-10-13. **Status:** proposed workflow, under draft PR; **no deployment authorized**. This changes the delivery process, not SolidPOS's product architecture.
+**Adoption date:** 2026-10-13. **Status:** proposed workflow, under draft PR; **no deployment authorized**. Active ChatGPT development branch: **`AC-DEV`**. This changes the delivery process, not SolidPOS's product architecture.
 
 ## 1. Objective
 
@@ -12,6 +12,7 @@ Let the PO direct development entirely in ChatGPT. The assistant inspects GitHub
 - App: .NET 8 ASP.NET Core PosServer, PosCore (SQLite offline-first, WPF client), PostgreSQL, PosDashboard React, PosBuilder WPF.
 - Existing CI workflow: `.github/workflows/solidpos-ci.yml`, event triggers `push`, `pull_request` and `workflow_dispatch`. Windows runner: secret scan; V1.1 static contract validators; dashboard `npm ci` / `self-test` / `build`; `dotnet restore`, `build`, `test`; TRX artifacts. The most recent inspected run on `main` was successful on 2026-09-16: https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/35073073377 . A historical PASS is not a PASS for a new SHA.
 - On 2026-10-13 `main` reported `protected: false`. Required checks / PR protection MUST be configured by a repository administrator; writing instructions here does not enforce GitHub branch protection.
+- Railway production project `heroic-solace` has two GitHub-linked `main` services: `FULL-METAL-CASH` API and `cooperative-connection` dashboard. In each Railway service Settings → Source, explicitly click **Disable** for GitHub Autodeploy; keep existing deployed services and source connection intact. The Railway connector currently exposes inspection but not the Disable Autodeploy toggle, so this manual action remains **unverified** until read back in the Railway dashboard. See https://docs.railway.com/deployments/github-autodeploys#disable-automatic-deployments.
 - `SOLIDPOS_TEST_POSTGRES` gates some integration tests. When unset, tests can return early; green `dotnet test` alone does not prove PostgreSQL integration.
 - Historical repository docs mention active Railway production API and dashboard. Their runtime status was **not** verified here. No production access, health checks, credentials or connections are part of this adoption.
 - Existing `railway.toml`/deployment assets remain untouched. A GitHub CI result alone does not prove whether a third-party auto-deploy webhook is linked; verify service-side deployment triggers before any future release.
@@ -21,7 +22,7 @@ Let the PO direct development entirely in ChatGPT. The assistant inspects GitHub
 1. **Intake**: PO supplies scope/outcome and acceptance conditions; assistant checks existing branches, current contracts, any open PR, current baseline and dependencies.
 2. **Design**: choose a small reversible increment; identify relevant invariants (tenants/RBAC, cash reconciliation, inventory, synchronization, offline, migrations, update channels); surface any ADR/decision required.
 3. **Code**: create/use a named task branch based on the current approved base SHA; perform only scoped edits, regression tests and documentation, without overwriting parallel work.
-4. **CI**: let existing `SolidPOS CI` run on the branch push/PR. Inspect the result for the exact commit SHA, checks, test reports and failure logs. Retry only after understanding failures.
+4. **CI**: let existing `SolidPOS CI` run on `AC-DEV` push/PR. Inspect the result for the exact commit SHA, checks, test reports and failure logs. Retry only after understanding failures.
 5. **Review**: deliver a draft PR. Explain change, validation, test skips, untested desktop/hardware paths, security impact and rollback.
 6. **Approval**: PO reviews. Even green QA is NOT permission to merge or publish; a separate authorization is required. Never bypass configured review rules.
 7. **Release**: a distinct future phase, under explicit PO GO/NO-GO, with production DB migration review, rollback, backups, RPO/RTO, deployment and health checks.
@@ -33,8 +34,8 @@ Let the PO direct development entirely in ChatGPT. The assistant inspects GitHub
 - Backend: run .NET in GitHub Actions.
 - Dashboard: build + execute existing self-tests in Actions.
 - POS desktop: build/test WPF projects on GitHub-hosted Windows runners; a successful headless build cannot prove touchscreen UX, peripherals, printer, scanner, cash drawer or field behavior.
-- SQLite: disposable DB/fixtures in test runners, not real registers or live sales.
-- PostgreSQL: run destructive migration/RLS tests **only** on a fresh, dedicated ephemeral database. The existing helper drops `pos` schema. Never point `SOLIDPOS_TEST_POSTGRES` to a real remote instance.
+- SQLite: use actual disposable SQLite DBs/fixtures as the default storage test path in the Windows CI runner, not real registers or live sales. `SQLiteLocalPersistenceTests.cs` exercises initialization, WAL, foreign keys and persistence without external services.
+- PostgreSQL: central PosServer remains PostgreSQL in production. SQLite is not a faithful replacement for PostgreSQL schemas, migrations or RLS; those checks are reported as skipped until a separately authorized disposable PostgreSQL runner exists. The existing helper drops `pos` schema. Never point `SOLIDPOS_TEST_POSTGRES` to a real remote instance.
 - Payments, hardware, receipts and network-sync edge cases: mocks/contract tests unless the PO separately authorizes controlled real-device/UAT tests.
 - Railway and production Supabase/PostgreSQL: release-only. Do not modify live resources, credentials, environment variables or hosted services.
 
