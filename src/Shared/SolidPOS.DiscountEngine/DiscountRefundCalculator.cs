@@ -44,11 +44,15 @@ public static class DiscountRefundCalculator
                 throw new InvalidOperationException("Invalid partial refund or oversold refund quantity.");
 
             int nowRefunded = checked(line.PreviouslyRefundedQuantity + line.ReturnQuantity);
-            long gross = checked(Cumulative(line.OriginalGrossCents, nowRefunded, line.SoldQuantity) -
-                Cumulative(line.OriginalGrossCents, line.PreviouslyRefundedQuantity, line.SoldQuantity));
             long net = checked(Cumulative(line.OriginalNetCents, nowRefunded, line.SoldQuantity) -
                 Cumulative(line.OriginalNetCents, line.PreviouslyRefundedQuantity, line.SoldQuantity));
-            long saving = checked(gross - net);
+            long discountBasis = checked(line.OriginalGrossCents - line.OriginalNetCents);
+            long saving = checked(Cumulative(discountBasis, nowRefunded, line.SoldQuantity) -
+                Cumulative(discountBasis, line.PreviouslyRefundedQuantity, line.SoldQuantity));
+            // Allocate both nonnegative original components independently.
+            // Gross = net + discount, preventing negative net reversals when
+            // sub-cent units receive different largest-remainder positions.
+            long gross = checked(net + saving);
             if (saving < 0 || net < 0)
                 throw new InvalidOperationException("Refund does not conserve original discount.");
 
