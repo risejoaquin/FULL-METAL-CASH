@@ -2569,7 +2569,8 @@ LIMIT 1;
         using var command = connection.CreateCommand();
         command.Transaction = transaction;
         command.CommandText = """
-SELECT s.user_id, s.created_at_utc, s.expires_at_utc
+SELECT s.user_id, s.created_at_utc, s.expires_at_utc,
+       u.last_synced_at_utc, u.max_offline_hours
 FROM local_sessions s
 JOIN local_users u ON u.user_id = s.user_id
 JOIN local_user_permissions p ON p.user_id = u.user_id
@@ -2591,6 +2592,15 @@ LIMIT 1;
         var expires = DateTimeOffset.Parse(reader.GetString(2));
         if (issued > now || expires <= now)
             throw new UnauthorizedAccessException("Local recovery session has expired or is not yet valid.");
+
+        // A still-active local session must NOT outlive the cached authority.
+        // This mirrors LocalAuthService's offline-access window at the moment
+        // of each recovery operation, including approval and final commit.
+        var cacheSyncedAt = DateTimeOffset.Parse(reader.GetString(3));
+        var maxOfflineHours = reader.GetInt32(4);
+        if (maxOfflineHours <= 0 || cacheSyncedAt > now ||
+            now - cacheSyncedAt > TimeSpan.FromHours(maxOfflineHours))
+            throw new UnauthorizedAccessException("Local recovery authorization cache is expired or invalid.");
         return id;
     }
 
