@@ -21,7 +21,8 @@ public sealed record LocalSyncRecoveryRequest(
     int MaxEvents,
     string Actor,
     string Reason,
-    bool DryRun);
+    bool DryRun,
+    string? ApprovalReference = null);
 
 public sealed record LocalSyncRecoveryResult(
     Guid RecoveryId,
