@@ -136,9 +136,10 @@ public sealed class SQLiteControlledSyncRecoveryTests
 
         var request = await fixture.AuthorizeAsync(Request(tenant, store, terminal, dryRun: true));
         await repository.RecoverStaleClaimsWithAuditAsync(request);
+        var liveWithSameId = await fixture.AuthorizeAsync(
+            request with { DryRun = false, ApprovalReference = "fixture-approval-001" }, approve: true);
         await Assert.ThrowsAsync<SqliteException>(
-            () => repository.RecoverStaleClaimsWithAuditAsync(
-                request with { DryRun = false, ApprovalReference = "fixture-approval-001" }));
+            () => repository.RecoverStaleClaimsWithAuditAsync(liveWithSameId));
 
         Assert.Equal(1, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
         Assert.Equal(0, await repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
@@ -210,6 +211,158 @@ BEGIN SELECT RAISE(ABORT, 'fixture_audit_failed'); END;
 
         Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
         Assert.Equal(0, fixture.Count("local_sync_recovery_candidates"));
+    }
+
+
+    [Fact]
+    public async Task Recovery_denies_missing_expired_revoked_or_cross_store_executor_session()
+    {
+        using var fixture = new DatabaseFixture();
+        var repo = fixture.NewRepository();
+        await repo.InitializeAsync();
+        var tenant = Guid.NewGuid(); var store = Guid.NewGuid(); var terminal = Guid.NewGuid();
+        var evt = NewEvent(tenant, store, terminal);
+        await repo.SaveOutboxEventAsync(evt);
+        Assert.Single(await repo.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
+
+        var basic = Request(tenant, store, terminal, dryRun: true);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => repo.RecoverStaleClaimsWithAuditAsync(basic));
+
+        foreach (var unauthorized in new[]
+        {
+            await fixture.AuthorizeAsync(Request(tenant, store, terminal, true), omitExecutePermission: true),
+            await fixture.AuthorizeAsync(Request(tenant, store, terminal, true), expiredExecutor: true),
+            await fixture.AuthorizeAsync(Request(tenant, store, terminal, true), differentStore: true)
+        })
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(
+                () => repo.RecoverStaleClaimsWithAuditAsync(unauthorized));
+
+        var valid = await fixture.AuthorizeAsync(Request(tenant, store, terminal, true));
+        await repo.CloseLocalSessionAsync(valid.ExecutorSessionId, DateTimeOffset.UtcNow);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => repo.RecoverStaleClaimsWithAuditAsync(valid));
+        Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
+        Assert.Equal(1, await repo.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+    }
+
+    [Fact]
+    public async Task Approval_requires_approver_permission_and_an_independent_user()
+    {
+        using var fixture = new DatabaseFixture();
+        var repo = fixture.NewRepository();
+        await repo.InitializeAsync();
+        var tenant = Guid.NewGuid(); var store = Guid.NewGuid(); var terminal = Guid.NewGuid();
+        await repo.SaveOutboxEventAsync(NewEvent(tenant, store, terminal));
+        Assert.Single(await repo.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true,
+            omitApprovePermission: true));
+        Assert.Equal(0, fixture.Count("local_sync_recovery_approvals"));
+
+        var selfApproved = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true, sameUser: true);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => repo.RecoverStaleClaimsWithAuditAsync(selfApproved));
+
+        Assert.Equal(1, fixture.Count("local_sync_recovery_approvals"));
+        Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
+        Assert.Equal(1, await repo.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+    }
+
+    [Fact]
+    public async Task Approval_is_bound_to_exact_terminal_bounds_reason_and_reference()
+    {
+        using var fixture = new DatabaseFixture();
+        var repo = fixture.NewRepository();
+        await repo.InitializeAsync();
+        var tenant = Guid.NewGuid(); var store = Guid.NewGuid(); var terminal = Guid.NewGuid();
+        var expected = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true);
+        await repo.SaveOutboxEventAsync(NewEvent(tenant, store, terminal));
+        Assert.Single(await repo.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
+
+        foreach (var invalid in new[]
+        {
+            expected with { TerminalId = Guid.NewGuid() },
+            expected with { MaxEvents = 9 },
+            expected with { ProcessingTimeout = TimeSpan.FromMinutes(6) },
+            expected with { Reason = "tampered-reason" },
+            expected with { ApprovalReference = "tampered-reference" },
+            expected with { RecoveryId = Guid.NewGuid() }
+        })
+        {
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(
+                () => repo.RecoverStaleClaimsWithAuditAsync(invalid));
+        }
+
+        Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
+        Assert.Equal(1, await repo.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+        var recovered = await repo.RecoverStaleClaimsWithAuditAsync(expected);
+        Assert.Equal(1, recovered.RecoveredCount);
+        Assert.Equal(1, fixture.Count("local_sync_recovery_runs"));
+        Assert.Equal(1, fixture.Count("local_sync_recovery_executors"));
+        Assert.Equal(1, fixture.ScalarInt(
+            "SELECT COUNT(*) FROM local_sync_recovery_approvals WHERE consumed_at_utc IS NOT NULL"));
+    }
+
+    [Fact]
+    public async Task Approval_is_single_use_and_execution_logs_verified_executor()
+    {
+        using var fixture = new DatabaseFixture();
+        var repo = fixture.NewRepository();
+        await repo.InitializeAsync();
+        var tenant = Guid.NewGuid(); var store = Guid.NewGuid(); var terminal = Guid.NewGuid();
+        var request = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true);
+        await repo.SaveOutboxEventAsync(NewEvent(tenant, store, terminal));
+        Assert.Single(await repo.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
+
+        await repo.RecoverStaleClaimsWithAuditAsync(request);
+        Assert.Equal(1, fixture.Count("local_sync_recovery_approvals"));
+        Assert.Equal(1, fixture.Count("local_sync_recovery_executors"));
+        Assert.Equal(request.ExecutorSessionId.ToString(),
+            fixture.ScalarString("SELECT executor_session_id FROM local_sync_recovery_executors LIMIT 1"));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(
+            () => repo.RecoverStaleClaimsWithAuditAsync(request));
+        Assert.Equal(1, fixture.Count("local_sync_recovery_runs"));
+        Assert.Equal(1, await repo.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+    }
+
+    [Fact]
+    public async Task Failed_recovery_audit_rolls_back_approval_consumption()
+    {
+        using var fixture = new DatabaseFixture();
+        var repo = fixture.NewRepository();
+        await repo.InitializeAsync();
+        var tenant = Guid.NewGuid(); var store = Guid.NewGuid(); var terminal = Guid.NewGuid();
+        var request = await fixture.AuthorizeAsync(
+            Request(tenant, store, terminal, dryRun: false), approve: true);
+        await repo.SaveOutboxEventAsync(NewEvent(tenant, store, terminal));
+        Assert.Single(await repo.ClaimPendingOutboxEventsAsync(10, Guid.NewGuid(), Now.AddMinutes(-6)));
+
+        fixture.Execute("""
+CREATE TRIGGER fixture_block_recovery_identity
+BEFORE INSERT ON local_sync_recovery_executors
+BEGIN SELECT RAISE(ABORT, 'fixture_execution_journal_failed'); END;
+""");
+        try
+        {
+            await Assert.ThrowsAsync<SqliteException>(
+                () => repo.RecoverStaleClaimsWithAuditAsync(request));
+        }
+        finally
+        {
+            fixture.Execute("DROP TRIGGER fixture_block_recovery_identity;");
+        }
+        Assert.Equal(1, await repo.CountOutboxByStatusAsync(LocalOutboxStatus.InFlight));
+        Assert.Equal(0, await repo.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+        Assert.Equal(0, fixture.Count("local_sync_recovery_runs"));
+        Assert.Equal(1, fixture.ScalarInt(
+            "SELECT COUNT(*) FROM local_sync_recovery_approvals WHERE consumed_at_utc IS NULL"));
+
+        Assert.Equal(1, (await repo.RecoverStaleClaimsWithAuditAsync(request)).RecoveredCount);
     }
 
     private static LocalSyncRecoveryRequest Request(
@@ -289,7 +442,7 @@ BEGIN SELECT RAISE(ABORT, 'fixture_audit_failed'); END;
 
         public int Count(string table)
         {
-            if (table is not ("local_sync_recovery_runs" or "local_sync_recovery_candidates" or "local_sync_claims"))
+            if (table is not ("local_sync_recovery_runs" or "local_sync_recovery_candidates" or "local_sync_claims" or "local_sync_recovery_approvals" or "local_sync_recovery_executors"))
                 throw new ArgumentException("Unexpected fixture table.", nameof(table));
             return ScalarInt($"SELECT COUNT(*) FROM {table};");
         }
