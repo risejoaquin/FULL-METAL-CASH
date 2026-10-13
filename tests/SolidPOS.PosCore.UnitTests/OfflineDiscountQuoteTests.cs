@@ -1,4 +1,8 @@
+using Microsoft.Data.Sqlite;
+using System.Text.Json;
 using SolidPOS.DiscountEngine;
+using SolidPOS.PosCore.Application.Abstractions;
+using SolidPOS.PosCore.Infrastructure.SQLite;
 using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Domain;
 using Xunit;
@@ -78,6 +82,54 @@ public sealed class OfflineDiscountQuoteTests
         Assert.Equal(adjusted.DiscountCents, adjusted.Lines.Sum(x => x.DiscountCents));
         Assert.All(draft.Lines, line => Assert.Null(line.DiscountId));
         OfflineSaleCalculator.Validate(adjusted);
+    }
+
+    [Fact]
+    public async Task Cart_checkout_persists_identical_discount_allocations_in_sqlite_and_sync_v4_json()
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "solidpos-discount-replay", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        var db = new SQLiteLocalDatabase(Path.Combine(dir, "checkout.sqlite"));
+        try
+        {
+            var repository = new SQLiteLocalPosRepository(db);
+            await repository.InitializeAsync();
+            var original = Draft(Guid.NewGuid());
+            var rule = new DiscountRule(Guid.NewGuid(), "cart", "percentage", 15);
+            var applied = OfflineDiscountQuoteService.ApplyCartDiscount(
+                original, rule, [new OfflineSalePaymentDraft("cash", 259)]);
+            var service = new OfflineSaleService(repository, new SystemClock());
+            var evt = await service.CreateOfflineSaleAsync(applied);
+
+            Assert.Equal(4, evt.SchemaVersion);
+            Assert.Equal("sale.completed", evt.EventType);
+            using var data = JsonDocument.Parse(evt.PayloadJson);
+            var lines = data.RootElement.GetProperty("lines").EnumerateArray().ToArray();
+            Assert.Equal(original.Lines.Count, lines.Length);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                Assert.Equal(applied.Lines[i].DiscountCents,
+                    lines[i].GetProperty("discountCents").GetInt32());
+                Assert.Equal(rule.Id, lines[i].GetProperty("discountId").GetGuid());
+            }
+
+            using var connection = db.OpenConnection();
+            using var query = connection.CreateCommand();
+            query.CommandText = "SELECT subtotal_cents, discount_cents, total_cents, paid_cents FROM offline_sales;";
+            using var reader = query.ExecuteReader();
+            Assert.True(reader.Read());
+            Assert.Equal(305L, reader.GetInt64(0));
+            Assert.Equal(46L, reader.GetInt64(1));
+            Assert.Equal(259L, reader.GetInt64(2));
+            Assert.Equal(259L, reader.GetInt64(3));
+            Assert.False(reader.Read());
+            Assert.Single(await repository.GetPendingOutboxEventsAsync(10));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(dir, true);
+        }
     }
 
     [Fact]
