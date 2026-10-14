@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -83,6 +84,23 @@ public sealed class OpenApiContractTests
             bool hasProblemDetailsResponse = responses.Values.Any(IsProblemDetailsResponse);
             Assert.True(hasProblemDetailsResponse, $"{method.ToUpperInvariant()} {path} is missing application/problem+json response.");
         }
+    }
+
+    [Fact]
+    public void Discount_cart_preview_runtime_requires_existing_validate_permission()
+    {
+        using WebApplicationFactory<Program> factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
+
+        EndpointDataSource source = factory.Services.GetRequiredService<EndpointDataSource>();
+        RouteEndpoint quote = Assert.Single(source.Endpoints.OfType<RouteEndpoint>(), endpoint =>
+            NormalizeRuntimePath(endpoint.RoutePattern.RawText ?? string.Empty) == "/discounts/quote" &&
+            endpoint.Metadata.GetMetadata<HttpMethodMetadata>()?.HttpMethods.Contains("POST") == true);
+
+        var authorizations = quote.Metadata.GetOrderedMetadata<IAuthorizeData>();
+        Assert.Contains(authorizations, rule =>
+            rule.Policy == SolidPOS.PosServer.Application.Security.PermissionCodes.DiscountsValidate);
+        Assert.Null(quote.Metadata.GetMetadata<IAllowAnonymous>());
     }
 
     [Fact]
