@@ -33,6 +33,7 @@ public sealed class AppShellViewModel : ViewModelBase
 
     public LoginViewModel Login { get; }
     public ProductionLoginViewModel? ProductionLogin { get; private set; }
+    public ProductionCartViewModel? ProductionCart { get; private set; }
 
     public TerminalStatusViewModel TerminalStatus { get; }
 
@@ -48,12 +49,14 @@ public sealed class AppShellViewModel : ViewModelBase
     /// Production shell is diagnostics-only until authorized login and
     /// atomic checkout are wired. No fabricated sale, cash or sync state.
     /// </summary>
-    public void InitializeForProduction(PosCoreStartupInspection inspection, SolidPOS.PosCore.Application.Auth.LocalAuthService? auth = null)
+    public void InitializeForProduction(PosCoreStartupInspection inspection, SolidPOS.PosCore.Application.Auth.LocalAuthService? auth = null, SolidPOS.PosCore.Application.Storage.ILocalPosRepository? repository = null)
     {
         ArgumentNullException.ThrowIfNull(inspection);
         isSelfTestMode = false;
         ProductionLogin = auth is null ? null : new ProductionLoginViewModel(auth, inspection);
+        ProductionCart = ProductionLogin is not null && repository is not null ? new ProductionCartViewModel(repository, ProductionLogin) : null;
         RaisePropertyChanged(nameof(ProductionLogin));
+        RaisePropertyChanged(nameof(ProductionCart));
         RaisePropertyChanged(nameof(SimulationTabVisibility));
         RaisePropertyChanged(nameof(ProductionTabVisibility));
         Branding.TenantName = inspection.TerminalBound
