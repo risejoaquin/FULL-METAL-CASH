@@ -271,6 +271,9 @@ BEGIN SELECT RAISE(ABORT,'test audit unavailable'); END;
         await checkout.RefreshShiftAsync();
         checkout.RecoveryReason = "Se verificó que no se cobró ni generó venta.";
         checkout.RecoveryEvidence = "INCIDENT-WPF-2026-0001";
+        Assert.False(checkout.CanResolveUncommitted);
+        checkout.RecoveryCashVerified = true;
+        Assert.True(checkout.CanResolveUncommitted);
         await checkout.ResolveUncommittedAsync();
 
         Assert.False(checkout.HasUncertainCheckout);
