@@ -171,6 +171,33 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
             f.Request with { Sale = f.Request.Sale with { LocalSaleId = Guid.NewGuid() } }));
     }
 
+
+    [Theory]
+    [InlineData("local_sale_payments")]
+    [InlineData("local_outbox_events")]
+    [InlineData("local_print_jobs")]
+    public async Task Missing_checkout_artifact_cannot_be_reconciled(string artifact)
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        await f.Checkout.CheckoutAsync(f.Request);
+        using (var connection = f.Database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            // Identifiers come exclusively from InlineData in this test file.
+            command.CommandText = "DELETE FROM " + artifact + " WHERE " +
+                (artifact == "local_outbox_events" ? "event_type='sale.completed'" :
+                artifact == "local_print_jobs" ? "sale_id=$sale" : "local_sale_id=$sale");
+            command.Parameters.AddWithValue("$sale", f.Request.Sale.LocalSaleId.ToString());
+            command.ExecuteNonQuery();
+        }
+        var restarted = new SQLiteCheckoutRecoveryJournal(new SQLiteLocalDatabase(f.Path));
+        Assert.False(restarted.ReconcileCommitted(f.Request.Sale.LocalSaleId));
+        Assert.Equal(f.Request.Sale.LocalSaleId, restarted.FindUnresolved(
+            f.Request.Sale.TenantId, f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+    }
+
     private sealed class FixedClock : IClock
     {
         public DateTimeOffset UtcNow { get; } = new(2026, 10, 13, 18, 0, 0, TimeSpan.Zero);
