@@ -17,8 +17,10 @@ public sealed class SQLiteSupervisedCheckoutRecoveryService
         => this.database = database ?? throw new ArgumentNullException(nameof(database));
 
     public void ResolveUncommitted(Guid saleId, Guid supervisorSessionId, string reason,
-        string evidenceReference, DateTimeOffset atUtc)
+        string evidenceReference, DateTimeOffset atUtc, bool physicalCashAttested = false)
     {
+        if (!physicalCashAttested)
+            throw new InvalidOperationException("Supervisor must explicitly attest physical cash verification.");
         if (saleId == Guid.Empty || supervisorSessionId == Guid.Empty)
             throw new InvalidOperationException("Checkout and supervisor IDs are required.");
         reason = reason?.Trim() ?? "";
@@ -176,7 +178,7 @@ VALUES ($id,$tenant,$store,$user,$session,
             cmd.Parameters.AddWithValue("$user", supervisorId);
             cmd.Parameters.AddWithValue("$session", supervisorSessionId.ToString());
             cmd.Parameters.AddWithValue("$message",
-                $"sale={saleId:N};reason={reason};evidence={evidenceReference}");
+                $"sale={saleId:N};physical_cash_attested=true;reason={reason};evidence={evidenceReference}");
             cmd.Parameters.AddWithValue("$now", atUtc.ToString("O"));
             cmd.ExecuteNonQuery();
         }
