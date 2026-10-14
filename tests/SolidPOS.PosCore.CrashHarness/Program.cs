@@ -33,7 +33,7 @@ internal static class Program
         // or write to a path that was not already provisioned by the test.
         string allowedTemp = Path.GetFullPath(Path.GetTempPath());
         string parent = Path.GetDirectoryName(dbPath) ?? "";
-        string name = Path.GetFileName(parent);
+        string name = Path.GetFileName(parent) ?? string.Empty;
         if (!parent.StartsWith(allowedTemp, StringComparison.OrdinalIgnoreCase) ||
             !name.StartsWith("solidpos-cashcheckout-", StringComparison.Ordinal) ||
             !string.Equals(Path.GetFileName(dbPath), "terminal.sqlite", StringComparison.Ordinal) ||
