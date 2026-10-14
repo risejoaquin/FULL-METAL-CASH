@@ -76,12 +76,8 @@ SELECT COUNT(*) FROM terminal_binding WHERE id=1 AND tenant_id=$tenant
         {
             read.Transaction = transaction;
             read.CommandText = """
-SELECT revision FROM local_signed_cart_discount_rules AS r
-INNER JOIN terminal_binding AS b ON b.id=1
- AND b.tenant_id=r.tenant_id AND b.store_id=r.store_id
- AND b.terminal_id=r.terminal_id
-WHERE r.tenant_id=$tenant AND r.store_id=$store
- AND r.terminal_id=$terminal AND r.discount_id=$discount;
+SELECT revision FROM local_signed_cart_discount_rules
+WHERE tenant_id=$tenant AND store_id=$store AND terminal_id=$terminal AND discount_id=$discount;
 """;
             read.Parameters.AddWithValue("$tenant", rule.TenantId.ToString());
             read.Parameters.AddWithValue("$store", rule.StoreId.ToString());
@@ -143,8 +139,12 @@ ON CONFLICT(tenant_id,store_id,terminal_id,discount_id) DO UPDATE SET
         command.CommandText = """
 SELECT revision,issued_at_utc,valid_from_utc,expires_at_utc,kind,
  amount_bits_json,requires_approval,can_combine,key_id,signature_base64
-FROM local_signed_cart_discount_rules
-WHERE tenant_id=$tenant AND store_id=$store AND terminal_id=$terminal AND discount_id=$discount;
+FROM local_signed_cart_discount_rules AS r
+INNER JOIN terminal_binding AS b ON b.id=1
+ AND b.tenant_id=r.tenant_id AND b.store_id=r.store_id
+ AND b.terminal_id=r.terminal_id
+WHERE r.tenant_id=$tenant AND r.store_id=$store
+ AND r.terminal_id=$terminal AND r.discount_id=$discount;
 """;
         command.Parameters.AddWithValue("$tenant", tenantId.ToString());
         command.Parameters.AddWithValue("$store", storeId.ToString());
