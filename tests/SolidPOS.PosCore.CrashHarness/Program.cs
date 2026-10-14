@@ -53,8 +53,6 @@ internal static class Program
         // The marker is flushed after the specified crash point so the
         // parent can distinguish a deliberate kill from an unrelated failure.
         await File.WriteAllTextAsync(markerPath, mode);
-        using (var marker = new FileStream(markerPath, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite)) { marker.Flush(flushToDisk: true); }
 
         // Deliberate OS-level termination; no finally block or normal shutdown.
         // The parent checks SQLite from a new process/connection.
