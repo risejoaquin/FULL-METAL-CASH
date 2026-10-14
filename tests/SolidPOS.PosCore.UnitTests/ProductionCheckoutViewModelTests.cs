@@ -15,6 +15,27 @@ namespace SolidPOS.PosCore.UnitTests;
 public sealed class ProductionCheckoutViewModelTests
 {
     [Fact]
+    public async Task Ready_terminal_shell_does_not_claim_checkout_is_unimplemented_after_wiring()
+    {
+        using var fixture = await Fixture.CreateAsync(new[] { "cash.open", "sales.create" });
+        var readiness = await new PosCoreStartupInspectionService(fixture.Repository).InspectAsync();
+        var shell = new AppShellViewModel(fixture.Path);
+        shell.InitializeForProduction(readiness, fixture.Auth, fixture.Repository);
+
+        var checkout = new ProductionCheckoutViewModel(
+            fixture.Repository, fixture.Auth, shell.ProductionLogin!, shell.ProductionCart!,
+            new AtomicCashCheckoutService(
+                fixture.Repository, new SQLiteAtomicCashCheckoutStore(fixture.Database), new SystemClock()),
+            fixture.CreateCashCloseService(), new SystemClock());
+        shell.AttachProductionCheckout(checkout);
+
+        Assert.Contains("cobro requiere sesión autorizada", shell.ShellStatus);
+        Assert.DoesNotContain("falta integrar", shell.ShellStatus);
+        Assert.Contains("condicionado a sesión", shell.TerminalStatus.Status);
+        Assert.False(checkout.CanCheckout); // still requires login and an open cash shift
+    }
+
+    [Fact]
     public async Task Wpf_login_open_cash_cart_and_checkout_are_persisted_in_SQLite()
     {
         using var f = await Fixture.CreateAsync(new[] { "cash.open", "sales.create" });
