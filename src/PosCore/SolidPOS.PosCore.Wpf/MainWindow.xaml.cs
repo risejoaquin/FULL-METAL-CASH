@@ -15,10 +15,26 @@ public partial class MainWindow : Window
         await login.LoginAsync(password);
     }
 
+    private async void ProductionAddSku_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AppShellViewModel { ProductionCart: { } cart })
+            await cart.AddBySkuAsync();
+    }
+
+    private void ProductionClearCart_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AppShellViewModel { ProductionCart: { } cart })
+            cart.Clear();
+    }
+
     private async void ProductionLogout_Click(object sender, RoutedEventArgs e)
     {
         ProductionPassword.Clear();
-        if (DataContext is AppShellViewModel { ProductionLogin: { } login })
-            await login.LogoutAsync();
+        if (DataContext is AppShellViewModel shell)
+        {
+            shell.ProductionCart?.Clear();
+            if (shell.ProductionLogin is { } login)
+                await login.LogoutAsync();
+        }
     }
 }
