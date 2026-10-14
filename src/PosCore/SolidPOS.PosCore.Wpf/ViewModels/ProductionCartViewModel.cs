@@ -53,6 +53,8 @@ public sealed class ProductionCartViewModel : ViewModelBase
                 return;
             }
             if (!login.IsAuthenticated) { Status = "La sesión expiró. Vuelva a iniciar sesión."; Clear(); return; }
+            // A previously-started SQLite read must not alter an in-progress checkout.
+            if (checkoutLocked) { Status = "Carrito bloqueado durante el cobro; SKU no agregado."; return; }
             var identity = product.ProductId.ToString("N") + ":" + product.VariantId?.ToString("N");
             var previous = Lines.FirstOrDefault(x => x.Identity == identity);
             if (previous is null)
