@@ -50,8 +50,10 @@ public sealed class PosCoreStartupInspectionService
             !string.IsNullOrWhiteSpace(binding.TerminalFingerprint) &&
             !string.IsNullOrWhiteSpace(binding.TerminalToken);
 
-        int users = (await _repository.GetLocalAuthSummaryAsync(cancellationToken)
-            .ConfigureAwait(false)).UserCount;
+        int users = terminalBound
+            ? await _repository.CountActiveLocalUsersForScopeAsync(
+                binding!.TenantId, binding.StoreId, cancellationToken).ConfigureAwait(false)
+            : 0;
         int products = await _repository.CountCatalogProductsAsync(cancellationToken)
             .ConfigureAwait(false);
         if (users < 0 || products < 0)
