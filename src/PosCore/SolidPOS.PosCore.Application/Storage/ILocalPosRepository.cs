@@ -69,6 +69,14 @@ public interface ILocalPosRepository
     Task<bool> LocalUserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken = default) => Task.FromResult(false);
     Task LogLocalAuditEventAsync(LocalAuditEvent auditEvent, CancellationToken cancellationToken = default) => Task.CompletedTask;
     Task<LocalAuthSummary> GetLocalAuthSummaryAsync(CancellationToken cancellationToken = default) => Task.FromResult(new LocalAuthSummary(0, 0, 0, 0, null));
+    /// <summary>
+    /// Fail-closed startup query. Compatibility implementations that cannot
+    /// verify scope report zero authorized users, never a global user count.
+    /// </summary>
+    Task<int> CountActiveLocalUsersForScopeAsync(
+        Guid tenantId, Guid storeId, CancellationToken cancellationToken = default)
+        => Task.FromResult(0);
+
 
 
     Task SaveReceiptPrintJobAsync(LocalReceiptPrintJob job, CancellationToken cancellationToken = default) => Task.CompletedTask;
