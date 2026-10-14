@@ -72,7 +72,7 @@ public sealed class ProductionCartViewModel : ViewModelBase
                 TotalCents = nextTotal;
             }
             Sku = string.Empty;
-            Status = "Producto consultado y agregado desde SQLite. Pago no disponible.";
+            Status = "Producto agregado desde catálogo SQLite; confirme caja y cobro antes de registrar la venta.";
         }
         catch (OverflowException) { Status = "Límite monetario o de cantidad excedido."; }
         catch (Exception) { Status = "No se pudo consultar el catálogo local."; }

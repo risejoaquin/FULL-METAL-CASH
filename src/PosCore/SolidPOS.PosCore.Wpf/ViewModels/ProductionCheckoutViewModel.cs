@@ -189,8 +189,16 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
             SaleStatus = $"VENTA GUARDADA en SQLite: {result.ReceiptNumber}; total={result.TotalCents}; cambio={result.ChangeCents} centavos. " +
                 (result.AlreadyCommitted ? "Reintento reconciliado, sin duplicar cobro. " : "") +
                 "Ticket pendiente de impresión. Sin ACK remoto todavía.";
-            var summary = await repository.GetLocalCashShiftSummaryAsync(activeShift.Id);
-            CashStatus = $"Caja abierta. Efectivo esperado={summary.ExpectedCashCents} centavos; ventas efectivo={summary.CashSalesCents}.";
+            try
+            {
+                var summary = await repository.GetLocalCashShiftSummaryAsync(activeShift.Id);
+                CashStatus = $"Caja abierta. Efectivo esperado={summary.ExpectedCashCents} centavos; ventas efectivo={summary.CashSalesCents}.";
+            }
+            catch (Exception)
+            {
+                // Checkout is already committed. Never report a failed charge.
+                CashStatus = "Venta guardada. No se pudo refrescar el saldo: consulte SQLite antes de otro turno.";
+            }
         }
         catch (Exception)
         {

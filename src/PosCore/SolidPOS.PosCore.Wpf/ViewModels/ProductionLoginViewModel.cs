@@ -63,7 +63,7 @@ public sealed class ProductionLoginViewModel : ViewModelBase
                 return;
             }
             session = authenticated;
-            Status = "Sesión local autenticada. Cobro todavía deshabilitado.";
+            Status = "Sesión local autenticada. Para cobrar, se requiere caja abierta y permiso sales.create.";
         }
         catch (Exception)
         {

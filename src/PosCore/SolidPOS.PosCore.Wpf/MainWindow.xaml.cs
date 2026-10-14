@@ -30,7 +30,7 @@ public partial class MainWindow : Window
 
     private void ProductionClearCart_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is AppShellViewModel { ProductionCart: { } cart })
+        if (DataContext is AppShellViewModel { ProductionCart: { } cart } && cart.CanEdit)
             cart.Clear();
     }
 
