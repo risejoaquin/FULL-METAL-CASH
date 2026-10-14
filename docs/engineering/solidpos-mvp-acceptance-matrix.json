@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "product": "SolidPOS Commercial MVP",
+  "scoring": "Weighted acceptance evidence; not test count or code coverage.",
+  "requirements": [
+    {"id":"MVP-01","name":"Commercial startup with SQLite","weight":10,"tests":["PosCoreStartupInspectionTests"],"manualGate":"Windows installation and restart on a provisioned terminal"},
+    {"id":"MVP-02","name":"Authenticated operator and tenant isolation","weight":12,"tests":["LocalAuthServiceTests"],"manualGate":"Operator login, expiry and lockout walkthrough"},
+    {"id":"MVP-03","name":"Commercial SQLite catalog and cart","weight":13,"tests":["ProductionCheckoutViewModelTests"],"manualGate":"UI multi-item sale, unavailable product and price refresh walkthrough"},
+    {"id":"MVP-04","name":"Atomic cash checkout and idempotency","weight":20,"tests":["SQLiteAtomicCashCheckoutTests"],"manualGate":"End-to-end WPF transaction and physical tender reconciliation"},
+    {"id":"MVP-05","name":"Receipt production and printer recovery","weight":10,"tests":["SQLiteAtomicCashCheckoutTests"],"manualGate":"Physical printer queue delivery and offline retry"},
+    {"id":"MVP-06","name":"Offline sync with acknowledged remote result","weight":10,"tests":["SQLiteSyncRestartRecoveryTests"],"manualGate":"End-to-end acknowledged sale from disposable server"},
+    {"id":"MVP-07","name":"Cash shift open, close and ledger","weight":10,"tests":["ProductionCheckoutViewModelTests"],"manualGate":"Cash count, discrepancy approval and operational close"},
+    {"id":"MVP-08","name":"Crash recovery and audited reconciliation","weight":15,"tests":["SQLiteCheckoutRecoveryJournalTests","SQLiteAtomicCashCheckoutTests"],"manualGate":"Forced process termination, supervisor resolution and audit evidence"}
+  ]
+}
