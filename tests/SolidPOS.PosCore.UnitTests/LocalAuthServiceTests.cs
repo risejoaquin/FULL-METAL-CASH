@@ -70,7 +70,7 @@ public sealed class LocalAuthServiceTests
             service.LoginForTerminalAsync("admin@micafeteria.com", "AdminSeguro123!",
                 TenantId, Guid.NewGuid()));
 
-        Assert.Empty(repository.AuditEvents.Where(x => x.EventType == "local.auth.login"));
+        Assert.DoesNotContain(repository.AuditEvents, x => x.EventType == "local.auth.login");
         Assert.Null(await repository.GetLatestActiveLocalSessionAsync());
     }
 
