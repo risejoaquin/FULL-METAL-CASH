@@ -32,13 +32,13 @@ public static class PosCoreWpfCompositionRoot
         var clock = new SystemClock();
         // Prepare real dependencies for the next MVP unit. No fake session
         // or self-test path is introduced into commercial startup.
-        _ = new LocalAuthService(repository, clock);
+        var auth = new LocalAuthService(repository, clock);
         PosCoreStartupInspection state =
             new PosCoreStartupInspectionService(repository).InspectAsync()
                 .GetAwaiter().GetResult();
 
         var shell = new AppShellViewModel(databasePath);
-        shell.InitializeForProduction(state);
+        shell.InitializeForProduction(state, auth);
         return shell;
     }
 
