@@ -60,8 +60,8 @@ public sealed class ProductionCheckoutViewModelTests
 
     private sealed class Fixture : IDisposable
     {
-        private readonly string directory = Path.Combine(
-            Path.GetTempPath(), "solidpos-wpf-commercial-" + Guid.NewGuid().ToString("N"));
+        private readonly string directory = System.IO.Path.Combine(
+            System.IO.Path.GetTempPath(), "solidpos-wpf-commercial-" + Guid.NewGuid().ToString("N"));
         public string Path => System.IO.Path.Combine(directory, "poscore.sqlite");
         public SQLiteLocalDatabase Database { get; }
         public SQLiteLocalPosRepository Repository { get; }
