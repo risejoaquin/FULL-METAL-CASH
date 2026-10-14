@@ -127,6 +127,50 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
         Assert.Equal(0, f.Count("offline_sales"));
     }
 
+
+    [Fact]
+    public async Task Crash_after_financial_commit_reconciles_journal_without_duplicate_money()
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        var result = await f.Checkout.CheckoutAsync(f.Request);
+        Assert.False(result.AlreadyCommitted);
+
+        var restarted = new SQLiteCheckoutRecoveryJournal(new SQLiteLocalDatabase(f.Path));
+        Assert.Equal(f.Request.Sale.LocalSaleId, restarted.FindUnresolved(
+            f.Request.Sale.TenantId, f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+        Assert.True(restarted.ReconcileCommitted(f.Request.Sale.LocalSaleId));
+        Assert.Null(restarted.FindUnresolved(
+            f.Request.Sale.TenantId, f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+        Assert.Equal(1, f.Count("offline_sales"));
+        Assert.Equal(1, f.Count("local_sale_payments"));
+        Assert.Equal(1, f.Count("local_outbox_events"));
+        Assert.Equal(9000, f.Amount("local_cash_movements", "movement_type='sale_cash'"));
+    }
+
+    [Fact]
+    public async Task Missing_cash_ledger_evidence_keeps_restarted_terminal_blocked()
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        await f.Checkout.CheckoutAsync(f.Request);
+        using (var db = f.Database.OpenConnection())
+        using (var command = db.CreateCommand())
+        {
+            command.CommandText = "DELETE FROM local_cash_movements WHERE source_id=$sale;";
+            command.Parameters.AddWithValue("$sale", f.Request.Sale.LocalSaleId.ToString());
+            command.ExecuteNonQuery();
+        }
+        var restarted = new SQLiteCheckoutRecoveryJournal(new SQLiteLocalDatabase(f.Path));
+        Assert.False(restarted.ReconcileCommitted(f.Request.Sale.LocalSaleId));
+        Assert.Equal(f.Request.Sale.LocalSaleId, restarted.FindUnresolved(
+            f.Request.Sale.TenantId, f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+        Assert.Throws<InvalidOperationException>(() => restarted.Register(
+            f.Request with { Sale = f.Request.Sale with { LocalSaleId = Guid.NewGuid() } }));
+    }
+
     private sealed class FixedClock : IClock
     {
         public DateTimeOffset UtcNow { get; } = new(2026, 10, 13, 18, 0, 0, TimeSpan.Zero);
