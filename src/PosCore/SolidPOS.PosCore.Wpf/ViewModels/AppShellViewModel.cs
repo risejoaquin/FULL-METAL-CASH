@@ -53,6 +53,10 @@ public sealed class AppShellViewModel : ViewModelBase
         isSelfTestMode = false;
         RaisePropertyChanged(nameof(SimulationTabVisibility));
         RaisePropertyChanged(nameof(ProductionTabVisibility));
+        Branding.TenantName = inspection.TerminalBound
+            ? $"Comercio por identificar / tienda {inspection.StoreId}"
+            : "Terminal sin activar";
+        Branding.Status = "No hay configuración comercial verificada en el shell.";
         ShellStatus = inspection.OperatorMessage;
         TerminalStatus.Status = inspection.TerminalBound
             ? "Identidad de terminal verificada en SQLite. Cobro deshabilitado."
