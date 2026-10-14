@@ -349,7 +349,8 @@
           "testCases": [
             "SQLiteAtomicCashCheckoutTests.Missing_cash_ledger_evidence_keeps_restarted_terminal_blocked",
             "SQLiteAtomicCashCheckoutTests.Supervisor_cannot_resolve_sale_that_already_committed",
-            "SQLiteAtomicCashCheckoutTests.Audit_insert_failure_rolls_back_supervised_resolution"
+            "SQLiteAtomicCashCheckoutTests.Audit_insert_failure_rolls_back_supervised_resolution",
+            "SQLiteAtomicCashCheckoutTests.Orphaned_outbox_record_blocks_supervisor_from_claiming_no_sale"
           ]
         },
         {
@@ -359,7 +360,8 @@
           "kind": "automated",
           "testCases": [
             "SQLiteCheckoutRecoveryJournalTests.Same_sale_id_cannot_change_amount_on_replay",
-            "SQLiteAtomicCashCheckoutTests.Supervisor_resolves_no_commit_with_audit_and_stale_worker_is_blocked"
+            "SQLiteAtomicCashCheckoutTests.Supervisor_resolves_no_commit_with_audit_and_stale_worker_is_blocked",
+            "SQLiteAtomicCashCheckoutTests.Uncommitted_resolution_requires_reason_evidence_and_matching_tenant_store"
           ]
         },
         {
