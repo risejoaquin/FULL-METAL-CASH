@@ -105,3 +105,12 @@
 - Bloqueos: safety checks del conector impiden crear archivo de tests; no hay .NET SDK local; impresora física, instalación Windows, recuperación y piloto de 3 días sin evidencia; Oasis prospecto sin autorización de contacto, marca o cobro. No hay acción PO concreta que resuelva los safety checks observados; email_sent=false.
 - Archivos/PR de este ciclo: sólo docs/ITERATION_STATE.md si se confirma commit; PR #15 existente, sin cambios de código.
 - Siguiente trabajo permitido: reconciliar por SOLIDPOS-20261014T15 antes de reintentar; publicar las tres regresiones cuando se permita, ejecutar Windows CI sobre SHA nuevo, corregir y revalidar; después continuar UI táctil con bebidas, tamaños y toppings ficticios en rama aislada. Sin merge, deploy, producción ni gastos.
+
+
+#### G1 TOUCH AUDIT ADDENDUM SOLIDPOS-20261014T15 — 2026-10-14T22:04Z
+- Trabajo independiente permitido posterior al bloqueo de tests: auditoría de UI comercial WPF para bebidas/tamaños/toppings con datos ficticios, sin modificar código ni contratos.
+- Documento publicado y verificado: `docs/qa/SOLIDPOS_BEVERAGE_TOUCH_GAP_20261014T15.md` en rama `docs/solidpos-beverage-touch-gap-20261014T15`, commit `f6cc26d65e1a59da6cd98b645c558c4554bf248f`, https://github.com/risejoaquin/FULL-METAL-CASH/blob/docs/solidpos-beverage-touch-gap-20261014T15/docs/qa/SOLIDPOS_BEVERAGE_TOUCH_GAP_20261014T15.md
+- Hallazgo: `MainWindow.xaml` en modo comercial requiere SKU escrito; las pestañas QSR táctiles son de simulación, ocultas en producción. No se certifican tamaños/toppings, impresión física ni demo táctil.
+- Draft PR documental intentado y rechazado por safety checks; **no existe PR nuevo confirmado**. GitHub Actions del commit documental: https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38644883637, PENDING al consultarlo; no afirmar PASS.
+- El checkpoint previo se publicó en commit `651fa65393dddbaeec5fab10cb2b6e580da2fa33`, con entrada de run_id exactamente una vez; el presente addendum conserva append-only. CI de ese SHA: #38644767888 y #38644762199 IN_PROGRESS al consultarlos.
+- Estado general PARTIAL: documento QA persistido; tres regresiones C# y PR de auditoría no publicados; pruebas .NET nuevas 0; COMMERCIAL_GO NO-GO.
