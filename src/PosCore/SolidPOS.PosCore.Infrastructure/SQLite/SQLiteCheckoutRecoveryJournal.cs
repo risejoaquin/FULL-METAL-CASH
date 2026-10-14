@@ -97,15 +97,45 @@ ORDER BY created_at_utc LIMIT 1;
         using var connection = database.OpenConnection();
         Ensure(connection);
         using var tx = connection.BeginTransaction();
+        // A marker alone is not enough: verify all financial side effects,
+        // and fail closed if an expected table is absent or incomplete.
+        string[] tables = { "local_checkout_commits", "offline_sales",
+            "local_sale_payments", "local_cash_movements",
+            "local_outbox_events", "local_print_jobs", "local_checkout_recovery" };
+        foreach (var table in tables)
+        {
+            using var exists = connection.CreateCommand();
+            exists.Transaction = tx;
+            exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=$table;";
+            exists.Parameters.AddWithValue("$table", table);
+            if (Convert.ToInt64(exists.ExecuteScalar()) != 1) return false;
+        }
         using var cmd = connection.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText = "SELECT COUNT(*) FROM local_checkout_commits WHERE local_sale_id=$sale;";
+        cmd.CommandText = """
+SELECT COUNT(*) FROM local_checkout_commits c
+JOIN local_checkout_recovery r ON r.local_sale_id = c.local_sale_id
+JOIN offline_sales s ON s.local_sale_id = c.local_sale_id
+JOIN local_sale_payments p ON p.local_sale_id = c.local_sale_id
+JOIN local_cash_movements m ON m.source_id = c.local_sale_id
+JOIN local_outbox_events o ON o.id = c.outbox_event_id
+JOIN local_print_jobs j ON j.id = c.print_job_id
+WHERE c.local_sale_id=$sale
+  AND c.cash_shift_id=p.shift_id
+  AND p.method_code='cash'
+  AND p.amount_cents=c.total_cents
+  AND s.total_cents=c.total_cents AND s.paid_cents=c.total_cents
+  AND m.source_type='offline_sale' AND m.movement_type='sale_cash'
+  AND m.amount_cents=c.total_cents
+  AND o.event_type='sale.completed' AND o.schema_version=4
+  AND o.tenant_id=r.tenant_id AND o.store_id=r.store_id
+  AND o.terminal_id=r.terminal_id
+  AND j.sale_id=c.local_sale_id AND j.tenant_id=r.tenant_id
+  AND j.store_id=r.store_id AND j.terminal_id=r.terminal_id
+  AND s.tenant_id=r.tenant_id AND s.store_id=r.store_id
+  AND s.terminal_id=r.terminal_id;
+""";
         cmd.Parameters.AddWithValue("$sale", localSaleId.ToString());
-        // A checkout never committed when the table itself has not been created.
-        using var exists = connection.CreateCommand();
-        exists.Transaction = tx;
-        exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='local_checkout_commits';";
-        if (Convert.ToInt64(exists.ExecuteScalar()) == 0) return false;
         if (Convert.ToInt64(cmd.ExecuteScalar()) != 1) return false;
         using var update = connection.CreateCommand();
         update.Transaction = tx;
