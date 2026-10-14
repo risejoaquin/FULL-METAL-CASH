@@ -2,6 +2,8 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 COPY Directory.Build.props ./
+# Keep all project references in the build context (discount rules are shared).
+COPY src/Shared ./src/Shared
 COPY src/PosServer ./src/PosServer
 
 RUN dotnet restore src/PosServer/SolidPOS.PosServer.Api/SolidPOS.PosServer.Api.csproj
