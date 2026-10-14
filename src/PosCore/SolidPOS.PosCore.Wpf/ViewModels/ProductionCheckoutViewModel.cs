@@ -135,6 +135,13 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     public async Task VerifyRecoveryAsync()
     {
         if (busy || login.ActiveSession is null || recoveryJournal is null) return;
+        if (pendingRequest is { } pending && recoveryJournal.ReconcileCommitted(pending.Sale.LocalSaleId))
+        {
+            pendingRequest = null;
+            cart.Clear();
+            cart.SetCheckoutLocked(false);
+            SaleStatus = $"Venta {pending.Sale.LocalSaleId} confirmada en SQLite. Sin nuevo cobro.";
+        }
         await RefreshShiftAsync();
     }
 
