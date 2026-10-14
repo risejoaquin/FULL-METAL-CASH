@@ -55,6 +55,25 @@ public sealed class LocalAuthServiceTests
         Assert.Contains("permission denied", error.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+
+    [Fact]
+    public async Task LoginForTerminalAsync_RejectsOtherStoreBeforeSessionIsCreated()
+    {
+        var clock = new FixedClock(new DateTimeOffset(2026, 8, 20, 4, 0, 0, TimeSpan.Zero));
+        var repository = new AuthRepository();
+        await repository.SaveLocalUserAsync(new LocalUser(UserId, TenantId, StoreId,
+            "admin@micafeteria.com", "Admin", LocalPasswordHasher.Hash("AdminSeguro123!"),
+            "owner", true, clock.UtcNow, 72), new[] { "sales.create" });
+        var service = new LocalAuthService(repository, clock);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.LoginForTerminalAsync("admin@micafeteria.com", "AdminSeguro123!",
+                TenantId, Guid.NewGuid()));
+
+        Assert.Empty(repository.AuditEvents.Where(x => x.EventType == "local.auth.login"));
+        Assert.Null(await repository.GetLatestActiveLocalSessionAsync());
+    }
+
     private sealed class AuthRepository : ILocalPosRepository
     {
         private readonly Dictionary<string, LocalUser> _usersByEmail = new(StringComparer.OrdinalIgnoreCase);
@@ -94,6 +113,7 @@ public sealed class LocalAuthServiceTests
         public Task<LocalUser?> GetLocalUserByEmailAsync(string email, CancellationToken cancellationToken = default) => Task.FromResult(_usersByEmail.TryGetValue(email, out var user) ? user : null);
         public Task CreateLocalSessionAsync(LocalSession session, CancellationToken cancellationToken = default) { _sessions[session.SessionId] = session; return Task.CompletedTask; }
         public Task<LocalSession?> GetLocalSessionAsync(Guid sessionId, CancellationToken cancellationToken = default) => Task.FromResult(_sessions.TryGetValue(sessionId, out var session) ? session : null);
+        public Task<LocalSession?> GetLatestActiveLocalSessionAsync(CancellationToken cancellationToken = default) => Task.FromResult(_sessions.Values.LastOrDefault(x => x.Status == "active"));
         public Task<bool> LocalUserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken = default) => Task.FromResult(_permissions.TryGetValue(userId, out var set) && set.Contains(permissionCode));
         public Task LogLocalAuditEventAsync(LocalAuditEvent auditEvent, CancellationToken cancellationToken = default) { AuditEvents.Add(auditEvent); return Task.CompletedTask; }
     }
