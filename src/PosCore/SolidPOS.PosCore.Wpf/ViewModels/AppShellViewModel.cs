@@ -32,6 +32,7 @@ public sealed class AppShellViewModel : ViewModelBase
     }
 
     public LoginViewModel Login { get; }
+    public ProductionLoginViewModel? ProductionLogin { get; private set; }
 
     public TerminalStatusViewModel TerminalStatus { get; }
 
@@ -47,10 +48,12 @@ public sealed class AppShellViewModel : ViewModelBase
     /// Production shell is diagnostics-only until authorized login and
     /// atomic checkout are wired. No fabricated sale, cash or sync state.
     /// </summary>
-    public void InitializeForProduction(PosCoreStartupInspection inspection)
+    public void InitializeForProduction(PosCoreStartupInspection inspection, SolidPOS.PosCore.Application.Auth.LocalAuthService? auth = null)
     {
         ArgumentNullException.ThrowIfNull(inspection);
         isSelfTestMode = false;
+        ProductionLogin = auth is null ? null : new ProductionLoginViewModel(auth, inspection);
+        RaisePropertyChanged(nameof(ProductionLogin));
         RaisePropertyChanged(nameof(SimulationTabVisibility));
         RaisePropertyChanged(nameof(ProductionTabVisibility));
         Branding.TenantName = inspection.TerminalBound
@@ -66,7 +69,7 @@ public sealed class AppShellViewModel : ViewModelBase
             : "No existe binding de terminal v4 válido; solicitar activación.";
         Login.Email = string.Empty;
         Login.Status = inspection.CanBeginAuthentication
-            ? "Existen usuarios locales. Login WPF real todavía no integrado; sin sesión."
+            ? "Existen usuarios locales. Inicio de sesión real disponible; sin sesión."
             : "No hay autenticación disponible hasta completar activación y aprovisionamiento.";
         Sales.CatalogSummary = $"Productos en catálogo SQLite: {inspection.CatalogProductCount}. Venta deshabilitada.";
         Sales.SaleStatus = "No se han registrado ventas. El cobro real está bloqueado.";
