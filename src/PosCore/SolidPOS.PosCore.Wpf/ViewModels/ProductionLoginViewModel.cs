@@ -52,7 +52,7 @@ public sealed class ProductionLoginViewModel : ViewModelBase
                 Status = "Capture correo y contraseña.";
                 return;
             }
-            var authenticated = await auth.LoginAsync(Email.Trim(), password);
+            var authenticated = await auth.LoginForTerminalAsync(Email.Trim(), password, inspection.TenantId!.Value, inspection.StoreId!.Value);
             if (authenticated.TenantId != inspection.TenantId ||
                 authenticated.StoreId != inspection.StoreId ||
                 authenticated.ExpiresAtUtc <= DateTimeOffset.UtcNow)
