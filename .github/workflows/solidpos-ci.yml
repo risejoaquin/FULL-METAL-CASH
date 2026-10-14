@@ -122,6 +122,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Test traceability calculator and acceptance manifest
+        shell: pwsh
+        run: python -m unittest discover -s tests/quality -p "test_*.py" -v
+
       - name: Generate MVP acceptance traceability
         if: always()
         shell: pwsh
@@ -130,7 +134,9 @@ jobs:
           --matrix docs/engineering/solidpos-mvp-acceptance-matrix.json
           --trx-dir TestResults
           --commit "${{ github.sha }}"
+          --run-id "${{ github.run_id }}"
           --output TestResults/solidpos-mvp-traceability.json
+          --strict
 
       - name: Upload MVP traceability evidence
         if: always()
