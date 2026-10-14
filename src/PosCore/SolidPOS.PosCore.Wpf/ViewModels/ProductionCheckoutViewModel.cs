@@ -99,7 +99,16 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
                     if (recoveryJournal.ReconcileCommitted(uncertain))
                     {
                         unresolvedAfterRestart = recoveryJournal.FindUnresolved(binding.TenantId, binding.StoreId, binding.TerminalId);
-                        SaleStatus = $"Venta {uncertain} verificada en SQLite tras reinicio; no se repitió el cobro.";
+                        SaleStatus = unresolvedAfterRestart is null
+                            ? $"Venta {uncertain} verificada en SQLite tras reinicio; no se repitió el cobro."
+                            : $"Venta {uncertain} verificada; sigue pendiente {unresolvedAfterRestart}. No se permiten cobros.";
+                        if (unresolvedAfterRestart is not null)
+                        {
+                            shift = null;
+                            cart.SetCheckoutLocked(true);
+                            CashStatus = "Caja bloqueada por otra operación pendiente.";
+                            return;
+                        }
                     }
                     else
                     {
