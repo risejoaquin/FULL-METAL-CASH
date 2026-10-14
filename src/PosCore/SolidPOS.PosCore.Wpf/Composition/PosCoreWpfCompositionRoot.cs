@@ -48,7 +48,8 @@ public static class PosCoreWpfCompositionRoot
             var cashClose = new AtomicCashShiftCloseService(
                 new SQLiteAtomicCashShiftCloseStore(database), clock);
             shell.AttachProductionCheckout(new ProductionCheckoutViewModel(
-                repository, auth, shell.ProductionLogin, shell.ProductionCart, checkout, cashClose, clock, new SQLiteCheckoutRecoveryJournal(database)));
+                repository, auth, shell.ProductionLogin, shell.ProductionCart, checkout, cashClose, clock, new SQLiteCheckoutRecoveryJournal(database),
+                new SQLiteSupervisedCheckoutRecoveryService(database)));
         }
         return shell;
     }
