@@ -65,6 +65,12 @@ WHERE terminal_id=$terminal AND state='pending' AND local_sale_id<>$sale;
         check.Parameters.AddWithValue("$sale", request.Sale.LocalSaleId.ToString());
         if (Convert.ToInt64(check.ExecuteScalar()) != 0)
             throw new InvalidOperationException("Unresolved checkout intent exists; reconciliation required.");
+        using var verify = connection.CreateCommand();
+        verify.Transaction = tx;
+        verify.CommandText = "SELECT request_json FROM local_checkout_recovery WHERE local_sale_id=$sale;";
+        verify.Parameters.AddWithValue("$sale", request.Sale.LocalSaleId.ToString());
+        if (!string.Equals(verify.ExecuteScalar() as string, JsonSerializer.Serialize(request), StringComparison.Ordinal))
+            throw new InvalidOperationException("Checkout intent ID reused with changed financial data.");
         tx.Commit();
     }
 
