@@ -132,6 +132,12 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
         }
     }
 
+    public async Task VerifyRecoveryAsync()
+    {
+        if (busy || login.ActiveSession is null || recoveryJournal is null) return;
+        await RefreshShiftAsync();
+    }
+
     public async Task OpenShiftAsync()
     {
         if (!CanOpenShift) return;
