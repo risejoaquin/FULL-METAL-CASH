@@ -129,6 +129,27 @@ public sealed class SignedOfflineCartDiscountTests
     }
 
     [Fact]
+    public async Task Terminal_reenrollment_revokes_access_to_previous_signed_rule_cache()
+    {
+        using var fx = new Fixture();
+        await fx.InitializeAsync();
+        var signed = fx.Sign(fx.Rule(1));
+        await fx.Service().PublishAsync(signed);
+        Assert.NotNull(await fx.Cache.LoadAsync(
+            fx.TenantId, fx.StoreId, fx.TerminalId, signed.DiscountId));
+
+        await fx.Repository.SaveTerminalBindingAsync(new TerminalBinding(
+            Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(),
+            "new-test-machine", "new-test-token", DateTimeOffset.UtcNow, 4));
+
+        Assert.Null(await fx.Cache.LoadAsync(
+            fx.TenantId, fx.StoreId, fx.TerminalId, signed.DiscountId));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            fx.Service().ApplyAsync(fx.Sale(), signed.DiscountId,
+                [new OfflineSalePaymentDraft("cash", 259)]));
+    }
+
+    [Fact]
     public async Task Direct_sqlite_tampering_is_detected_when_rule_is_reloaded()
     {
         using var fx = new Fixture();
