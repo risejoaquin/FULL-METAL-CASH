@@ -301,6 +301,64 @@ BEGIN SELECT RAISE(ABORT, 'simulated audit persistence failure'); END;
         Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
     }
 
+    [Fact]
+    public async Task Uncommitted_resolution_requires_reason_evidence_and_matching_tenant_store()
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        var supervisor = await f.CreateSupervisorAsync(new[] { "sales.void", "cash.close" });
+        var recovery = new SQLiteSupervisedCheckoutRecoveryService(f.Database);
+        Assert.Throws<InvalidOperationException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
+                "short", "INCIDENT-2026-007", f.Clock.UtcNow));
+        Assert.Throws<InvalidOperationException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
+                "No money was taken and financial logs were checked.", "x", f.Clock.UtcNow));
+
+        var externalUser = Guid.NewGuid();
+        var otherTenant = Guid.NewGuid();
+        var otherStore = Guid.NewGuid();
+        await f.Repository.SaveLocalUserAsync(new LocalUser(externalUser, otherTenant,
+            otherStore, "external-supervisor@test.invalid", "External Supervisor",
+            LocalPasswordHasher.Hash("Other-store-test-password!"),
+            "supervisor", true, f.Clock.UtcNow, 12),
+            new[] { "sales.void", "cash.close" });
+        var outsider = await new LocalAuthService(f.Repository, f.Clock).LoginForTerminalAsync(
+            "external-supervisor@test.invalid", "Other-store-test-password!",
+            otherTenant, otherStore);
+        Assert.Throws<InvalidOperationException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, outsider.SessionId,
+                "No funds were physically received according to logs.",
+                "INCIDENT-2026-008", f.Clock.UtcNow));
+        Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
+        Assert.Equal(f.Request.Sale.LocalSaleId,
+            journal.FindUnresolved(f.Request.Sale.TenantId,
+                f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+    }
+
+    [Fact]
+    public async Task Orphaned_outbox_record_blocks_supervisor_from_claiming_no_sale()
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        var supervisor = await f.CreateSupervisorAsync(new[] { "sales.void", "cash.close" });
+        await f.Repository.SaveOutboxEventAsync(new LocalOutboxEvent(
+            Guid.NewGuid(), f.Request.Sale.TenantId, f.Request.Sale.StoreId,
+            f.Request.Sale.TerminalId, "sale.completed", 4, 123456789,
+            System.Text.Json.JsonSerializer.Serialize(new { localSaleId = f.Request.Sale.LocalSaleId }),
+            LocalOutboxStatus.Pending, f.Clock.UtcNow));
+        var recovery = new SQLiteSupervisedCheckoutRecoveryService(f.Database);
+        Assert.Throws<InvalidOperationException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
+                "An outbox record survives and must prevent supervisor release.",
+                "INCIDENT-2026-009", f.Clock.UtcNow));
+        Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
+        Assert.NotNull(journal.FindUnresolved(f.Request.Sale.TenantId,
+            f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+    }
+
     private sealed class FixedClock : IClock
     {
         public DateTimeOffset UtcNow { get; } = new(2026, 10, 13, 18, 0, 0, TimeSpan.Zero);
