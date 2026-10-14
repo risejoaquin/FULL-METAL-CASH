@@ -154,7 +154,7 @@ def make_markdown(report):
     lines = [
         "# SolidPOS — Evidencia de aceptación (CI)",
         "",
-        f"**Commit:** \`{report['commit']}\` · **Run:** \`{report['runId']}\`",
+        f"**Commit:** `{report['commit']}` · **Run:** `{report['runId']}`",
         f"**Puntos de evidencia verificables:** {report['verifiedAcceptanceEvidencePercent']}/100",
         f"**Automatización acreditada:** {report['verifiedAutomatedWeight']}/{report['automatedWeightAvailable']}",
         f"**Escenarios automáticos demostrados:** {report['verifiedScenarioCount']}/{report['totalScenarioCount']} (total incluye manuales)",
@@ -179,7 +179,7 @@ def make_markdown(report):
                     if result["status"] != "passed")
                 lines.append(f"| {scenario['id']} | {scenario['status']} | {evidence} |")
     lines += ["", "> Una suite verde no equivale a autorización comercial. El GO exige UAT, hardware, seguridad y aprobación explícita.", ""]
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 
 def main(argv=None):
