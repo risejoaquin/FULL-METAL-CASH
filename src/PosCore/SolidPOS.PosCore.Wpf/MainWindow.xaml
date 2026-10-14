@@ -57,7 +57,8 @@
         </TabItem>
 
         <TabItem Header="Activación / Estado real" Visibility="{Binding ProductionTabVisibility}">
-          <StackPanel Margin="24">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24">
             <TextBlock Text="SolidPOS — operación local en validación técnica (NO-GO comercial)" FontSize="22" FontWeight="SemiBold" />
             <TextBlock Text="{Binding ShellStatus}" TextWrapping="Wrap" Margin="0,18,0,10" FontSize="15"/>
             <TextBlock Text="{Binding TerminalStatus.Status}" TextWrapping="Wrap" />
@@ -124,7 +125,8 @@
             </GroupBox>
             <TextBlock Text="Cobro local habilitado únicamente con sesión, permiso y caja válida. Impresión física, sincronización y validación comercial completa siguen pendientes de certificación." TextWrapping="Wrap" FontWeight="SemiBold" />
             <TextBlock Text="No presentar esta pantalla como sistema comercial certificado hasta validar instalación, hardware, sincronización, devoluciones y cierre." TextWrapping="Wrap" Margin="0,12,0,0" />
-          </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
         </TabItem>
 
         <TabItem Header="Terminal">
