@@ -49,7 +49,7 @@ documentalmente.
 
 1. Segundo operador diferente del cajero original, con sesión vigente y mismo tenant/store.
 2. Permisos locales `sales.void` y `cash.close` simultáneamente; no se conceden por este flujo.
-3. Terminal con binding v4 vigente, motivo detallado y referencia de incidencia/evidencia.
+3. Terminal con binding v4 vigente, motivo detallado, referencia de incidencia/evidencia y **confirmación explícita de inspección de efectivo físico**. Sin esta atestación el servicio deniega la resolución.
 4. Ausencia de venta, pago, línea, movimiento de inventario/caja, trabajo de impresión,
    outbox o auditoría de commit relacionados con ese identificador.
 5. Escritura conjunta de la resolución y del evento `local.checkout.intent_resolved_uncommitted`
@@ -63,7 +63,7 @@ sujeta a aprobación humana antes de operar en comercios reales.
 
 ### Pruebas automáticas de regresión
 
-- Supervisor autorizado resuelve sólo cuando no hubo commit ni efectos financieros.
+- Supervisor autorizado resuelve sólo cuando no hubo commit ni efectos financieros y confirmó la inspección física.
 - Cajero original o un supervisor sin permisos suficientes no puede resolver.
 - Si hay venta persistida, la resolución se rechaza sin mover el ledger.
 - Falla la auditoría: rollback de resolución, intención continúa pendiente.
