@@ -90,3 +90,16 @@
 - Persistencia: este registro sólo se considera persistido si GitHub confirma commit; revisión de código y reporte local independientes disponibles.
 - Riesgos: impresora física, WPF Windows, instalación/restauración, piloto 3 días y aceptación PO pendientes. Oasis sólo prospecto.
 - Próxima acción: publicar regresiones cuando escritura sea posible; CI Windows por SHA final, corregir y revalidar; luego UI táctil y variantes ficticias.
+
+
+### SOLIDPOS-20261014T10 — 2026-10-14T17:06:15.814Z
+- Estado: BLOCKED_TOOL (publicación de código y documento QA rechazada por controles de seguridad de la integración).
+- Sprint/gate: 14-oct, Semana 1 G0/G1; DEMO_READY pendiente; COMMERCIAL_GO NO-GO; entrega base 2026-11-10 y aceleración condicional 2026-11-03 a 06.
+- Rama aislada: ac-dev/cart-session-race-tests-20261014T10; SHA base de código bf80d560a9b2c47b140de6b5a76c33442d51be7d; SHA de código final sin cambios bf80d560a9b2c47b140de6b5a76c33442d51be7d. Commit documental sujeto a confirmación.
+- Cambios humanos/PO: AC-DEV a2961f4e14ebe0a18ec1c6a93db5ca3b6ac73655; PR #13/#14/#15/#16 Draft. No se sobrescribieron ramas ni contratos congelados.
+- Slice P0: se recuperaron tres regresiones C# preparadas para lecturas tardías del catálogo tras logout, reingreso del mismo operador y bloqueo de checkout; create_file de pruebas y QA fue bloqueado. Ninguna de las tres pruebas nuevas está en GitHub.
+- Pruebas ejecutadas esta iteración: revisión de firmas y fixture de pruebas por lectura de código; dotnet test NO EJECUTADO (dotnet no disponible en entorno). No se acreditan puntos nuevos.
+- CI comprobado por SHA: PR #15 SHA bf80d560..., run 38593958764 SUCCESS, 406/406 (145 unit servidor, 11 integración reportada, 6 contratos, 244 PosCore); PR #16 SHA 18337b17..., run 38602106388 SUCCESS. Ninguna incluye regresiones nuevas.
+- Aceptación: matriz oficial 38 escenarios / 100 puntos (71 automáticos y 29 manuales por clasificación); 29/38 escenarios y 71/100 automáticos acreditados por CI previo, NO equivale a 71% release; aceptación comercial total N/D. Windows hardware, impresora y piloto 3 días pendientes.
+- Bloqueos: escritura GitHub de archivos nuevos rechazada por safety checks; sin ejecución .NET local; no acción comercial/producción autorizada.
+- Próximo trabajo: reintentar publicación idempotente de ProductionCartSessionRaceTests.cs en rama aislada, ejecutar Windows CI por SHA, corregir fallos; luego adaptar UX táctil bebidas/variantes ficticias sobre PosCore/PosBuilder.
