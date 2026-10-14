@@ -111,6 +111,11 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
                         SaleStatus = unresolvedAfterRestart is null
                             ? $"Venta {uncertain} verificada en SQLite tras reinicio; no se repitió el cobro."
                             : $"Venta {uncertain} verificada; sigue pendiente {unresolvedAfterRestart}. No se permiten cobros.";
+                        if (pendingRequest?.Sale.LocalSaleId == uncertain)
+                        {
+                            pendingRequest = null;
+                            cart.Clear();
+                        }
                         if (unresolvedAfterRestart is not null)
                         {
                             shift = null;
@@ -129,6 +134,9 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
                     }
                 }
             }
+            // Successful reconciliation must actually release the read-only
+            // cart; never release it while another uncertain sale remains.
+            cart.SetCheckoutLocked(pendingRequest is not null || unresolvedAfterRestart is not null);
             shift = open;
             if (open is null)
                 CashStatus = "No existe turno abierto. Requiere permiso cash.open.";
