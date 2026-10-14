@@ -120,6 +120,7 @@
                     <TextBox Text="{Binding RecoveryReason, UpdateSourceTrigger=PropertyChanged}" />
                     <TextBlock Text="Referencia de incidencia y evidencia (mínimo 8 caracteres)" Margin="0,8,0,4" />
                     <TextBox Text="{Binding RecoveryEvidence, UpdateSourceTrigger=PropertyChanged}" />
+                    <CheckBox IsChecked="{Binding RecoveryCashVerified, Mode=TwoWay}" Content="Confirmo revisión del efectivo físico y que no hubo cobro" Margin="0,10,0,0" />
                     <Button Content="Resolver intento SIN venta (auditado)" Click="ProductionResolveUncommitted_Click"
                             IsEnabled="{Binding CanResolveUncommitted}" Padding="12,8" Margin="0,10,0,0" HorizontalAlignment="Left" />
                   </StackPanel>
