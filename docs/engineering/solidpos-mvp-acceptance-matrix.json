@@ -328,7 +328,8 @@
           "weight": 2,
           "kind": "automated",
           "testCases": [
-            "SQLiteCheckoutRecoveryJournalTests.Restart_preserves_uncertain_checkout_and_blocks_new_sale_id"
+            "SQLiteCheckoutRecoveryJournalTests.Restart_preserves_uncertain_checkout_and_blocks_new_sale_id",
+            "SQLiteAtomicCashCheckoutTests.Killed_external_process_preserves_or_reconciles_exactly_one_checkout"
           ]
         },
         {
@@ -338,7 +339,8 @@
           "kind": "automated",
           "testCases": [
             "SQLiteAtomicCashCheckoutTests.Crash_after_financial_commit_reconciles_journal_without_duplicate_money",
-            "ProductionCheckoutViewModelTests.Reopened_commercial_shell_reconciles_persisted_checkout_and_unlocks_cart"
+            "ProductionCheckoutViewModelTests.Reopened_commercial_shell_reconciles_persisted_checkout_and_unlocks_cart",
+            "SQLiteAtomicCashCheckoutTests.Killed_external_process_preserves_or_reconciles_exactly_one_checkout"
           ]
         },
         {
