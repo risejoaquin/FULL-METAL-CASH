@@ -88,7 +88,7 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
     }
 
     [Fact]
-    public async Task Unbound_terminal_or_wrong_permission_never_writes_a_sale()
+    public async Task Missing_cashier_permission_never_writes_a_sale()
     {
         using var f = await Fixture.CreateAsync();
         using (var db = f.Database.OpenConnection())
@@ -192,6 +192,13 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
             // Constants from tests only; no user-provided SQL identifiers.
             using var db = Database.OpenConnection();
             using var cmd = db.CreateCommand();
+            if (table.StartsWith("local_checkout_", StringComparison.Ordinal))
+            {
+                using var exists = db.CreateCommand();
+                exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=$name;";
+                exists.Parameters.AddWithValue("$name", table);
+                if (Convert.ToInt32(exists.ExecuteScalar()) == 0) return 0;
+            }
             cmd.CommandText = "SELECT COUNT(*) FROM " + table +
                 (condition is null ? "" : " WHERE " + condition);
             return Convert.ToInt32(cmd.ExecuteScalar());
