@@ -114,6 +114,55 @@ public sealed class DiscountCartQuoteServiceTests
     }
 
     [Fact]
+    public async Task Forged_client_clock_cannot_preview_future_or_expired_promotion()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var upcoming = Stored(Guid.NewGuid(), "percentage", 40, _product, _store)
+            with { StartsAt = now.AddDays(1) };
+        var expired = Stored(Guid.NewGuid(), "percentage", 40, _product, _store)
+            with { EndsAt = now.AddDays(-1) };
+        _discounts.Setup(x => x.GetByIdAsync(_tenant, It.IsAny<Guid>(),
+            It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Guid _, Guid id, CancellationToken _) =>
+                id == upcoming.Id ? upcoming : id == expired.Id ? expired : null);
+
+        var service = Service();
+        foreach (var (rule, forgedDate) in new[]
+        {
+            (upcoming, now.AddDays(2)),
+            (expired, now.AddDays(-2))
+        })
+        {
+            var request = new DiscountCartQuoteRequest(_store,
+                [new(Guid.NewGuid(), _product, 1000, rule.Id)],
+                OccurredAt: forgedDate);
+
+            Assert.Null(await service.QuoteCartAsync(request, CancellationToken.None));
+            Assert.Null(await service.QuoteCartAsync(
+                request with { OccurredAt = now }, CancellationToken.None));
+        }
+        _audit.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Recent_client_timestamp_still_uses_server_time_for_valid_promotions()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var active = Stored(Guid.NewGuid(), "percentage", 25, _product, _store)
+            with { StartsAt = now.AddMinutes(-5), EndsAt = now.AddMinutes(5) };
+        _discounts.Setup(x => x.GetByIdAsync(_tenant, active.Id,
+            It.IsAny<CancellationToken>())).ReturnsAsync(active);
+        var service = Service();
+        var request = new DiscountCartQuoteRequest(_store,
+            [new(Guid.NewGuid(), _product, 100, active.Id)],
+            OccurredAt: now.AddSeconds(90));
+        var quote = await service.QuoteCartAsync(request, CancellationToken.None);
+        Assert.NotNull(quote);
+        Assert.Equal(25, quote.DiscountCents);
+        Assert.Equal(75, quote.NetCents);
+    }
+
+    [Fact]
     public async Task Partial_update_cannot_introduce_fractional_fixed_amount_when_type_is_omitted()
     {
         var original = Stored(Guid.NewGuid(), "fixed_amount", 100, storeId: _store);
