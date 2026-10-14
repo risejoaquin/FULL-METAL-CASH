@@ -49,3 +49,8 @@
 - Porcentaje justificado / denominador o N/D:
 - Próxima actividad independiente prioritaria:
 ```
+
+## Verificación de conectividad — 2026-10-14
+- Esta sección documenta una prueba controlada de escritura desde la integración ChatGPT/GitHub en `AC-DEV`.
+- La lectura del archivo fue satisfactoria. La escritura quedará verificada únicamente si el commit de esta actualización se confirma.
+- No acredita ejecución de GitHub Actions, permisos de merge ni avance funcional del MVP.
