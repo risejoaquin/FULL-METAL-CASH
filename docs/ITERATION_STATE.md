@@ -79,3 +79,14 @@
 - Defectos/bloqueos: no hay permiso efectivo de publicación del nuevo archivo de tests; impresora física, instalación Windows, recuperación real y piloto humano pendientes. Oasis es prospecto no confirmado.
 - Avance ponderado comercial: N/D; no contar 71 puntos automáticos como aprobados ni CI verde como aceptación física.
 - Siguiente tarea: publicar regresiones cuando el conector permita escritura, correr dotnet test Windows y revalidar por SHA; después UI táctil bebidas/variantes sobre PosCore existente.
+
+
+### SOLIDPOS-20261014T1557Z — 2026-10-14T15:57:36Z
+- Sprint/gate: Semana 1, G0/G1; DEMO_READY pendiente, COMMERCIAL_GO NO-GO; entrega base 2026-11-10, aceleración 2026-11-03 a 06 condicionada a aceptación.
+- Rama y SHA base: ac-dev/cart-session-regression-20261014-0556; d2488c43931b128fc80beab8fc6d85275c615dd8. SHA final: por confirmar tras escritura.
+- Concurrencia: PR #13 AC-DEV→main y #14 roadmap→AC-DEV siguen Draft; #15 Draft en el SHA anterior. No se alteraron cambios humanos ni contratos schema_version_4.
+- Pruebas reales revisadas: Windows SolidPOS CI run 38577251185, SHA d2488c43931b128fc80beab8fc6d85275c615dd8, SUCCESS; 406/406 tests .NET, 29/38 escenarios, 71/100 puntos de evidencia automática (71/71 automáticos); 29 puntos manuales no acreditados. No se ejecutaron tests .NET nuevos en esta sesión.
+- Slice P0: tres pruebas deterministas de carrera de sesión/catálogo preparadas, pero publicación bloqueada por controles de seguridad del conector. No afirmar ejecución ni incluirlas en los 406.
+- Persistencia: este registro sólo se considera persistido si GitHub confirma commit; revisión de código y reporte local independientes disponibles.
+- Riesgos: impresora física, WPF Windows, instalación/restauración, piloto 3 días y aceptación PO pendientes. Oasis sólo prospecto.
+- Próxima acción: publicar regresiones cuando escritura sea posible; CI Windows por SHA final, corregir y revalidar; luego UI táctil y variantes ficticias.
