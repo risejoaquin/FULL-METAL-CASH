@@ -206,9 +206,13 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
         journal.Register(f.Request);
         var supervisor = await f.CreateSupervisorAsync(new[] { "sales.void", "cash.close" });
         var recovery = new SQLiteSupervisedCheckoutRecoveryService(f.Database);
+        Assert.Throws<InvalidOperationException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
+                "Se confirmó que nunca se entregó ni cobró efectivo.",
+                "INCIDENT-TEST-2026-001", f.Clock.UtcNow));
         recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
             "Se confirmó que nunca se entregó ni cobró efectivo.",
-            "INCIDENT-TEST-2026-001", f.Clock.UtcNow);
+            "INCIDENT-TEST-2026-001", f.Clock.UtcNow, true);
 
         Assert.Null(journal.FindUnresolved(f.Request.Sale.TenantId,
             f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
