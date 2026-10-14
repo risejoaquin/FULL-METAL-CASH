@@ -38,7 +38,7 @@ public static class PosCoreWpfCompositionRoot
                 .GetAwaiter().GetResult();
 
         var shell = new AppShellViewModel(databasePath);
-        shell.InitializeForProduction(state, auth);
+        shell.InitializeForProduction(state, auth, repository);
         return shell;
     }
 
