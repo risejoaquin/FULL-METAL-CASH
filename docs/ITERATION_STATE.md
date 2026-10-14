@@ -65,3 +65,17 @@
 - Blockers: GitHub connector blocked regression-test writes and draft PR creation. No merge, deployment, production data or expenses.
 - Evidence: acceptance matrix 100 points; verified new acceptance points N/D; manual Windows and printer UAT pending.
 - Next: add deterministic regression tests when connector permits, trigger CI for exact SHA, review PR, continue tactile beverage integration without changing frozen contracts.
+
+### SOLIDPOS-20261014-0700 — 2026-10-14T14:02:57Z
+- Ejecutor y contexto: ChatGPT, iteración horaria GitHub, sin contacto con prospectos.
+- Sprint y gate: Semana 1 (14–20 octubre), G0/G1; DEMO_READY pendiente, COMMERCIAL_GO NO-GO; fecha base 10-nov y acelerada 3–6 nov condicional.
+- Cambios humanos: AC-DEV continúa en a2961f4e14ebe0a18ec1c6a93db5ca3b6ac73655; PR #13 y #14 Draft; otras ramas de checkout/RBAC detectadas, sin tocarlas.
+- Rama y SHA base → final: ac-dev/cart-session-regression-20261014-0556; 5d485b6b68925ef6b41380c40f4e6e4f1bc8ab5f → 5d485b6b68925ef6b41380c40f4e6e4f1bc8ab5f (no se pudo publicar nuevo código).
+- Requisitos: revisión estática de la matriz oficial: 38 IDs únicos, 100 puntos (71 automáticos/29 manuales), 39 referencias a métodos de prueba presentes en 8 archivos del HEAD AC-DEV. Presencia no equivale a ejecución PASS.
+- Intento de cambio: publicación de 3 regresiones deterministas de consulta asíncrona de catálogo (logout, nuevo login, checkout lock), BLOQUEADA por safety checks del conector. Archivo recuperable fuera de GitHub.
+- Pruebas realmente ejecutadas: validación de referencias fuente 39/39 PASS (inspección estática); NO se ejecutó dotnet test ni nuevas pruebas de runtime; 0 puntos nuevos certificados.
+- CI: AC-DEV a2961f4e: Windows .NET 8, PostgreSQL 16 recovery RBAC, PostgreSQL cart sale y Linux PosServer image SUCCESS en ejecuciones 38529486841/38529486836/38529486972/38529486825. Rama ac-dev/cart-session-regression-20261014-0556, SHA 5d485b6b68925ef6b41380c40f4e6e4f1bc8ab5f: SolidPOS CI 38567940341 SUCCESS, sin incluir pruebas nuevas.
+- PR: #13 Draft AC-DEV→main; #14 Draft roadmap→AC-DEV; ningún PR nuevo.
+- Defectos/bloqueos: no hay permiso efectivo de publicación del nuevo archivo de tests; impresora física, instalación Windows, recuperación real y piloto humano pendientes. Oasis es prospecto no confirmado.
+- Avance ponderado comercial: N/D; no contar 71 puntos automáticos como aprobados ni CI verde como aceptación física.
+- Siguiente tarea: publicar regresiones cuando el conector permita escritura, correr dotnet test Windows y revalidar por SHA; después UI táctil bebidas/variantes sobre PosCore existente.
