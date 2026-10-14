@@ -7,6 +7,19 @@ public interface ILocalPosRepository
     Task InitializeAsync(CancellationToken cancellationToken = default);
     Task SaveTerminalBindingAsync(TerminalBinding binding, CancellationToken cancellationToken = default);
     Task<TerminalBinding?> GetTerminalBindingAsync(CancellationToken cancellationToken = default);
+    // Cash operations are supported by real SQLite repositories; older in-memory
+    // test doubles fail closed unless they explicitly implement them.
+    Task OpenLocalCashShiftAsync(LocalCashShift shift, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift persistence is not implemented.");
+    Task<LocalCashShift?> GetOpenLocalCashShiftAsync(CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift persistence is not implemented.");
+    Task<LocalCashShift?> GetLocalCashShiftAsync(Guid shiftId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift persistence is not implemented.");
+    Task<LocalCashShiftSummary> GetLocalCashShiftSummaryAsync(Guid shiftId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift summary persistence is not implemented.");
+    Task CloseLocalCashShiftAsync(Guid shiftId, Guid closedByUserId, int countedCashCents,
+        DateTimeOffset closedAtUtc, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift close is not implemented.");
     Task SaveOfflineSaleAsync(OfflineSaleDraft sale, LocalOutboxEvent outboxEvent, CancellationToken cancellationToken = default);
     Task SaveOfflineSaleWithInventoryAsync(OfflineSaleDraft sale, LocalOutboxEvent outboxEvent, IReadOnlyCollection<LocalInventoryMovement> movements, CancellationToken cancellationToken = default);
     Task SaveCatalogProductsAsync(IReadOnlyCollection<LocalCatalogProduct> products, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default);
