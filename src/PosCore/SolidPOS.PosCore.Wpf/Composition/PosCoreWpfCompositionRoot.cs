@@ -3,6 +3,7 @@ using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.Auth;
 using SolidPOS.PosCore.Application.Startup;
 using SolidPOS.PosCore.Application.OfflineSales;
+using SolidPOS.PosCore.Application.Cash;
 using SolidPOS.PosCore.Infrastructure.SQLite;
 using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Wpf.ViewModels;
@@ -44,8 +45,10 @@ public static class PosCoreWpfCompositionRoot
         {
             var checkout = new AtomicCashCheckoutService(
                 repository, new SQLiteAtomicCashCheckoutStore(database), clock);
+            var cashClose = new AtomicCashShiftCloseService(
+                new SQLiteAtomicCashShiftCloseStore(database), clock);
             shell.AttachProductionCheckout(new ProductionCheckoutViewModel(
-                repository, auth, shell.ProductionLogin, shell.ProductionCart, checkout, clock));
+                repository, auth, shell.ProductionLogin, shell.ProductionCart, checkout, cashClose, clock));
         }
         return shell;
     }

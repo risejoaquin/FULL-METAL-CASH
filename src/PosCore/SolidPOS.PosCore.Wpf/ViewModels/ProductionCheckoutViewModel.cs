@@ -1,6 +1,7 @@
 using System.Collections.Specialized;
 using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.Auth;
+using SolidPOS.PosCore.Application.Cash;
 using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Application.Storage;
 using SolidPOS.PosCore.Domain;
@@ -18,11 +19,13 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     private readonly ProductionLoginViewModel login;
     private readonly ProductionCartViewModel cart;
     private readonly AtomicCashCheckoutService checkout;
+    private readonly AtomicCashShiftCloseService cashClose;
     private readonly IClock clock;
     private LocalCashShift? shift;
     private AtomicCashCheckoutRequest? pendingRequest;
     private int openingAmountCents;
     private int tenderedCents;
+    private int countedCashCents;
     private bool busy;
     private string cashStatus = "Inicie sesión para consultar su caja.";
     private string saleStatus = "No hay un cobro confirmado.";
@@ -30,24 +33,28 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     public ProductionCheckoutViewModel(
         ILocalPosRepository repository, LocalAuthService auth,
         ProductionLoginViewModel login, ProductionCartViewModel cart,
-        AtomicCashCheckoutService checkout, IClock clock)
+        AtomicCashCheckoutService checkout, AtomicCashShiftCloseService cashClose, IClock clock)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.auth = auth ?? throw new ArgumentNullException(nameof(auth));
         this.login = login ?? throw new ArgumentNullException(nameof(login));
         this.cart = cart ?? throw new ArgumentNullException(nameof(cart));
         this.checkout = checkout ?? throw new ArgumentNullException(nameof(checkout));
+        this.cashClose = cashClose ?? throw new ArgumentNullException(nameof(cashClose));
         this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
         cart.Lines.CollectionChanged += (_, _) => RefreshCommands();
     }
 
     public int OpeningAmountCents { get => openingAmountCents; set => SetProperty(ref openingAmountCents, value); }
     public int TenderedCents { get => tenderedCents; set => SetProperty(ref tenderedCents, value); }
+    public int CountedCashCents { get => countedCashCents; set => SetProperty(ref countedCashCents, value); }
     public string CashStatus { get => cashStatus; private set => SetProperty(ref cashStatus, value); }
     public string SaleStatus { get => saleStatus; private set => SetProperty(ref saleStatus, value); }
     public bool CanOpenShift => !busy && login.ActiveSession is not null && shift is null && pendingRequest is null;
     public bool CanCheckout => !busy && login.ActiveSession is not null && shift is not null
         && (pendingRequest is not null || cart.Lines.Count > 0);
+    public bool CanCloseShift => !busy && login.ActiveSession is not null && shift is not null
+        && pendingRequest is null && cart.Lines.Count == 0;
     public string ShiftLabel => shift is null ? "Sin caja abierta" : $"Caja abierta: {shift.Id}";
     public bool HasUncertainCheckout => pendingRequest is not null;
 
@@ -215,6 +222,39 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
         }
     }
 
+    public async Task CloseShiftAsync()
+    {
+        if (!CanCloseShift) return;
+        var session = login.ActiveSession!;
+        var currentShift = shift!;
+        if (CountedCashCents < 0)
+        {
+            CashStatus = "El efectivo contado no puede ser negativo.";
+            return;
+        }
+        busy = true;
+        RefreshCommands();
+        try
+        {
+            await auth.RequirePermissionAsync(session.SessionId, "cash.close");
+            var result = await cashClose.CloseAsync(new AtomicCashShiftCloseRequest(
+                currentShift.Id, session.SessionId, CountedCashCents));
+            shift = null;
+            CashStatus = $"CIERRE GUARDADO en SQLite: turno={result.ShiftId}; efectivo esperado={result.ExpectedCashCents}; " +
+                $"contado={result.CountedCashCents}; diferencia={result.DifferenceCents} centavos." +
+                (result.AlreadyClosed ? " Cierre previo reconciliado." : "");
+        }
+        catch (Exception)
+        {
+            CashStatus = "No se confirmó el cierre. Verifique cash.close, movimientos y conciliación en SQLite; el turno no se marca como cerrado.";
+        }
+        finally
+        {
+            busy = false;
+            RefreshCommands();
+        }
+    }
+
     public void SessionChanged()
     {
         if (login.ActiveSession is null)
@@ -231,6 +271,7 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     {
         RaisePropertyChanged(nameof(CanOpenShift));
         RaisePropertyChanged(nameof(CanCheckout));
+        RaisePropertyChanged(nameof(CanCloseShift));
         RaisePropertyChanged(nameof(ShiftLabel));
         RaisePropertyChanged(nameof(HasUncertainCheckout));
     }

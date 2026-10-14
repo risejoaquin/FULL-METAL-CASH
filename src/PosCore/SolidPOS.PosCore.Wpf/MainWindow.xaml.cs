@@ -58,4 +58,10 @@ public partial class MainWindow : Window
         if (DataContext is AppShellViewModel { ProductionCheckout: { } checkout })
             await checkout.CheckoutCashAsync();
     }
+
+    private async void ProductionCloseShift_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AppShellViewModel { ProductionCheckout: { } checkout })
+            await checkout.CloseShiftAsync();
+    }
 }

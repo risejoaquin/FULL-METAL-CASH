@@ -1,5 +1,6 @@
 using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.Auth;
+using SolidPOS.PosCore.Application.Cash;
 using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Application.Startup;
 using SolidPOS.PosCore.Domain;
@@ -79,6 +80,119 @@ public sealed class ProductionCheckoutViewModelTests
         Assert.True(cart.CanEdit);
     }
 
+    [Fact]
+    public async Task Wpf_cash_close_reconciles_physical_count_and_blocks_future_checkout()
+    {
+        using var f = await Fixture.CreateAsync(new[] { "cash.open", "sales.create", "cash.close" });
+        await f.Login.LoginAsync("Test-local-password-2026!");
+        var cart = new ProductionCartViewModel(f.Repository, f.Login) { Sku = "SKU-QA-1" };
+        await cart.AddBySkuAsync();
+        var checkout = f.CreateCheckout(cart) { OpeningAmountCents = 10000, TenderedCents = 5000 };
+        await checkout.OpenShiftAsync();
+        var originalShift = await f.Repository.GetOpenLocalCashShiftAsync();
+        Assert.NotNull(originalShift);
+        await checkout.CheckoutCashAsync();
+        checkout.CountedCashCents = 14000;
+        Assert.True(checkout.CanCloseShift);
+        await checkout.CloseShiftAsync();
+
+        Assert.Contains("CIERRE GUARDADO", checkout.CashStatus);
+        Assert.False(checkout.CanCheckout);
+        Assert.Null(await f.Repository.GetOpenLocalCashShiftAsync());
+        var shift = await f.Repository.GetLocalCashShiftAsync(originalShift.Id);
+        Assert.NotNull(shift);
+        Assert.Equal("closed", shift.Status);
+        Assert.Equal(14500, shift.ExpectedCashCents);
+        Assert.Equal(14000, shift.CountedCashCents);
+        Assert.Equal(-500, shift.DifferenceCents);
+        using var db = f.Database.OpenConnection();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM local_audit_events WHERE event_type='local.cash_shift.closed'";
+        Assert.Equal(1L, (long)cmd.ExecuteScalar()!);
+        var reopened = new SQLiteLocalPosRepository(new SQLiteLocalDatabase(f.Path));
+        Assert.Equal("closed", (await reopened.GetLocalCashShiftAsync(originalShift.Id))?.Status);
+    }
+
+    [Fact]
+    public async Task Wpf_close_without_cash_close_permission_keeps_turn_open()
+    {
+        using var f = await Fixture.CreateAsync(new[] { "cash.open", "sales.create" });
+        await f.Login.LoginAsync("Test-local-password-2026!");
+        var cart = new ProductionCartViewModel(f.Repository, f.Login);
+        var checkout = f.CreateCheckout(cart) { OpeningAmountCents = 5000, CountedCashCents = 5000 };
+        await checkout.OpenShiftAsync();
+        await checkout.CloseShiftAsync();
+        Assert.NotNull(await f.Repository.GetOpenLocalCashShiftAsync());
+        Assert.DoesNotContain("CIERRE GUARDADO", checkout.CashStatus);
+    }
+
+    [Fact]
+    public async Task Close_service_replay_is_idempotent_but_changed_physical_count_is_rejected()
+    {
+        using var f = await Fixture.CreateAsync(new[] { "cash.open", "cash.close" });
+        await f.Login.LoginAsync("Test-local-password-2026!");
+        var cart = new ProductionCartViewModel(f.Repository, f.Login);
+        var checkout = f.CreateCheckout(cart) { OpeningAmountCents = 7500 };
+        await checkout.OpenShiftAsync();
+        var original = await f.Repository.GetOpenLocalCashShiftAsync();
+        Assert.NotNull(original);
+        var session = f.Login.ActiveSession!;
+        var request = new AtomicCashShiftCloseRequest(original.Id, session.SessionId, 7400);
+        var first = await f.CreateCashCloseService().CloseAsync(request);
+        var reopenClose = new AtomicCashShiftCloseService(
+            new SQLiteAtomicCashShiftCloseStore(new SQLiteLocalDatabase(f.Path)), new SystemClock());
+        var second = await reopenClose.CloseAsync(request);
+
+        Assert.False(first.AlreadyClosed);
+        Assert.True(second.AlreadyClosed);
+        Assert.Equal(-100, first.DifferenceCents);
+        Assert.Equal(first.ExpectedCashCents, second.ExpectedCashCents);
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => reopenClose.CloseAsync(request with { CountedCashCents = 7500 }));
+        using var db = f.Database.OpenConnection();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM local_audit_events WHERE event_type='local.cash_shift.closed'";
+        Assert.Equal(1L, (long)cmd.ExecuteScalar()!);
+    }
+
+    [Fact]
+    public async Task Ledger_tampering_and_audit_write_failure_prevent_closure()
+    {
+        using var f = await Fixture.CreateAsync(new[] { "cash.open", "sales.create", "cash.close" });
+        await f.Login.LoginAsync("Test-local-password-2026!");
+        var cart = new ProductionCartViewModel(f.Repository, f.Login) { Sku = "SKU-QA-1" };
+        await cart.AddBySkuAsync();
+        var checkout = f.CreateCheckout(cart) { OpeningAmountCents = 1000, TenderedCents = 5000 };
+        await checkout.OpenShiftAsync();
+        await checkout.CheckoutCashAsync();
+        var shift = await f.Repository.GetOpenLocalCashShiftAsync();
+        Assert.NotNull(shift);
+        using (var db = f.Database.OpenConnection())
+        using (var cmd = db.CreateCommand())
+        {
+            cmd.CommandText = "UPDATE local_cash_movements SET amount_cents=amount_cents+1 WHERE movement_type='sale_cash'";
+            cmd.ExecuteNonQuery();
+        }
+        var request = new AtomicCashShiftCloseRequest(shift.Id, f.Login.ActiveSession!.SessionId, 5500);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => f.CreateCashCloseService().CloseAsync(request));
+        Assert.Equal("open", (await f.Repository.GetLocalCashShiftAsync(shift.Id))?.Status);
+
+        using (var db = f.Database.OpenConnection())
+        using (var cmd = db.CreateCommand())
+        {
+            cmd.CommandText = """
+UPDATE local_cash_movements SET amount_cents=amount_cents-1 WHERE movement_type='sale_cash';
+CREATE TRIGGER reject_shift_audit BEFORE INSERT ON local_audit_events
+WHEN NEW.event_type='local.cash_shift.closed'
+BEGIN SELECT RAISE(ABORT,'test audit unavailable'); END;
+""";
+            cmd.ExecuteNonQuery();
+        }
+        await Assert.ThrowsAsync<SqliteException>(() => f.CreateCashCloseService().CloseAsync(request));
+        Assert.Equal("open", (await f.Repository.GetLocalCashShiftAsync(shift.Id))?.Status);
+        Assert.Null((await f.Repository.GetLocalCashShiftAsync(shift.Id))?.ClosedAtUtc);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly string directory = System.IO.Path.Combine(
@@ -126,7 +240,10 @@ public sealed class ProductionCheckoutViewModelTests
         public ProductionCheckoutViewModel CreateCheckout(ProductionCartViewModel cart)
             => new(Repository, Auth, Login, cart,
                 new AtomicCashCheckoutService(Repository,
-                    new SQLiteAtomicCashCheckoutStore(Database), clock), clock);
+                    new SQLiteAtomicCashCheckoutStore(Database), clock), CreateCashCloseService(), clock);
+
+        public AtomicCashShiftCloseService CreateCashCloseService()
+            => new(new SQLiteAtomicCashShiftCloseStore(Database), clock);
 
         public void Dispose()
         {
