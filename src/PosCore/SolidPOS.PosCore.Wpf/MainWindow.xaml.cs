@@ -13,6 +13,8 @@ public partial class MainWindow : Window
         string password = ProductionPassword.Password;
         ProductionPassword.Clear();
         await login.LoginAsync(password);
+        if (DataContext is AppShellViewModel shell)
+            shell.ProductionCart?.SessionChanged();
     }
 
     private async void ProductionAddSku_Click(object sender, RoutedEventArgs e)
@@ -35,6 +37,7 @@ public partial class MainWindow : Window
             shell.ProductionCart?.Clear();
             if (shell.ProductionLogin is { } login)
                 await login.LogoutAsync();
+            shell.ProductionCart?.SessionChanged();
         }
     }
 }
