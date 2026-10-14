@@ -80,6 +80,16 @@ CREATE TABLE IF NOT EXISTS local_checkout_lines (
 );
 """);
 
+        // A supervisor may have resolved a pre-commit intent while an old
+        // process was suspended. Recheck under the same SQLite writer lock:
+        // resolved sale IDs can never subsequently create financial records.
+        if (Scalar(connection, tx,
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='local_checkout_recovery_resolutions';") > 0 &&
+            Scalar(connection, tx,
+                "SELECT COUNT(*) FROM local_checkout_recovery_resolutions WHERE local_sale_id=$sale;",
+                ("$sale", sale.LocalSaleId.ToString())) != 0)
+            throw new InvalidOperationException("Checkout ID was resolved without sale and cannot be committed.");
+
         // Authentication and authority are read inside the same transaction,
         // including on an idempotent replay. Never trust a WPF enabled button.
         using (var cmd = Command(connection, tx, """
