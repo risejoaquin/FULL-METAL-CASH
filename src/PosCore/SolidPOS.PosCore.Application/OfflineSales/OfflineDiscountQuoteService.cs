@@ -45,7 +45,7 @@ public static class OfflineDiscountQuoteService
     /// Approval-required rules are refused until authenticated offline
     /// supervisor authorization exists end-to-end.
     /// </summary>
-    public static OfflineSaleDraft ApplyCartDiscount(
+    internal static OfflineSaleDraft ApplyCartDiscount(
         OfflineSaleDraft sale, DiscountRule trustedCachedRule,
         IReadOnlyList<OfflineSalePaymentDraft> payments)
     {
