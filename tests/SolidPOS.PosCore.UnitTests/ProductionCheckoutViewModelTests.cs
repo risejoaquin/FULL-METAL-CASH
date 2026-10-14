@@ -87,7 +87,9 @@ public sealed class ProductionCheckoutViewModelTests
         await f.Login.LoginAsync("Test-local-password-2026!");
         var cart = new ProductionCartViewModel(f.Repository, f.Login) { Sku = "SKU-QA-1" };
         await cart.AddBySkuAsync();
-        var checkout = f.CreateCheckout(cart) { OpeningAmountCents = 10000, TenderedCents = 5000 };
+        var checkout = f.CreateCheckout(cart);
+        checkout.OpeningAmountCents = 10000;
+        checkout.TenderedCents = 5000;
         await checkout.OpenShiftAsync();
         var originalShift = await f.Repository.GetOpenLocalCashShiftAsync();
         Assert.NotNull(originalShift);
@@ -119,7 +121,9 @@ public sealed class ProductionCheckoutViewModelTests
         using var f = await Fixture.CreateAsync(new[] { "cash.open", "sales.create" });
         await f.Login.LoginAsync("Test-local-password-2026!");
         var cart = new ProductionCartViewModel(f.Repository, f.Login);
-        var checkout = f.CreateCheckout(cart) { OpeningAmountCents = 5000, CountedCashCents = 5000 };
+        var checkout = f.CreateCheckout(cart);
+        checkout.OpeningAmountCents = 5000;
+        checkout.CountedCashCents = 5000;
         await checkout.OpenShiftAsync();
         await checkout.CloseShiftAsync();
         Assert.NotNull(await f.Repository.GetOpenLocalCashShiftAsync());
@@ -132,7 +136,8 @@ public sealed class ProductionCheckoutViewModelTests
         using var f = await Fixture.CreateAsync(new[] { "cash.open", "cash.close" });
         await f.Login.LoginAsync("Test-local-password-2026!");
         var cart = new ProductionCartViewModel(f.Repository, f.Login);
-        var checkout = f.CreateCheckout(cart) { OpeningAmountCents = 7500 };
+        var checkout = f.CreateCheckout(cart);
+        checkout.OpeningAmountCents = 7500;
         await checkout.OpenShiftAsync();
         var original = await f.Repository.GetOpenLocalCashShiftAsync();
         Assert.NotNull(original);
@@ -162,7 +167,9 @@ public sealed class ProductionCheckoutViewModelTests
         await f.Login.LoginAsync("Test-local-password-2026!");
         var cart = new ProductionCartViewModel(f.Repository, f.Login) { Sku = "SKU-QA-1" };
         await cart.AddBySkuAsync();
-        var checkout = f.CreateCheckout(cart) { OpeningAmountCents = 1000, TenderedCents = 5000 };
+        var checkout = f.CreateCheckout(cart);
+        checkout.OpeningAmountCents = 1000;
+        checkout.TenderedCents = 5000;
         await checkout.OpenShiftAsync();
         await checkout.CheckoutCashAsync();
         var shift = await f.Repository.GetOpenLocalCashShiftAsync();
