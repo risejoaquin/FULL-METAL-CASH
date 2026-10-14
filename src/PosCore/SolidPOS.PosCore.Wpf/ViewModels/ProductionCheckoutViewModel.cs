@@ -161,12 +161,24 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     public async Task VerifyRecoveryAsync()
     {
         if (busy || login.ActiveSession is null || recoveryJournal is null) return;
-        if (pendingRequest is { } pending && recoveryJournal.ReconcileCommitted(pending.Sale.LocalSaleId))
+        try
         {
-            pendingRequest = null;
-            cart.Clear();
-            cart.SetCheckoutLocked(false);
-            SaleStatus = $"Venta {pending.Sale.LocalSaleId} confirmada en SQLite. Sin nuevo cobro.";
+            if (pendingRequest is { } pending &&
+                recoveryJournal.ReconcileCommitted(pending.Sale.LocalSaleId))
+            {
+                pendingRequest = null;
+                cart.Clear();
+                SaleStatus = $"Venta {pending.Sale.LocalSaleId} confirmada en SQLite. Sin nuevo cobro.";
+            }
+        }
+        catch (Exception)
+        {
+            // Disk failures/corrupt evidence must not crash the UI or enable checkout.
+            cart.SetCheckoutLocked(true);
+            shift = null;
+            SaleStatus = "No fue posible verificar la evidencia de cobro. Terminal bloqueada; escalar a soporte.";
+            RefreshCommands();
+            return;
         }
         await RefreshShiftAsync();
     }
@@ -361,6 +373,8 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     {
         if (login.ActiveSession is null)
         {
+            RecoveryReason = string.Empty;
+            RecoveryEvidence = string.Empty;
             shift = null;
             CashStatus = "No hay sesión; cobro y caja bloqueados.";
             if (pendingRequest is not null)
