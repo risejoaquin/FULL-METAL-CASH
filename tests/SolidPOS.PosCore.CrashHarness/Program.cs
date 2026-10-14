@@ -31,8 +31,19 @@ internal static class Program
         string markerPath = Path.GetFullPath(args[3]);
         // The parent created the temporary fixture. Never create an unknown DB
         // or write to a path that was not already provisioned by the test.
-        if (!File.Exists(dbPath) || !File.Exists(requestPath) || File.Exists(markerPath))
+        string allowedTemp = Path.GetFullPath(Path.GetTempPath());
+        string parent = Path.GetDirectoryName(dbPath) ?? "";
+        string name = Path.GetFileName(parent);
+        if (!parent.StartsWith(allowedTemp, StringComparison.OrdinalIgnoreCase) ||
+            !name.StartsWith("solidpos-cashcheckout-", StringComparison.Ordinal) ||
+            !string.Equals(Path.GetFileName(dbPath), "terminal.sqlite", StringComparison.Ordinal) ||
+            !string.Equals(requestPath, dbPath + ".crash-request.json", StringComparison.Ordinal) ||
+            !string.Equals(markerPath, dbPath + ".crash-marker", StringComparison.Ordinal) ||
+            !File.Exists(dbPath) || !File.Exists(requestPath) || File.Exists(markerPath))
+        {
+            Console.Error.WriteLine("Refusing to run outside an existing disposable cashcheckout test fixture.");
             return 3;
+        }
 
         var request = JsonSerializer.Deserialize<AtomicCashCheckoutRequest>(
             await File.ReadAllTextAsync(requestPath))
