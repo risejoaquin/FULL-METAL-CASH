@@ -1,10 +1,16 @@
+using System.Windows;
+using SolidPOS.PosCore.Application.Startup;
 using SolidPOS.PosCore.Domain;
 
 namespace SolidPOS.PosCore.Wpf.ViewModels;
 
 public sealed class AppShellViewModel : ViewModelBase
 {
-    private string shellStatus = "Inicializando shell WPF.";
+    private string shellStatus = "Terminal sin verificar. Operaciones deshabilitadas.";
+    private bool isSelfTestMode;
+
+    public Visibility SimulationTabVisibility => isSelfTestMode ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility ProductionTabVisibility => isSelfTestMode ? Visibility.Collapsed : Visibility.Visible;
 
     public AppShellViewModel(string databasePath)
     {
@@ -37,8 +43,42 @@ public sealed class AppShellViewModel : ViewModelBase
 
     public BrandingViewModel Branding { get; }
 
+    /// <summary>
+    /// Production shell is diagnostics-only until authorized login and
+    /// atomic checkout are wired. No fabricated sale, cash or sync state.
+    /// </summary>
+    public void InitializeForProduction(PosCoreStartupInspection inspection)
+    {
+        ArgumentNullException.ThrowIfNull(inspection);
+        isSelfTestMode = false;
+        OnPropertyChanged(nameof(SimulationTabVisibility));
+        OnPropertyChanged(nameof(ProductionTabVisibility));
+        ShellStatus = inspection.OperatorMessage;
+        TerminalStatus.Status = inspection.TerminalBound
+            ? "Identidad de terminal verificada en SQLite. Cobro deshabilitado."
+            : "Activación de terminal requerida. Cobro deshabilitado.";
+        TerminalStatus.BindingSummary = inspection.TerminalBound
+            ? $"Tenant={inspection.TenantId}; tienda={inspection.StoreId}; terminal={inspection.TerminalId}; schema=4."
+            : "No existe binding de terminal v4 válido; solicitar activación.";
+        Login.Email = string.Empty;
+        Login.Status = inspection.CanBeginAuthentication
+            ? "Existen usuarios locales. Login WPF real todavía no integrado; sin sesión."
+            : "No hay autenticación disponible hasta completar activación y aprovisionamiento.";
+        Sales.CatalogSummary = $"Productos en catálogo SQLite: {inspection.CatalogProductCount}. Venta deshabilitada.";
+        Sales.SaleStatus = "No se han registrado ventas. El cobro real está bloqueado.";
+        Sales.ReceiptStatus = "Sin recibo confirmado.";
+        Sales.SyncVisualStatus = "No se ha verificado ningún ACK remoto.";
+        SyncStatus.Status = "Sync no ejecutado desde shell comercial.";
+        SyncStatus.QueueSummary = "Estado de cola no verificado; nunca marcar una venta manualmente como sincronizada.";
+        CashShift.Status = "Caja no verificada. No se han registrado movimientos.";
+        CashShift.ExpectedCashSummary = "Saldo de caja no calculado desde el ledger; acciones bloqueadas.";
+    }
+
     public void InitializeForShell()
     {
+        isSelfTestMode = true;
+        OnPropertyChanged(nameof(SimulationTabVisibility));
+        OnPropertyChanged(nameof(ProductionTabVisibility));
         ShellStatus = $"Shell MVVM listo para flujo QSR con branding {Branding.AppName}.";
         TerminalStatus.Status = "TerminalStatusViewModel listo para leer binding local.";
         TerminalStatus.BindingSummary = "Binding local sera provisto por PosCore.Infrastructure.SQLite.";
