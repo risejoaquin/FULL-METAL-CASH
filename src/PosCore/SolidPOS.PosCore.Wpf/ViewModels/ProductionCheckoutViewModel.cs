@@ -5,6 +5,7 @@ using SolidPOS.PosCore.Application.Cash;
 using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Application.Storage;
 using SolidPOS.PosCore.Domain;
+using SolidPOS.PosCore.Infrastructure.SQLite;
 
 namespace SolidPOS.PosCore.Wpf.ViewModels;
 
@@ -21,6 +22,8 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     private readonly AtomicCashCheckoutService checkout;
     private readonly AtomicCashShiftCloseService cashClose;
     private readonly IClock clock;
+    private readonly SQLiteCheckoutRecoveryJournal? recoveryJournal;
+    private Guid? unresolvedAfterRestart;
     private LocalCashShift? shift;
     private AtomicCashCheckoutRequest? pendingRequest;
     private int openingAmountCents;
@@ -33,7 +36,7 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     public ProductionCheckoutViewModel(
         ILocalPosRepository repository, LocalAuthService auth,
         ProductionLoginViewModel login, ProductionCartViewModel cart,
-        AtomicCashCheckoutService checkout, AtomicCashShiftCloseService cashClose, IClock clock)
+        AtomicCashCheckoutService checkout, AtomicCashShiftCloseService cashClose, IClock clock, SQLiteCheckoutRecoveryJournal? recoveryJournal = null)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.auth = auth ?? throw new ArgumentNullException(nameof(auth));
@@ -42,6 +45,7 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
         this.checkout = checkout ?? throw new ArgumentNullException(nameof(checkout));
         this.cashClose = cashClose ?? throw new ArgumentNullException(nameof(cashClose));
         this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        this.recoveryJournal = recoveryJournal;
         cart.Lines.CollectionChanged += (_, _) => RefreshCommands();
     }
 
@@ -50,13 +54,13 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     public int CountedCashCents { get => countedCashCents; set => SetProperty(ref countedCashCents, value); }
     public string CashStatus { get => cashStatus; private set => SetProperty(ref cashStatus, value); }
     public string SaleStatus { get => saleStatus; private set => SetProperty(ref saleStatus, value); }
-    public bool CanOpenShift => !busy && login.ActiveSession is not null && shift is null && pendingRequest is null;
+    public bool CanOpenShift => !busy && login.ActiveSession is not null && shift is null && pendingRequest is null && unresolvedAfterRestart is null;
     public bool CanCheckout => !busy && login.ActiveSession is not null && shift is not null
-        && (pendingRequest is not null || cart.Lines.Count > 0);
+        && unresolvedAfterRestart is null && (pendingRequest is not null || cart.Lines.Count > 0);
     public bool CanCloseShift => !busy && login.ActiveSession is not null && shift is not null
-        && pendingRequest is null && cart.Lines.Count == 0;
+        && pendingRequest is null && unresolvedAfterRestart is null && cart.Lines.Count == 0;
     public string ShiftLabel => shift is null ? "Sin caja abierta" : $"Caja abierta: {shift.Id}";
-    public bool HasUncertainCheckout => pendingRequest is not null;
+    public bool HasUncertainCheckout => pendingRequest is not null || unresolvedAfterRestart is not null;
 
     public async Task RefreshShiftAsync()
     {
@@ -87,6 +91,26 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
                 return;
             }
 
+            if (recoveryJournal is not null)
+            {
+                unresolvedAfterRestart = recoveryJournal.FindUnresolved(binding.TenantId, binding.StoreId, binding.TerminalId);
+                if (unresolvedAfterRestart is { } uncertain)
+                {
+                    if (recoveryJournal.ReconcileCommitted(uncertain))
+                    {
+                        unresolvedAfterRestart = recoveryJournal.FindUnresolved(binding.TenantId, binding.StoreId, binding.TerminalId);
+                        SaleStatus = $"Venta {uncertain} verificada en SQLite tras reinicio; no se repitió el cobro.";
+                    }
+                    else
+                    {
+                        shift = null;
+                        cart.SetCheckoutLocked(true);
+                        SaleStatus = $"Cobro {uncertain} con resultado incierto tras reinicio. Operaciones bloqueadas: requiere conciliación supervisada.";
+                        CashStatus = "Caja bloqueada por intento de venta pendiente.";
+                        return;
+                    }
+                }
+            }
             shift = open;
             if (open is null)
                 CashStatus = "No existe turno abierto. Requiere permiso cash.open.";
@@ -189,7 +213,9 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
                 throw new InvalidOperationException("Ambiguous prior checkout belongs to another session.");
             }
 
+            recoveryJournal?.Register(pendingRequest);
             var result = await checkout.CheckoutAsync(pendingRequest);
+            recoveryJournal?.ReconcileCommitted(result.LocalSaleId);
             pendingRequest = null;
             cart.Clear();
             cart.SetCheckoutLocked(false);
@@ -217,7 +243,7 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
         finally
         {
             busy = false;
-            cart.SetCheckoutLocked(pendingRequest is not null);
+            cart.SetCheckoutLocked(pendingRequest is not null || unresolvedAfterRestart is not null);
             RefreshCommands();
         }
     }
