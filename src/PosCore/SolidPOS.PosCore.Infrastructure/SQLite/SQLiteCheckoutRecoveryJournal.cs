@@ -122,18 +122,24 @@ JOIN local_outbox_events o ON o.id = c.outbox_event_id
 JOIN local_print_jobs j ON j.id = c.print_job_id
 WHERE c.local_sale_id=$sale
   AND c.cash_shift_id=p.shift_id
+  AND p.local_sale_id=s.local_sale_id
   AND p.method_code='cash'
   AND p.amount_cents=c.total_cents
   AND s.total_cents=c.total_cents AND s.paid_cents=c.total_cents
   AND m.source_type='offline_sale' AND m.movement_type='sale_cash'
   AND m.amount_cents=c.total_cents
+  AND m.shift_id=c.cash_shift_id
+  AND m.tenant_id=r.tenant_id AND m.store_id=r.store_id
+  AND m.terminal_id=r.terminal_id
   AND o.event_type='sale.completed' AND o.schema_version=4
   AND o.tenant_id=r.tenant_id AND o.store_id=r.store_id
   AND o.terminal_id=r.terminal_id
   AND j.sale_id=c.local_sale_id AND j.tenant_id=r.tenant_id
   AND j.store_id=r.store_id AND j.terminal_id=r.terminal_id
   AND s.tenant_id=r.tenant_id AND s.store_id=r.store_id
-  AND s.terminal_id=r.terminal_id;
+  AND s.terminal_id=r.terminal_id
+  AND c.total_cents > 0 AND c.tendered_cents >= c.total_cents
+  AND c.change_cents = c.tendered_cents - c.total_cents;
 """;
         cmd.Parameters.AddWithValue("$sale", localSaleId.ToString());
         if (Convert.ToInt64(cmd.ExecuteScalar()) != 1) return false;
