@@ -390,6 +390,19 @@ BEGIN SELECT RAISE(ABORT, 'simulated audit persistence failure'); END;
                 RedirectStandardError = true
             }
         };
+        // Referenced exe projects may be copied without their own runtimeconfig.
+        // Run the probe with the already-built test host's .NET 8 runtime/deps.
+        string runtimeConfig = Path.Combine(AppContext.BaseDirectory,
+            "SolidPOS.PosCore.UnitTests.runtimeconfig.json");
+        string depsFile = Path.Combine(AppContext.BaseDirectory,
+            "SolidPOS.PosCore.UnitTests.deps.json");
+        Assert.True(File.Exists(runtimeConfig), "Missing unit-test .NET runtimeconfig.");
+        Assert.True(File.Exists(depsFile), "Missing unit-test dependency manifest.");
+        process.StartInfo.ArgumentList.Add("exec");
+        process.StartInfo.ArgumentList.Add("--runtimeconfig");
+        process.StartInfo.ArgumentList.Add(runtimeConfig);
+        process.StartInfo.ArgumentList.Add("--depsfile");
+        process.StartInfo.ArgumentList.Add(depsFile);
         process.StartInfo.ArgumentList.Add(harness);
         process.StartInfo.ArgumentList.Add(killPoint);
         process.StartInfo.ArgumentList.Add(f.Path);
