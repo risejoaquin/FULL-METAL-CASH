@@ -47,6 +47,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void ProductionResolveUncommitted_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AppShellViewModel { ProductionCheckout: { } checkout })
+            await checkout.ResolveUncommittedAsync();
+    }
+
     private async void ProductionVerifyRecovery_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is AppShellViewModel { ProductionCheckout: { } checkout })
