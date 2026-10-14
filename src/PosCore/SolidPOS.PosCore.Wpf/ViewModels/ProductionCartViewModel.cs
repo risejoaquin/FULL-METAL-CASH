@@ -9,7 +9,6 @@ public sealed class ProductionCartViewModel : ViewModelBase
 {
     private readonly ILocalPosRepository repository;
     private readonly ProductionLoginViewModel login;
-    private readonly Dictionary<string, LocalCatalogProduct> products = new(StringComparer.OrdinalIgnoreCase);
     private string sku = string.Empty;
     private string status = "Autentíquese para consultar el catálogo.";
     private long totalCents;
@@ -26,6 +25,12 @@ public sealed class ProductionCartViewModel : ViewModelBase
     public string Status { get => status; private set => SetProperty(ref status, value); }
     public long TotalCents { get => totalCents; private set => SetProperty(ref totalCents, value); }
     public bool CanEdit => login.IsAuthenticated && !busy;
+    public void SessionChanged()
+    {
+        if (!login.IsAuthenticated)
+            Clear();
+        RaisePropertyChanged(nameof(CanEdit));
+    }
 
     public async Task AddBySkuAsync()
     {
@@ -46,16 +51,20 @@ public sealed class ProductionCartViewModel : ViewModelBase
             var previous = Lines.FirstOrDefault(x => x.Identity == identity);
             if (previous is null)
             {
-                products[identity] = product;
-                Lines.Add(new ProductionCartLine(identity, product.Sku, product.Name, 1, product.PriceCents));
+                var proposedLine = new ProductionCartLine(identity, product.Sku, product.Name, 1, product.PriceCents);
+                long nextTotal = checked(TotalCents + proposedLine.SubtotalCents);
+                Lines.Add(proposedLine);
+                TotalCents = nextTotal;
             }
             else
             {
                 int nextQuantity = checked(previous.Quantity + 1);
+                var updatedLine = previous with { Quantity = nextQuantity };
+                long nextTotal = checked(TotalCents - previous.SubtotalCents + updatedLine.SubtotalCents);
                 int index = Lines.IndexOf(previous);
-                Lines[index] = previous with { Quantity = nextQuantity };
+                Lines[index] = updatedLine;
+                TotalCents = nextTotal;
             }
-            Recalculate();
             Sku = string.Empty;
             Status = "Producto consultado y agregado desde SQLite. Pago no disponible.";
         }
@@ -67,18 +76,10 @@ public sealed class ProductionCartViewModel : ViewModelBase
     public void Clear()
     {
         Lines.Clear();
-        products.Clear();
         TotalCents = 0;
         Status = "Carrito vacío. No se registró venta.";
     }
 
-    private void Recalculate()
-    {
-        long sum = 0;
-        foreach (var line in Lines)
-            sum = checked(sum + checked((long)line.Quantity * line.UnitPriceCents));
-        TotalCents = sum;
-    }
 }
 
 public sealed record ProductionCartLine(string Identity, string Sku, string Name, int Quantity, int UnitPriceCents)
