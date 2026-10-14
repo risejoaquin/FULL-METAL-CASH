@@ -90,3 +90,18 @@
 - Persistencia: este registro sólo se considera persistido si GitHub confirma commit; revisión de código y reporte local independientes disponibles.
 - Riesgos: impresora física, WPF Windows, instalación/restauración, piloto 3 días y aceptación PO pendientes. Oasis sólo prospecto.
 - Próxima acción: publicar regresiones cuando escritura sea posible; CI Windows por SHA final, corregir y revalidar; luego UI táctil y variantes ficticias.
+
+
+### SOLIDPOS-20261014T15 — 2026-10-14T22:01:47Z
+- Ejecutor: ChatGPT Automation, ejecución programada del 2026-10-14 15:00 America/Hermosillo.
+- Gate: Semana 1 G0/G1, regresión P0 de sesión/catálogo; DEMO_READY pendiente; COMMERCIAL_GO NO-GO.
+- Estado: BLOCKED_TOOL (publicación del archivo C# rechazada por safety checks; este checkpoint requiere verificación de commit).
+- Rama: ac-dev/cart-session-regression-20261014-0556; SHA base/código final sin modificación: bf80d560a9b2c47b140de6b5a76c33442d51be7d. El SHA del checkpoint documental corresponde al commit de GitHub si se publica.
+- Reconciliación humana: AC-DEV a2961f4e14ebe0a18ec1c6a93db5ca3b6ac73655; PR #13 (AC-DEV→main), #14 (roadmap), #15 (carrera de sesión), #16 (protocolo) abiertos Draft. No se modificaron ramas ajenas, ni schemaVersion 4 ni syncContract schema_version_4.
+- Slice intentado: publicar tests/SolidPOS.PosCore.UnitTests/ProductionCartSessionRaceTests.cs con 3 regresiones deterministas (logout, nueva sesión del mismo operador, bloqueo durante checkout). create_file rechazado por controles de seguridad; archivo NO publicado. Sin PR nuevo.
+- Pruebas ejecutadas realmente: `python /mnt/data/solidpos_t15_work/verify_static.py` en Linux/Python, 12/12 comprobaciones estáticas PASS sobre archivo recuperado del ZIP T14, no sobre SHA GitHub; `dotnet test` NO EJECUTADO (SDK no disponible); SQLite integrado del nuevo test NO EJECUTADO; impresora/Windows UI NO EJECUTADOS.
+- CI SHA de PR #15 bf80d560a9b2c47b140de6b5a76c33442d51be7d: SolidPOS CI #38593958764 SUCCESS, https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38593958764; ejecuciones #38619981398 y #38603613322 CANCELLED. Estos CI no contienen las tres regresiones nuevas. CI del SHA documental final: N/D hasta nueva consulta.
+- Aceptación: matriz oficial 38 escenarios/100 puntos; 71 automáticos y 29 manuales por clasificación. CI anterior acredita automatización previa, NO las regresiones ni las pruebas manuales; nuevos puntos acreditados en este ciclo 0; progreso comercial total N/D (no confundir peso automatizado con aceptación).
+- Bloqueos: safety checks del conector impiden crear archivo de tests; no hay .NET SDK local; impresora física, instalación Windows, recuperación y piloto de 3 días sin evidencia; Oasis prospecto sin autorización de contacto, marca o cobro. No hay acción PO concreta que resuelva los safety checks observados; email_sent=false.
+- Archivos/PR de este ciclo: sólo docs/ITERATION_STATE.md si se confirma commit; PR #15 existente, sin cambios de código.
+- Siguiente trabajo permitido: reconciliar por SOLIDPOS-20261014T15 antes de reintentar; publicar las tres regresiones cuando se permita, ejecutar Windows CI sobre SHA nuevo, corregir y revalidar; después continuar UI táctil con bebidas, tamaños y toppings ficticios en rama aislada. Sin merge, deploy, producción ni gastos.
