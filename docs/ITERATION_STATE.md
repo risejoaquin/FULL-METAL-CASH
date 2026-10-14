@@ -54,3 +54,14 @@
 - Esta sección documenta una prueba controlada de escritura desde la integración ChatGPT/GitHub en `AC-DEV`.
 - La lectura del archivo fue satisfactoria. La escritura quedará verificada únicamente si el commit de esta actualización se confirma.
 - No acredita ejecución de GitHub Actions, permisos de merge ni avance funcional del MVP.
+
+
+### SOLIDPOS-20261014-0502 — 2026-10-14T12:02:54Z
+- Gate: Week 1 G0/G1 preparation; NO-GO commercial; Oasis remains an unconfirmed prospect.
+- Branch: ac-dev/cart-session-fence-hourly-20261014-0502; base a2961f4e14ebe0a18ec1c6a93db5ca3b6ac73655; code commit b7833816c58638438fda1be63fdc438a76cb89c3.
+- Change: ProductionCartViewModel fences asynchronous catalog reads to the initiating session, preventing stale results from being added after operator switch.
+- Reconciliation: PR #13 Draft AC-DEV and PR #14 Draft roadmap; AC-DEV unchanged, no protected branch write.
+- Tests: 6 structural source checks PASS; .NET unit/integration/E2E NOT EXECUTED; no workflow run observed for new SHA.
+- Blockers: GitHub connector blocked regression-test writes and draft PR creation. No merge, deployment, production data or expenses.
+- Evidence: acceptance matrix 100 points; verified new acceptance points N/D; manual Windows and printer UAT pending.
+- Next: add deterministic regression tests when connector permits, trigger CI for exact SHA, review PR, continue tactile beverage integration without changing frozen contracts.
