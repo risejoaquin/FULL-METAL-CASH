@@ -114,3 +114,18 @@
 - Draft PR documental intentado y rechazado por safety checks; **no existe PR nuevo confirmado**. GitHub Actions del commit documental: https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38644883637, PENDING al consultarlo; no afirmar PASS.
 - El checkpoint previo se publicó en commit `651fa65393dddbaeec5fab10cb2b6e580da2fa33`, con entrada de run_id exactamente una vez; el presente addendum conserva append-only. CI de ese SHA: #38644767888 y #38644762199 IN_PROGRESS al consultarlos.
 - Estado general PARTIAL: documento QA persistido; tres regresiones C# y PR de auditoría no publicados; pruebas .NET nuevas 0; COMMERCIAL_GO NO-GO.
+
+
+### SOLIDPOS-20261014T16 — 2026-10-14T23:58:23.826Z
+- Ejecutor: ChatGPT Automation; America/Hermosillo 2026-10-14 16:00; UTC 2026-10-14T23:58:23.826Z.
+- Gate: Semana 1 G0/G1, pruebas de carrera sesión/catálogo; DEMO_READY pendiente; COMMERCIAL_GO NO-GO.
+- Estado: BLOCKED_TOOL / PARTIAL (tres regresiones C# y documentación QA rechazadas por safety checks del conector; checkpoint pendiente de confirmación).
+- Rama: ac-dev/cart-session-race-tests-20261014T16; SHA base: e11958238932e0ffc93942bb093cd191e42acd46; HEAD previo al checkpoint: e11958238932e0ffc93942bb093cd191e42acd46; SHA final: consultar SHA de commit verificado de esta escritura, si existe.
+- Concurrencia: AC-DEV a2961f4e14ebe0a18ec1c6a93db5ca3b6ac73655; PR #13/#14/#15/#16 Draft; sin cambios en ramas humanas, schemaVersion 4 ni syncContract schema_version_4.
+- Slice P0: reintento de publicar tests/SolidPOS.PosCore.UnitTests/ProductionCartSessionRaceTests.cs (logout, mismo operador/nueva sesión, checkout lock durante lectura) en rama aislada; create_file rechazado por safety checks, NO PUBLICADO. Documento docs/qa/SOLIDPOS_SESSION_RACE_QA_20261014T16.md igualmente rechazado. Rama aislada creada sin nuevos commits.
+- Pruebas realmente ejecutadas: `python verify_static.py` en Linux/Python 3.13 sobre archivo recuperado del ZIP T14: 12/12 PASS de inspección estática, NO compilación C# ni pruebas SQLite. `dotnet test` NO EJECUTADO (sin SDK .NET local). Windows UI, impresora y piloto NO EJECUTADOS.
+- CI por SHA: e11958238932e0ffc93942bb093cd191e42acd46, SolidPOS CI #38644935300 push SUCCESS y #38644942458 PR SUCCESS (https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38644942458). Estos CI no incluyen las tres regresiones. CI de nuevo SHA: N/D, hasta ejecución y verificación.
+- Aceptación: 38 escenarios/100 puntos (71 automáticos/29 manuales clasificados, no equivalen a PASS); 0 puntos nuevos certificados; aceptación comercial global N/D. Impresora física/Windows/instalación/restauración/piloto 3 días/PO GO pendientes.
+- Escalamiento: safety checks sin HTTP 401/403 ni intervención PO concreta confirmada; email_sent=false; notificaciones de este runtime deshabilitadas.
+- Bloqueo: no publicar código/QA ni afirmar tests funcionales PASS. No merge, deploy, gasto, datos reales, contacto o uso de marca Oasis.
+- Próximo slice permitido: reintentar publicación de tests tras resolver restricción, correr Windows CI sobre SHA definitivo, revisar TRX, corregir/revalidar; continuar auditoría táctil con datos ficticios en paralelo.
