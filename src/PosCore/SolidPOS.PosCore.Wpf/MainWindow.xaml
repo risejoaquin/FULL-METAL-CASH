@@ -113,6 +113,17 @@
                         IsEnabled="{Binding CanCheckout}" Padding="14,9" FontWeight="SemiBold"
                         HorizontalAlignment="Left" Margin="0,10,0,8" />
                 <TextBlock Text="{Binding SaleStatus}" TextWrapping="Wrap" />
+                <GroupBox Header="Conciliación excepcional — SOLO supervisor" Margin="0,10,0,10">
+                  <StackPanel Margin="10">
+                    <TextBlock Text="Use únicamente cuando NO hubo venta ni cobro y exista evidencia documental. Debe acceder otra persona con sales.void y cash.close." TextWrapping="Wrap" />
+                    <TextBlock Text="Motivo detallado (mínimo 20 caracteres)" Margin="0,8,0,4" />
+                    <TextBox Text="{Binding RecoveryReason, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Text="Referencia de incidencia y evidencia (mínimo 8 caracteres)" Margin="0,8,0,4" />
+                    <TextBox Text="{Binding RecoveryEvidence, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button Content="Resolver intento SIN venta (auditado)" Click="ProductionResolveUncommitted_Click"
+                            IsEnabled="{Binding CanResolveUncommitted}" Padding="12,8" Margin="0,10,0,0" HorizontalAlignment="Left" />
+                  </StackPanel>
+                </GroupBox>
                 <Button Content="Verificar cobro pendiente en SQLite" Click="ProductionVerifyRecovery_Click" Padding="12,7" HorizontalAlignment="Left" Margin="0,8,0,8" />
                 <TextBlock Text="Verificacion local solamente: no repite pagos ni libera operaciones inciertas sin evidencia." TextWrapping="Wrap" />
                 <Separator Margin="0,14,0,10"/>
