@@ -99,12 +99,24 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var shell = new MainWindow
+        // Commercial startup must never start the visual self-test shell.
+        // Block opening the WPF window on SQLite initialization failures.
+        try
         {
-            DataContext = PosCoreWpfCompositionRoot.CreateShellViewModel(".\\.runtime\\poscore-wpf.sqlite")
-        };
-
-        shell.Show();
+            var shell = new MainWindow
+            {
+                DataContext = PosCoreWpfCompositionRoot.CreateProductionShellViewModel()
+            };
+            shell.Show();
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"[STARTUP_BLOCKED] {exception.GetType().Name}");
+            MessageBox.Show(
+                "No se pudo verificar el almacenamiento local. No se abrirá el punto de venta. Solicite soporte técnico.",
+                "SolidPOS — arranque bloqueado", MessageBoxButton.OK, MessageBoxImage.Error);
+            Shutdown(1);
+        }
     }
 
     private void RegisterCrashHandlers()
