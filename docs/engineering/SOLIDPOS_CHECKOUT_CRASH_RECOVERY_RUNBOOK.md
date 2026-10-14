@@ -31,6 +31,13 @@
 | Múltiples intenciones pendientes | Mantener bloqueo y requerir revisión supervisada |
 | Desconexión de impresora / red | No convertir estado en pago fallido ni en ACK remoto |
 
+## Iteración de endurecimiento — 2026-10-13
+
+- El shell conserva bloqueo si una segunda intención persiste tras reconciliar la primera.
+- Nunca informa éxito cuando falta la evidencia que verifica el journal después del commit.
+- Nueva regresión para múltiples intenciones pendientes, incluyendo estado SQLite anómalo.
+- Los tres grupos de GitHub Actions deben estar aprobados para el SHA final antes de contar estas correcciones como validadas.
+
 ## Riesgos abiertos
 
 - Resolución supervisada con RBAC, motivos, evidencias y auditoría inmutable: **no implementada**.
