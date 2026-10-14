@@ -51,8 +51,8 @@ public sealed class AppShellViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(inspection);
         isSelfTestMode = false;
-        OnPropertyChanged(nameof(SimulationTabVisibility));
-        OnPropertyChanged(nameof(ProductionTabVisibility));
+        RaisePropertyChanged(nameof(SimulationTabVisibility));
+        RaisePropertyChanged(nameof(ProductionTabVisibility));
         ShellStatus = inspection.OperatorMessage;
         TerminalStatus.Status = inspection.TerminalBound
             ? "Identidad de terminal verificada en SQLite. Cobro deshabilitado."
@@ -77,8 +77,8 @@ public sealed class AppShellViewModel : ViewModelBase
     public void InitializeForShell()
     {
         isSelfTestMode = true;
-        OnPropertyChanged(nameof(SimulationTabVisibility));
-        OnPropertyChanged(nameof(ProductionTabVisibility));
+        RaisePropertyChanged(nameof(SimulationTabVisibility));
+        RaisePropertyChanged(nameof(ProductionTabVisibility));
         ShellStatus = $"Shell MVVM listo para flujo QSR con branding {Branding.AppName}.";
         TerminalStatus.Status = "TerminalStatusViewModel listo para leer binding local.";
         TerminalStatus.BindingSummary = "Binding local sera provisto por PosCore.Infrastructure.SQLite.";
