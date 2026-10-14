@@ -27,6 +27,18 @@ CREATE TABLE IF NOT EXISTS local_checkout_recovery (
   state TEXT NOT NULL CHECK (state IN ('pending','committed')),
   created_at_utc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS local_checkout_recovery_resolutions (
+  local_sale_id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  store_id TEXT NOT NULL,
+  terminal_id TEXT NOT NULL,
+  supervisor_user_id TEXT NOT NULL,
+  supervisor_session_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  evidence_reference TEXT NOT NULL,
+  resolved_at_utc TEXT NOT NULL,
+  FOREIGN KEY(local_sale_id) REFERENCES local_checkout_recovery(local_sale_id)
+);
 CREATE INDEX IF NOT EXISTS ix_checkout_recovery_terminal_state
  ON local_checkout_recovery (terminal_id, state);
 """;
@@ -59,7 +71,8 @@ ON CONFLICT(local_sale_id) DO NOTHING;
         check.Transaction = tx;
         check.CommandText = """
 SELECT COUNT(*) FROM local_checkout_recovery
-WHERE terminal_id=$terminal AND state='pending' AND local_sale_id<>$sale;
+WHERE terminal_id=$terminal AND state='pending' AND local_sale_id<>$sale
+  AND NOT EXISTS (SELECT 1 FROM local_checkout_recovery_resolutions x WHERE x.local_sale_id=local_checkout_recovery.local_sale_id);
 """;
         check.Parameters.AddWithValue("$terminal", request.Sale.TerminalId.ToString());
         check.Parameters.AddWithValue("$sale", request.Sale.LocalSaleId.ToString());
@@ -71,6 +84,12 @@ WHERE terminal_id=$terminal AND state='pending' AND local_sale_id<>$sale;
         verify.Parameters.AddWithValue("$sale", request.Sale.LocalSaleId.ToString());
         if (!string.Equals(verify.ExecuteScalar() as string, JsonSerializer.Serialize(request), StringComparison.Ordinal))
             throw new InvalidOperationException("Checkout intent ID reused with changed financial data.");
+        using var resolved = connection.CreateCommand();
+        resolved.Transaction = tx;
+        resolved.CommandText = "SELECT COUNT(*) FROM local_checkout_recovery_resolutions WHERE local_sale_id=$sale;";
+        resolved.Parameters.AddWithValue("$sale", request.Sale.LocalSaleId.ToString());
+        if (Convert.ToInt64(resolved.ExecuteScalar()) != 0)
+            throw new InvalidOperationException("Cannot reuse an already resolved checkout ID.");
         tx.Commit();
     }
 
@@ -82,6 +101,7 @@ WHERE terminal_id=$terminal AND state='pending' AND local_sale_id<>$sale;
         cmd.CommandText = """
 SELECT local_sale_id FROM local_checkout_recovery
 WHERE tenant_id=$tenant AND store_id=$store AND terminal_id=$terminal AND state='pending'
+AND NOT EXISTS (SELECT 1 FROM local_checkout_recovery_resolutions x WHERE x.local_sale_id=local_checkout_recovery.local_sale_id)
 ORDER BY created_at_utc LIMIT 1;
 """;
         cmd.Parameters.AddWithValue("$tenant", tenantId.ToString());
