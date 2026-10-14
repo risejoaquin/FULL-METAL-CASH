@@ -38,8 +38,40 @@
 - Nueva regresión para múltiples intenciones pendientes, incluyendo estado SQLite anómalo.
 - Los tres grupos de GitHub Actions deben estar aprobados para el SHA final antes de contar estas correcciones como validadas.
 
+## Resolución excepcional con supervisor (rama AC-DEV)
+
+La interfaz WPF presenta la opción **Resolver intento SIN venta (auditado)**.
+No cancela ni devuelve una venta completada: únicamente permite resolver
+un intento previo que **nunca** generó efectos financieros y que fue comprobado
+documentalmente.
+
+**Requisitos exigidos por SQLite bajo la misma transacción:**
+
+1. Segundo operador diferente del cajero original, con sesión vigente y mismo tenant/store.
+2. Permisos locales `sales.void` y `cash.close` simultáneamente; no se conceden por este flujo.
+3. Terminal con binding v4 vigente, motivo detallado y referencia de incidencia/evidencia.
+4. Ausencia de venta, pago, línea, movimiento de inventario/caja, trabajo de impresión,
+   outbox o auditoría de commit relacionados con ese identificador.
+5. Escritura conjunta de la resolución y del evento `local.checkout.intent_resolved_uncommitted`
+   en `local_audit_events`. Un fallo de auditoría revierte todo y conserva el bloqueo.
+6. El ID resuelto queda conservado en el journal y **no puede reutilizarse**. El store de
+   checkout rechaza también a un proceso suspendido que intente confirmar ese ID después.
+
+La supervisión debe dejar constancia del efectivo físico. La **ausencia de registros en
+SQLite por sí sola no demuestra que nadie haya recibido dinero**; esta decisión sigue
+sujeta a aprobación humana antes de operar en comercios reales.
+
+### Pruebas automáticas de regresión
+
+- Supervisor autorizado resuelve sólo cuando no hubo commit ni efectos financieros.
+- Cajero original o un supervisor sin permisos suficientes no puede resolver.
+- Si hay venta persistida, la resolución se rechaza sin mover el ledger.
+- Falla la auditoría: rollback de resolución, intención continúa pendiente.
+- Un worker antiguo no puede crear una venta luego de resolver su ID.
+- WPF vuelve a habilitar carrito sólo tras verificar que no existen otras intenciones pendientes.
+
 ## Riesgos abiertos
 
-- Resolución supervisada con RBAC, motivos, evidencias y auditoría inmutable: **no implementada**.
+- Resolución supervisada con RBAC, motivos y evidencia referenciada: **implementación inicial en AC-DEV**. Falta prueba de autorización independiente y UAT física; no está certificada.
 - Simulación de terminación abrupta del proceso Windows real y validación hardware: **pendiente**.
 - Pruebas de recuperación deben contar por separado cobertura CI y aceptación operativa. El CI verde no equivale a GO comercial.
