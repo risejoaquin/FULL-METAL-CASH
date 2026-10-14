@@ -26,7 +26,7 @@ withdrawal, bounded offline freshness and replay protection.
   horizon is at most **7 days** (revised by policy only).
 - `SQLiteSignedOfflineCartDiscountRuleCache` is a new **opt-in** SQLite
   table. A signed rule can only be persisted for its existing terminal
-  binding; a later revision supersedes an earlier one transactionally. Decimal
+  binding; a later revision supersedes an earlier one transactionally. Reads also require the **current** terminal binding to match, so re-enrollment cannot reuse the previous terminal's cached promotions. Decimal
   bits are stored losslessly so signature verification survives restart.
 - `SignedOfflineCartDiscountCheckout.PublishAsync` verifies before cache
   insertion. `ApplyAsync` looks up the rule by exact sale scope, re-verifies
