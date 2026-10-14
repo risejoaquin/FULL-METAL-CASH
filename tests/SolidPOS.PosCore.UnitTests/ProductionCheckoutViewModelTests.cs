@@ -58,6 +58,27 @@ public sealed class ProductionCheckoutViewModelTests
         Assert.Equal(0, await f.Repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
     }
 
+    [Fact]
+    public async Task Locked_checkout_cart_rejects_new_sku_without_mutating_total()
+    {
+        using var f = await Fixture.CreateAsync(new[] { "cash.open", "sales.create" });
+        await f.Login.LoginAsync("Test-local-password-2026!");
+        var cart = new ProductionCartViewModel(f.Repository, f.Login) { Sku = "SKU-QA-1" };
+        await cart.AddBySkuAsync();
+        Assert.Equal(4500, cart.TotalCents);
+        cart.SetCheckoutLocked(true);
+        cart.Sku = "SKU-QA-1";
+
+        await cart.AddBySkuAsync();
+
+        Assert.Single(cart.Lines);
+        Assert.Equal(1, cart.Lines[0].Quantity);
+        Assert.Equal(4500, cart.TotalCents);
+        Assert.False(cart.CanEdit);
+        cart.SetCheckoutLocked(false);
+        Assert.True(cart.CanEdit);
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly string directory = System.IO.Path.Combine(
