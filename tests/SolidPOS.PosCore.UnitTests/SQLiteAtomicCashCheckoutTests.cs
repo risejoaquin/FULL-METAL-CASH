@@ -198,6 +198,109 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
             f.Request.Sale.TenantId, f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
     }
 
+    [Fact]
+    public async Task Supervisor_resolves_no_commit_with_audit_and_stale_worker_is_blocked()
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        var supervisor = await f.CreateSupervisorAsync(new[] { "sales.void", "cash.close" });
+        var recovery = new SQLiteSupervisedCheckoutRecoveryService(f.Database);
+        recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
+            "Se confirmó que nunca se entregó ni cobró efectivo.",
+            "INCIDENT-TEST-2026-001", f.Clock.UtcNow);
+
+        Assert.Null(journal.FindUnresolved(f.Request.Sale.TenantId,
+            f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+        Assert.Equal(1, f.Count("local_checkout_recovery_resolutions"));
+        Assert.Equal(1, f.Count("local_audit_events",
+            "event_type='local.checkout.intent_resolved_uncommitted'"));
+        Assert.Equal(0, f.Count("offline_sales"));
+        Assert.Equal(0, f.Count("local_sale_payments"));
+        Assert.Equal(0, f.Count("local_outbox_events"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            f.Checkout.CheckoutAsync(f.Request));
+        Assert.Throws<InvalidOperationException>(() => journal.Register(f.Request));
+        Assert.Equal(0, f.Amount("local_cash_movements", "movement_type='sale_cash'"));
+
+        var newSale = f.Request with
+        {
+            Sale = f.Request.Sale with { LocalSaleId = Guid.NewGuid() },
+            ReceiptId = Guid.NewGuid(),
+            PrintJobId = Guid.NewGuid()
+        };
+        journal.Register(newSale);
+        Assert.Equal(newSale.Sale.LocalSaleId,
+            journal.FindUnresolved(newSale.Sale.TenantId, newSale.Sale.StoreId,
+                newSale.Sale.TerminalId));
+    }
+
+    [Fact]
+    public async Task Recovery_requires_both_supervisor_permissions_and_a_second_user()
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        var recovery = new SQLiteSupervisedCheckoutRecoveryService(f.Database);
+        var limited = await f.CreateSupervisorAsync(new[] { "cash.close" });
+        Assert.Throws<InvalidOperationException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, limited.SessionId,
+                "Revisé turno y registros y no se recibió efectivo.",
+                "INCIDENT-TEST-2026-002", f.Clock.UtcNow));
+        Assert.Throws<InvalidOperationException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, f.Request.SessionId,
+                "No hay venta guardada y se verificó la operación.",
+                "INCIDENT-TEST-2026-003", f.Clock.UtcNow));
+        Assert.NotNull(journal.FindUnresolved(f.Request.Sale.TenantId,
+            f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+        Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
+    }
+
+    [Fact]
+    public async Task Supervisor_cannot_resolve_sale_that_already_committed()
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        await f.Checkout.CheckoutAsync(f.Request);
+        var supervisor = await f.CreateSupervisorAsync(new[] { "sales.void", "cash.close" });
+        var recovery = new SQLiteSupervisedCheckoutRecoveryService(f.Database);
+        Assert.Throws<InvalidOperationException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
+                "El cajero reportó un resultado de operación incierto.",
+                "INCIDENT-TEST-2026-004", f.Clock.UtcNow));
+        Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
+        Assert.Equal(1, f.Count("offline_sales"));
+        Assert.Equal(9000, f.Amount("local_cash_movements", "movement_type='sale_cash'"));
+    }
+
+    [Fact]
+    public async Task Audit_insert_failure_rolls_back_supervised_resolution()
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+        var supervisor = await f.CreateSupervisorAsync(new[] { "sales.void", "cash.close" });
+        using (var db = f.Database.OpenConnection())
+        using (var trigger = db.CreateCommand())
+        {
+            trigger.CommandText = """
+CREATE TRIGGER test_reject_supervisor_audit BEFORE INSERT ON local_audit_events
+WHEN NEW.event_type='local.checkout.intent_resolved_uncommitted'
+BEGIN SELECT RAISE(ABORT, 'simulated audit persistence failure'); END;
+""";
+            trigger.ExecuteNonQuery();
+        }
+        var recovery = new SQLiteSupervisedCheckoutRecoveryService(f.Database);
+        Assert.Throws<SqliteException>(() =>
+            recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
+                "La auditoría falló y no se debe liberar caja.",
+                "INCIDENT-TEST-2026-005", f.Clock.UtcNow));
+        Assert.NotNull(journal.FindUnresolved(f.Request.Sale.TenantId,
+            f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+        Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
+    }
+
     private sealed class FixedClock : IClock
     {
         public DateTimeOffset UtcNow { get; } = new(2026, 10, 13, 18, 0, 0, TimeSpan.Zero);
@@ -256,6 +359,18 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
             f.Request = new AtomicCashCheckoutRequest(
                 draft, session.SessionId, f.ShiftId, 11000, Guid.NewGuid(), Guid.NewGuid());
             return f;
+        }
+
+        public async Task<LocalSession> CreateSupervisorAsync(string[] permissions)
+        {
+            var userId = Guid.NewGuid();
+            string email = "supervisor-" + userId.ToString("N") + "@test.invalid";
+            await Repository.SaveLocalUserAsync(new LocalUser(
+                userId, Request.Sale.TenantId, Request.Sale.StoreId, email, "Test Supervisor",
+                LocalPasswordHasher.Hash("Supervisor-test-password!"),
+                "supervisor", true, Clock.UtcNow, 12), permissions);
+            return await new LocalAuthService(Repository, Clock).LoginForTerminalAsync(
+                email, "Supervisor-test-password!", Request.Sale.TenantId, Request.Sale.StoreId);
         }
 
         public int Count(string table, string? condition = null)
