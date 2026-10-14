@@ -23,12 +23,15 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     private readonly AtomicCashShiftCloseService cashClose;
     private readonly IClock clock;
     private readonly SQLiteCheckoutRecoveryJournal? recoveryJournal;
+    private readonly SQLiteSupervisedCheckoutRecoveryService? supervisorRecovery;
     private Guid? unresolvedAfterRestart;
     private LocalCashShift? shift;
     private AtomicCashCheckoutRequest? pendingRequest;
     private int openingAmountCents;
     private int tenderedCents;
     private int countedCashCents;
+    private string recoveryReason = string.Empty;
+    private string recoveryEvidence = string.Empty;
     private bool busy;
     private string cashStatus = "Inicie sesión para consultar su caja.";
     private string saleStatus = "No hay un cobro confirmado.";
@@ -36,7 +39,8 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
     public ProductionCheckoutViewModel(
         ILocalPosRepository repository, LocalAuthService auth,
         ProductionLoginViewModel login, ProductionCartViewModel cart,
-        AtomicCashCheckoutService checkout, AtomicCashShiftCloseService cashClose, IClock clock, SQLiteCheckoutRecoveryJournal? recoveryJournal = null)
+        AtomicCashCheckoutService checkout, AtomicCashShiftCloseService cashClose, IClock clock, SQLiteCheckoutRecoveryJournal? recoveryJournal = null,
+        SQLiteSupervisedCheckoutRecoveryService? supervisorRecovery = null)
     {
         this.repository = repository ?? throw new ArgumentNullException(nameof(repository));
         this.auth = auth ?? throw new ArgumentNullException(nameof(auth));
@@ -46,12 +50,15 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
         this.cashClose = cashClose ?? throw new ArgumentNullException(nameof(cashClose));
         this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
         this.recoveryJournal = recoveryJournal;
+        this.supervisorRecovery = supervisorRecovery;
         cart.Lines.CollectionChanged += (_, _) => RefreshCommands();
     }
 
     public int OpeningAmountCents { get => openingAmountCents; set => SetProperty(ref openingAmountCents, value); }
     public int TenderedCents { get => tenderedCents; set => SetProperty(ref tenderedCents, value); }
     public int CountedCashCents { get => countedCashCents; set => SetProperty(ref countedCashCents, value); }
+    public string RecoveryReason { get => recoveryReason; set => SetProperty(ref recoveryReason, value); }
+    public string RecoveryEvidence { get => recoveryEvidence; set => SetProperty(ref recoveryEvidence, value); }
     public string CashStatus { get => cashStatus; private set => SetProperty(ref cashStatus, value); }
     public string SaleStatus { get => saleStatus; private set => SetProperty(ref saleStatus, value); }
     public bool CanOpenShift => !busy && login.ActiveSession is not null && shift is null && pendingRequest is null && unresolvedAfterRestart is null;
@@ -61,6 +68,8 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
         && pendingRequest is null && unresolvedAfterRestart is null && cart.Lines.Count == 0;
     public string ShiftLabel => shift is null ? "Sin caja abierta" : $"Caja abierta: {shift.Id}";
     public bool HasUncertainCheckout => pendingRequest is not null || unresolvedAfterRestart is not null;
+    public bool CanResolveUncommitted => !busy && supervisorRecovery is not null &&
+        login.ActiveSession is not null && HasUncertainCheckout;
 
     public async Task RefreshShiftAsync()
     {
@@ -151,6 +160,42 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
             cart.SetCheckoutLocked(false);
             SaleStatus = $"Venta {pending.Sale.LocalSaleId} confirmada en SQLite. Sin nuevo cobro.";
         }
+        await RefreshShiftAsync();
+    }
+
+    /// <summary>Never resolves a committed sale; store checks RBAC, scope and absence of effects atomically.</summary>
+    public async Task ResolveUncommittedAsync()
+    {
+        if (!CanResolveUncommitted) return;
+        var id = unresolvedAfterRestart ?? pendingRequest?.Sale.LocalSaleId;
+        var session = login.ActiveSession;
+        if (id is null || session is null || supervisorRecovery is null) return;
+        busy = true;
+        RefreshCommands();
+        try
+        {
+            supervisorRecovery.ResolveUncommitted(id.Value, session.SessionId,
+                RecoveryReason, RecoveryEvidence, clock.UtcNow);
+            if (pendingRequest?.Sale.LocalSaleId == id.Value)
+                pendingRequest = null;
+            unresolvedAfterRestart = null;
+            cart.Clear();
+            RecoveryReason = string.Empty;
+            RecoveryEvidence = string.Empty;
+            SaleStatus = $"Intento {id} resuelto SIN venta mediante autorización supervisada; conserva auditoría. No se cobró automáticamente.";
+        }
+        catch (Exception)
+        {
+            SaleStatus = $"Intento {id} sigue BLOQUEADO. Se requiere otro supervisor, permisos sales.void y cash.close, motivo, evidencia y ausencia total de registros de venta.";
+            return;
+        }
+        finally
+        {
+            busy = false;
+            cart.SetCheckoutLocked(pendingRequest is not null || unresolvedAfterRestart is not null);
+            RefreshCommands();
+        }
+        // Recheck the terminal and any other unresolved intent before enabling checkout.
         await RefreshShiftAsync();
     }
 
@@ -323,5 +368,6 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
         RaisePropertyChanged(nameof(CanCloseShift));
         RaisePropertyChanged(nameof(ShiftLabel));
         RaisePropertyChanged(nameof(HasUncertainCheckout));
+        RaisePropertyChanged(nameof(CanResolveUncommitted));
     }
 }
