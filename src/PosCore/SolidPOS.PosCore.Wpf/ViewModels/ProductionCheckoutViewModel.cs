@@ -237,7 +237,8 @@ public sealed class ProductionCheckoutViewModel : ViewModelBase
 
             recoveryJournal?.Register(pendingRequest);
             var result = await checkout.CheckoutAsync(pendingRequest);
-            recoveryJournal?.ReconcileCommitted(result.LocalSaleId);
+            if (recoveryJournal is not null && !recoveryJournal.ReconcileCommitted(result.LocalSaleId))
+                throw new InvalidOperationException("Financial commit evidence incomplete; manual reconciliation required.");
             pendingRequest = null;
             cart.Clear();
             cart.SetCheckoutLocked(false);
