@@ -337,7 +337,8 @@
           "weight": 3,
           "kind": "automated",
           "testCases": [
-            "SQLiteAtomicCashCheckoutTests.Crash_after_financial_commit_reconciles_journal_without_duplicate_money"
+            "SQLiteAtomicCashCheckoutTests.Crash_after_financial_commit_reconciles_journal_without_duplicate_money",
+            "ProductionCheckoutViewModelTests.Reopened_commercial_shell_reconciles_persisted_checkout_and_unlocks_cart"
           ]
         },
         {
@@ -346,7 +347,9 @@
           "weight": 2,
           "kind": "automated",
           "testCases": [
-            "SQLiteAtomicCashCheckoutTests.Missing_cash_ledger_evidence_keeps_restarted_terminal_blocked"
+            "SQLiteAtomicCashCheckoutTests.Missing_cash_ledger_evidence_keeps_restarted_terminal_blocked",
+            "SQLiteAtomicCashCheckoutTests.Supervisor_cannot_resolve_sale_that_already_committed",
+            "SQLiteAtomicCashCheckoutTests.Audit_insert_failure_rolls_back_supervised_resolution"
           ]
         },
         {
@@ -355,7 +358,8 @@
           "weight": 2,
           "kind": "automated",
           "testCases": [
-            "SQLiteCheckoutRecoveryJournalTests.Same_sale_id_cannot_change_amount_on_replay"
+            "SQLiteCheckoutRecoveryJournalTests.Same_sale_id_cannot_change_amount_on_replay",
+            "SQLiteAtomicCashCheckoutTests.Supervisor_resolves_no_commit_with_audit_and_stale_worker_is_blocked"
           ]
         },
         {
@@ -364,7 +368,9 @@
           "weight": 2,
           "kind": "automated",
           "testCases": [
-            "SQLiteCheckoutRecoveryJournalTests.Pending_intents_remain_visible_and_block_new_sale_after_restart"
+            "SQLiteCheckoutRecoveryJournalTests.Pending_intents_remain_visible_and_block_new_sale_after_restart",
+            "SQLiteAtomicCashCheckoutTests.Recovery_requires_both_supervisor_permissions_and_a_second_user",
+            "ProductionCheckoutViewModelTests.Independent_supervisor_can_resolve_uncommitted_intent_via_WPF_without_sale"
           ]
         },
         {
