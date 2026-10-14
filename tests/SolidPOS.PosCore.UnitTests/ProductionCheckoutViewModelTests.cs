@@ -200,6 +200,43 @@ BEGIN SELECT RAISE(ABORT,'test audit unavailable'); END;
         Assert.Null((await f.Repository.GetLocalCashShiftAsync(shift.Id))?.ClosedAtUtc);
     }
 
+    [Fact]
+    public async Task Reopened_commercial_shell_reconciles_persisted_checkout_and_unlocks_cart()
+    {
+        using var f = await Fixture.CreateAsync(new[] { "cash.open", "sales.create" });
+        await f.Login.LoginAsync("Test-local-password-2026!");
+        var cart = new ProductionCartViewModel(f.Repository, f.Login) { Sku = "SKU-QA-1" };
+        await cart.AddBySkuAsync();
+        var initial = f.CreateCheckout(cart);
+        await initial.OpenShiftAsync();
+        var shift = (await f.Repository.GetOpenLocalCashShiftAsync())!;
+        var binding = (await f.Repository.GetTerminalBindingAsync())!;
+        var product = (await f.Repository.GetCatalogProductBySkuAsync("SKU-QA-1"))!;
+        var sale = new OfflineSaleDraft(Guid.NewGuid(), binding.TenantId, binding.StoreId,
+            binding.TerminalId, DateTimeOffset.UtcNow,
+            new[] { new OfflineSaleLineDraft(product.ProductId, product.VariantId,
+                product.Sku, product.Name, 1, product.PriceCents) },
+            new[] { new OfflineSalePaymentDraft("cash", product.PriceCents, Guid.NewGuid()) },
+            "MXN", f.Login.ActiveSession!.UserId);
+        var request = new AtomicCashCheckoutRequest(sale, f.Login.ActiveSession.SessionId,
+            shift.Id, product.PriceCents, Guid.NewGuid(), Guid.NewGuid());
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(request);
+        await new AtomicCashCheckoutService(f.Repository, new SQLiteAtomicCashCheckoutStore(f.Database),
+            new SystemClock()).CheckoutAsync(request);
+        cart.SetCheckoutLocked(true);
+        var reopened = f.CreateCheckout(cart,
+            new SQLiteCheckoutRecoveryJournal(new SQLiteLocalDatabase(f.Path)));
+        await reopened.RefreshShiftAsync();
+
+        Assert.False(reopened.HasUncertainCheckout);
+        Assert.True(cart.CanEdit);
+        Assert.Contains("verificada", reopened.SaleStatus);
+        Assert.Null(journal.FindUnresolved(binding.TenantId, binding.StoreId, binding.TerminalId));
+        Assert.Equal(4500, (await f.Repository.GetLocalCashShiftSummaryAsync(shift.Id)).CashSalesCents);
+        Assert.Equal(1, await f.Repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly string directory = System.IO.Path.Combine(
@@ -244,10 +281,13 @@ BEGIN SELECT RAISE(ABORT,'test audit unavailable'); END;
             return f;
         }
 
-        public ProductionCheckoutViewModel CreateCheckout(ProductionCartViewModel cart)
+        public ProductionCheckoutViewModel CreateCheckout(ProductionCartViewModel cart,
+            SQLiteCheckoutRecoveryJournal? journal = null,
+            SQLiteSupervisedCheckoutRecoveryService? supervisorRecovery = null)
             => new(Repository, Auth, Login, cart,
                 new AtomicCashCheckoutService(Repository,
-                    new SQLiteAtomicCashCheckoutStore(Database), clock), CreateCashCloseService(), clock);
+                    new SQLiteAtomicCashCheckoutStore(Database), clock), CreateCashCloseService(), clock,
+                journal, supervisorRecovery);
 
         public AtomicCashShiftCloseService CreateCashCloseService()
             => new(new SQLiteAtomicCashShiftCloseStore(Database), clock);
