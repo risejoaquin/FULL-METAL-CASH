@@ -246,11 +246,11 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
         Assert.Throws<InvalidOperationException>(() =>
             recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, limited.SessionId,
                 "Revisé turno y registros y no se recibió efectivo.",
-                "INCIDENT-TEST-2026-002", f.Clock.UtcNow));
+                "INCIDENT-TEST-2026-002", f.Clock.UtcNow, true));
         Assert.Throws<InvalidOperationException>(() =>
             recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, f.Request.SessionId,
                 "No hay venta guardada y se verificó la operación.",
-                "INCIDENT-TEST-2026-003", f.Clock.UtcNow));
+                "INCIDENT-TEST-2026-003", f.Clock.UtcNow, true));
         Assert.NotNull(journal.FindUnresolved(f.Request.Sale.TenantId,
             f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
         Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
@@ -268,7 +268,7 @@ BEGIN SELECT RAISE(ABORT, 'simulated print queue disk failure'); END;
         Assert.Throws<InvalidOperationException>(() =>
             recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
                 "El cajero reportó un resultado de operación incierto.",
-                "INCIDENT-TEST-2026-004", f.Clock.UtcNow));
+                "INCIDENT-TEST-2026-004", f.Clock.UtcNow, true));
         Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
         Assert.Equal(1, f.Count("offline_sales"));
         Assert.Equal(9000, f.Amount("local_cash_movements", "movement_type='sale_cash'"));
@@ -295,7 +295,7 @@ BEGIN SELECT RAISE(ABORT, 'simulated audit persistence failure'); END;
         Assert.Throws<SqliteException>(() =>
             recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
                 "La auditoría falló y no se debe liberar caja.",
-                "INCIDENT-TEST-2026-005", f.Clock.UtcNow));
+                "INCIDENT-TEST-2026-005", f.Clock.UtcNow, true));
         Assert.NotNull(journal.FindUnresolved(f.Request.Sale.TenantId,
             f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
         Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
@@ -311,10 +311,10 @@ BEGIN SELECT RAISE(ABORT, 'simulated audit persistence failure'); END;
         var recovery = new SQLiteSupervisedCheckoutRecoveryService(f.Database);
         Assert.Throws<InvalidOperationException>(() =>
             recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
-                "short", "INCIDENT-2026-007", f.Clock.UtcNow));
+                "short", "INCIDENT-2026-007", f.Clock.UtcNow, true));
         Assert.Throws<InvalidOperationException>(() =>
             recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
-                "No money was taken and financial logs were checked.", "x", f.Clock.UtcNow));
+                "No money was taken and financial logs were checked.", "x", f.Clock.UtcNow, true));
 
         var externalUser = Guid.NewGuid();
         var otherTenant = Guid.NewGuid();
@@ -330,7 +330,7 @@ BEGIN SELECT RAISE(ABORT, 'simulated audit persistence failure'); END;
         Assert.Throws<InvalidOperationException>(() =>
             recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, outsider.SessionId,
                 "No funds were physically received according to logs.",
-                "INCIDENT-2026-008", f.Clock.UtcNow));
+                "INCIDENT-2026-008", f.Clock.UtcNow, true));
         Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
         Assert.Equal(f.Request.Sale.LocalSaleId,
             journal.FindUnresolved(f.Request.Sale.TenantId,
@@ -353,7 +353,7 @@ BEGIN SELECT RAISE(ABORT, 'simulated audit persistence failure'); END;
         Assert.Throws<InvalidOperationException>(() =>
             recovery.ResolveUncommitted(f.Request.Sale.LocalSaleId, supervisor.SessionId,
                 "An outbox record survives and must prevent supervisor release.",
-                "INCIDENT-2026-009", f.Clock.UtcNow));
+                "INCIDENT-2026-009", f.Clock.UtcNow, true));
         Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
         Assert.NotNull(journal.FindUnresolved(f.Request.Sale.TenantId,
             f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
