@@ -41,12 +41,21 @@ public sealed class ProductionCartViewModel : ViewModelBase
     public async Task AddBySkuAsync()
     {
         if (!CanEdit) { Status = "Inicie sesión antes de agregar productos."; return; }
+        // An async catalog lookup belongs to the session that initiated it.
+        // Never transfer its result to a newly authenticated operator.
+        var originatingSessionId = login.ActiveSession?.SessionId;
         var requestedSku = Sku.Trim();
         if (requestedSku.Length == 0) { Status = "Capture un SKU."; return; }
         busy = true;
         try
         {
             var product = await repository.GetCatalogProductBySkuAsync(requestedSku);
+            if (originatingSessionId is null || login.ActiveSession?.SessionId != originatingSessionId)
+            {
+                Clear();
+                Status = "La sesión cambió durante la consulta; busque nuevamente el producto.";
+                return;
+            }
             if (product is null || !product.IsSellable || !string.Equals(product.Currency, "MXN", StringComparison.OrdinalIgnoreCase))
             {
                 Status = "SKU inexistente, inactivo o con moneda no admitida.";
