@@ -150,6 +150,38 @@ def assess(matrix, cases, commit, run_id=""):
     }
 
 
+def make_markdown(report):
+    lines = [
+        "# SolidPOS — Evidencia de aceptación (CI)",
+        "",
+        f"**Commit:** \`{report['commit']}\` · **Run:** \`{report['runId']}\`",
+        f"**Puntos de evidencia verificables:** {report['verifiedAcceptanceEvidencePercent']}/100",
+        f"**Automatización acreditada:** {report['verifiedAutomatedWeight']}/{report['automatedWeightAvailable']}",
+        f"**Escenarios automáticos demostrados:** {report['verifiedScenarioCount']}/{report['totalScenarioCount']} (total incluye manuales)",
+        "**Aceptación comercial:** NO-GO; recorridos manuales pendientes.",
+        "",
+        "| Requisito | Evidencia acreditada | Peso total |",
+        "| --- | ---: | ---: |",
+    ]
+    for req in report["requirements"]:
+        lines.append(f"| {req['id']} — {req['name']} | {req['verifiedWeight']} | {req['weight']} |")
+    lines += [
+        "", "## Pendientes de aceptación",
+        "",
+        "| Caso | Estado | Evidencia requerida |",
+        "| --- | --- | --- |",
+    ]
+    for req in report["requirements"]:
+        for scenario in req["scenarios"]:
+            if scenario["status"] != "passed":
+                evidence = scenario.get("procedure") if scenario["kind"] == "manual" else ", ".join(
+                    result["selector"] for result in scenario["testResults"]
+                    if result["status"] != "passed")
+                lines.append(f"| {scenario['id']} | {scenario['status']} | {evidence} |")
+    lines += ["", "> Una suite verde no equivale a autorización comercial. El GO exige UAT, hardware, seguridad y aprobación explícita.", ""]
+    return "\\n".join(lines)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--matrix", required=True)
@@ -157,6 +189,7 @@ def main(argv=None):
     parser.add_argument("--commit", required=True)
     parser.add_argument("--run-id", default="")
     parser.add_argument("--output", required=True)
+    parser.add_argument("--markdown", default="", help="Optional GitHub summary Markdown output path")
     parser.add_argument("--strict", action="store_true",
                         help="Fail CI if a mapped automated acceptance selector is absent or nonpassed.")
     args = parser.parse_args(argv)
@@ -167,6 +200,10 @@ def main(argv=None):
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    if args.markdown:
+        markdown = Path(args.markdown)
+        markdown.parent.mkdir(parents=True, exist_ok=True)
+        markdown.write_text(make_markdown(report), encoding="utf-8")
     print(f"SolidPOS verified acceptance evidence: {report['verifiedAcceptanceEvidencePercent']}/100 weighted points")
     print(f"Automated acceptance weighting: {report['verifiedAutomatedWeight']}/{report['automatedWeightAvailable']}")
     print(f"Scenarios demonstrated: {report['verifiedScenarioCount']}/{report['totalScenarioCount']}; "
