@@ -2247,6 +2247,24 @@ VALUES ($id, $tenantId, $storeId, $userId, $sessionId, $eventType, $message, $oc
         return Task.CompletedTask;
     }
 
+    public Task<int> CountActiveLocalUsersForScopeAsync(
+        Guid tenantId, Guid storeId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (tenantId == Guid.Empty || storeId == Guid.Empty)
+            return Task.FromResult(0);
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+SELECT COUNT(*) FROM local_users
+WHERE tenant_id = $tenant AND store_id = $store AND is_active = 1
+AND max_offline_hours > 0;
+""";
+        command.Parameters.AddWithValue("$tenant", tenantId.ToString());
+        command.Parameters.AddWithValue("$store", storeId.ToString());
+        return Task.FromResult(Convert.ToInt32(command.ExecuteScalar()));
+    }
+
     public Task<LocalAuthSummary> GetLocalAuthSummaryAsync(CancellationToken cancellationToken = default)
     {
         using var connection = _database.OpenConnection();
