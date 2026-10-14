@@ -70,6 +70,41 @@ public sealed class PosCoreStartupInspectionTests
     }
 
     [Fact]
+    public async Task User_from_other_tenant_or_store_never_activates_cashier_login()
+    {
+        using var db = new Fixture();
+        await db.Repository.InitializeAsync();
+        Guid tenant = Guid.NewGuid(), store = Guid.NewGuid();
+        await db.Repository.SaveTerminalBindingAsync(new TerminalBinding(
+            tenant, store, Guid.NewGuid(), "scoped-device", "ci-token",
+            DateTimeOffset.UtcNow, 4));
+        await db.Repository.SaveLocalUserAsync(new LocalUser(
+            Guid.NewGuid(), tenant, Guid.NewGuid(), "foreign-user@test.invalid",
+            "Other Store", "ci-only-hash", "cashier", true,
+            DateTimeOffset.UtcNow, 12), ["sales.create"]);
+        await db.Repository.SaveLocalUserAsync(new LocalUser(
+            Guid.NewGuid(), Guid.NewGuid(), store, "foreign-tenant@test.invalid",
+            "Other Tenant", "ci-only-hash", "cashier", true,
+            DateTimeOffset.UtcNow, 12), ["sales.create"]);
+
+        var denied = await new PosCoreStartupInspectionService(db.Repository).InspectAsync();
+        Assert.True(denied.TerminalBound);
+        Assert.Equal("users_missing", denied.StatusCode);
+        Assert.Equal(0, denied.LocalUserCount);
+        Assert.False(denied.CanBeginAuthentication);
+
+        await db.Repository.SaveLocalUserAsync(new LocalUser(
+            Guid.NewGuid(), tenant, store, "local-user@test.invalid",
+            "Same Store", "ci-only-hash", "cashier", true,
+            DateTimeOffset.UtcNow, 12), ["sales.create"]);
+        var permitted = await new PosCoreStartupInspectionService(db.Repository).InspectAsync();
+        Assert.Equal("catalog_missing", permitted.StatusCode);
+        Assert.Equal(1, permitted.LocalUserCount);
+        Assert.True(permitted.CanBeginAuthentication);
+        Assert.False(permitted.CanCheckout);
+    }
+
+    [Fact]
     public async Task Wrong_terminal_schema_version_does_not_pass_activation()
     {
         using var db = new Fixture();
