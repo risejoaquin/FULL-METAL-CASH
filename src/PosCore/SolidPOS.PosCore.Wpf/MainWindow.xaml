@@ -79,7 +79,7 @@
                     <DataGridTextColumn Header="Subtotal centavos" Binding="{Binding SubtotalCents}" />
                   </DataGrid.Columns>
                 </DataGrid>
-                <TextBlock Text="{Binding TotalCents, StringFormat=Total en centavos: {0}}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBlock Text="{Binding TotalCents, StringFormat={}{0} centavos}" FontWeight="SemiBold" Margin="0,8,0,0" />
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
               </StackPanel>
             </GroupBox>
