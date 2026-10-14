@@ -57,6 +57,39 @@ public sealed class SQLiteCheckoutRecoveryJournalTests
         }
     }
 
+    [Fact]
+    public void Commit_marker_without_complete_financial_evidence_does_not_unlock_terminal()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "solidpos-recovery-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var database = new SQLiteLocalDatabase(Path.Combine(directory, "poscore.sqlite"));
+            var journal = new SQLiteCheckoutRecoveryJournal(database);
+            Guid tenant = Guid.NewGuid(), store = Guid.NewGuid(), terminal = Guid.NewGuid();
+            var request = Request(tenant, store, terminal, Guid.NewGuid(), 4500);
+            journal.Register(request);
+            using (var connection = database.OpenConnection())
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandText = """
+CREATE TABLE local_checkout_commits (local_sale_id TEXT PRIMARY KEY);
+INSERT INTO local_checkout_commits (local_sale_id) VALUES ($sale);
+""";
+                command.Parameters.AddWithValue("$sale", request.Sale.LocalSaleId.ToString());
+                command.ExecuteNonQuery();
+            }
+            var restarted = new SQLiteCheckoutRecoveryJournal(new SQLiteLocalDatabase(database.DatabasePath));
+            Assert.False(restarted.ReconcileCommitted(request.Sale.LocalSaleId));
+            Assert.Equal(request.Sale.LocalSaleId, restarted.FindUnresolved(tenant, store, terminal));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(directory, true);
+        }
+    }
+
     private static AtomicCashCheckoutRequest Request(Guid tenant, Guid store, Guid terminal, Guid saleId, int amount)
     {
         var sale = new OfflineSaleDraft(saleId, tenant, store, terminal, DateTimeOffset.UtcNow,
