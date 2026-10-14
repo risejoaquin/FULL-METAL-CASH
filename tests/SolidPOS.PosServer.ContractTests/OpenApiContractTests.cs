@@ -86,6 +86,50 @@ public sealed class OpenApiContractTests
     }
 
     [Fact]
+    public void Discount_cart_preview_contract_documents_scope_security_and_non_authoritative_money()
+    {
+        OpenApiDocument contract = LoadContract();
+        var quote = Assert.Single(contract.RawOperations,
+            operation => operation.Path == "/discounts/quote" && operation.Method == "post");
+        Assert.Equal("post_discounts_quote", quote.Operation["operationId"].ToString());
+
+        var security = Assert.IsType<List<object>>(quote.Operation["security"]);
+        Assert.Contains(security, element =>
+            element is Dictionary<object, object> scheme && scheme.ContainsKey("bearerAuth"));
+
+        var requestBody = Assert.IsType<Dictionary<object, object>>(quote.Operation["requestBody"]);
+        var content = Assert.IsType<Dictionary<object, object>>(requestBody["content"]);
+        var json = Assert.IsType<Dictionary<object, object>>(content["application/json"]);
+        var schema = Assert.IsType<Dictionary<object, object>>(json["schema"]);
+        Assert.Equal("#/components/schemas/DiscountCartQuoteRequest", schema["$ref"].ToString());
+
+        var responses = Assert.IsType<Dictionary<object, object>>(quote.Operation["responses"]);
+        Assert.True(responses.ContainsKey("200"));
+        Assert.True(responses.ContainsKey("403"));
+        Assert.True(responses.ContainsKey("409"));
+        var success = Assert.IsType<Dictionary<object, object>>(responses["200"]);
+        var successfulContent = Assert.IsType<Dictionary<object, object>>(success["content"]);
+        var successfulSchema = Assert.IsType<Dictionary<object, object>>(
+            Assert.IsType<Dictionary<object, object>>(successfulContent["application/json"])["schema"]);
+        Assert.Equal("#/components/schemas/DiscountCartQuoteResponse", successfulSchema["$ref"].ToString());
+
+        var components = Assert.IsType<Dictionary<object, object>>(contract.Root["components"]);
+        var schemas = Assert.IsType<Dictionary<object, object>>(components["schemas"]);
+        var responseSchema = Assert.IsType<Dictionary<object, object>>(schemas["DiscountCartQuoteResponse"]);
+        var properties = Assert.IsType<Dictionary<object, object>>(responseSchema["properties"]);
+        Assert.True(properties.ContainsKey("previewOnly"));
+        Assert.True(properties.ContainsKey("allocations"));
+        Assert.True(properties.ContainsKey("grossCents"));
+        Assert.True(properties.ContainsKey("discountCents"));
+        Assert.True(properties.ContainsKey("netCents"));
+
+        // This endpoint intentionally cannot be used to settle money or
+        // manufacture a trusted payment or receipt.
+        Assert.False(properties.ContainsKey("paymentId"));
+        Assert.False(properties.ContainsKey("saleId"));
+    }
+
+    [Fact]
     public void Shared_problem_details_responses_use_application_problem_json()
     {
         OpenApiDocument contract = LoadContract();
