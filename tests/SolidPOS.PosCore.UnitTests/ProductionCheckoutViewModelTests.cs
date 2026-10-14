@@ -237,6 +237,49 @@ BEGIN SELECT RAISE(ABORT,'test audit unavailable'); END;
         Assert.Equal(1, await f.Repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
     }
 
+    [Fact]
+    public async Task Independent_supervisor_can_resolve_uncommitted_intent_via_WPF_without_sale()
+    {
+        using var f = await Fixture.CreateAsync(new[] { "cash.open", "sales.create" });
+        await f.Login.LoginAsync("Test-local-password-2026!");
+        var cashier = f.Login.ActiveSession!;
+        var binding = (await f.Repository.GetTerminalBindingAsync())!;
+        var sale = new OfflineSaleDraft(Guid.NewGuid(), binding.TenantId, binding.StoreId,
+            binding.TerminalId, DateTimeOffset.UtcNow,
+            new[] { new OfflineSaleLineDraft(Guid.NewGuid(), null, "UNCOMMITTED", "Test", 1, 4500) },
+            new[] { new OfflineSalePaymentDraft("cash", 4500, Guid.NewGuid()) },
+            "MXN", cashier.UserId);
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(new AtomicCashCheckoutRequest(sale, cashier.SessionId,
+            Guid.NewGuid(), 5000, Guid.NewGuid(), Guid.NewGuid()));
+        var cart = new ProductionCartViewModel(f.Repository, f.Login);
+        var checkout = f.CreateCheckout(cart, journal, new SQLiteSupervisedCheckoutRecoveryService(f.Database));
+        await checkout.RefreshShiftAsync();
+        Assert.True(checkout.HasUncertainCheckout);
+        Assert.False(cart.CanEdit);
+
+        await f.Login.LogoutAsync();
+        var supervisor = Guid.NewGuid();
+        await f.Repository.SaveLocalUserAsync(new LocalUser(supervisor,
+            binding.TenantId, binding.StoreId, "supervisor@qa.invalid", "Supervisor",
+            LocalPasswordHasher.Hash("Supervised-recovery-2026!"),
+            "supervisor", true, DateTimeOffset.UtcNow, 8),
+            new[] { "sales.void", "cash.close" });
+        f.Login.Email = "supervisor@qa.invalid";
+        await f.Login.LoginAsync("Supervised-recovery-2026!");
+        checkout.SessionChanged();
+        await checkout.RefreshShiftAsync();
+        checkout.RecoveryReason = "Se verificó que no se cobró ni generó venta.";
+        checkout.RecoveryEvidence = "INCIDENT-WPF-2026-0001";
+        await checkout.ResolveUncommittedAsync();
+
+        Assert.False(checkout.HasUncertainCheckout);
+        Assert.True(cart.CanEdit);
+        Assert.Contains("resuelto SIN venta", checkout.SaleStatus);
+        Assert.Null(journal.FindUnresolved(binding.TenantId, binding.StoreId, binding.TerminalId));
+        Assert.Equal(0, await f.Repository.CountOutboxByStatusAsync(LocalOutboxStatus.Pending));
+    }
+
     private sealed class Fixture : IDisposable
     {
         private readonly string directory = System.IO.Path.Combine(
