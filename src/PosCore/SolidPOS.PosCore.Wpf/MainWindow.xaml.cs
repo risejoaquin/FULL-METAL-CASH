@@ -47,6 +47,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void ProductionVerifyRecovery_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is AppShellViewModel { ProductionCheckout: { } checkout })
+            await checkout.VerifyRecoveryAsync();
+    }
+
     private async void ProductionOpenShift_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is AppShellViewModel { ProductionCheckout: { } checkout })
