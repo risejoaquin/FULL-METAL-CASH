@@ -2,6 +2,7 @@ using System.IO;
 using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.Auth;
 using SolidPOS.PosCore.Application.Startup;
+using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Infrastructure.SQLite;
 using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Wpf.ViewModels;
@@ -39,6 +40,13 @@ public static class PosCoreWpfCompositionRoot
 
         var shell = new AppShellViewModel(databasePath);
         shell.InitializeForProduction(state, auth, repository);
+        if (shell.ProductionLogin is not null && shell.ProductionCart is not null)
+        {
+            var checkout = new AtomicCashCheckoutService(
+                repository, new SQLiteAtomicCashCheckoutStore(database), clock);
+            shell.AttachProductionCheckout(new ProductionCheckoutViewModel(
+                repository, auth, shell.ProductionLogin, shell.ProductionCart, checkout, clock));
+        }
         return shell;
     }
 

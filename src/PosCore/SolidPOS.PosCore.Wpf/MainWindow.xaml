@@ -58,7 +58,7 @@
 
         <TabItem Header="Activación / Estado real" Visibility="{Binding ProductionTabVisibility}">
           <StackPanel Margin="24">
-            <TextBlock Text="SolidPOS — punto de venta aún no habilitado" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Text="SolidPOS — operación local en validación técnica (NO-GO comercial)" FontSize="22" FontWeight="SemiBold" />
             <TextBlock Text="{Binding ShellStatus}" TextWrapping="Wrap" Margin="0,18,0,10" FontSize="15"/>
             <TextBlock Text="{Binding TerminalStatus.Status}" TextWrapping="Wrap" />
             <TextBlock Text="{Binding TerminalStatus.BindingSummary}" TextWrapping="Wrap" Margin="0,8,0,10" />
@@ -98,8 +98,25 @@
                 <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
               </StackPanel>
             </GroupBox>
-            <TextBlock Text="Esta interfaz no registra cobros ni abre caja ni confirma sincronización. El acceso autenticado no habilita ventas." TextWrapping="Wrap" FontWeight="SemiBold" />
-            <TextBlock Text="La activación, el login y el cobro transaccional se habilitarán después de superar sus pruebas de integración. Esta pantalla no es una demostración de ventas." TextWrapping="Wrap" Margin="0,12,0,0" />
+            <GroupBox Header="Caja y cobro efectivo locales — flujo financiero real" Margin="0,10,0,8" MaxWidth="680" HorizontalAlignment="Left">
+              <StackPanel Margin="12" DataContext="{Binding ProductionCheckout}">
+                <TextBlock Text="{Binding ShiftLabel}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding CashStatus}" TextWrapping="Wrap" />
+                <TextBlock Text="Fondo inicial (centavos MXN)" Margin="0,12,0,4" />
+                <TextBox Text="{Binding OpeningAmountCents, UpdateSourceTrigger=PropertyChanged}" Width="180" HorizontalAlignment="Left" />
+                <Button Content="Abrir turno en SQLite" Click="ProductionOpenShift_Click"
+                        IsEnabled="{Binding CanOpenShift}" Padding="12,7" HorizontalAlignment="Left" Margin="0,7,0,12" />
+                <TextBlock Text="Efectivo recibido (centavos MXN)" Margin="0,0,0,4" />
+                <TextBox Text="{Binding TenderedCents, UpdateSourceTrigger=PropertyChanged}" Width="180" HorizontalAlignment="Left" />
+                <Button Content="Confirmar cobro efectivo" Click="ProductionCheckout_Click"
+                        IsEnabled="{Binding CanCheckout}" Padding="14,9" FontWeight="SemiBold"
+                        HorizontalAlignment="Left" Margin="0,10,0,8" />
+                <TextBlock Text="{Binding SaleStatus}" TextWrapping="Wrap" />
+                <TextBlock Text="La operación se guarda con ticket pendiente y outbox sin ACK. Repetir la confirmación tras error reutiliza el identificador original." TextWrapping="Wrap" Margin="0,8,0,0" />
+              </StackPanel>
+            </GroupBox>
+            <TextBlock Text="Cobro local habilitado únicamente con sesión, permiso y caja válida. Impresión física, sincronización y cierre comercial siguen pendientes de certificación." TextWrapping="Wrap" FontWeight="SemiBold" />
+            <TextBlock Text="No presentar esta pantalla como sistema comercial certificado hasta validar instalación, hardware, sincronización, devoluciones y cierre." TextWrapping="Wrap" Margin="0,12,0,0" />
           </StackPanel>
         </TabItem>
 

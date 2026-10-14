@@ -34,6 +34,7 @@ public sealed class AppShellViewModel : ViewModelBase
     public LoginViewModel Login { get; }
     public ProductionLoginViewModel? ProductionLogin { get; private set; }
     public ProductionCartViewModel? ProductionCart { get; private set; }
+    public ProductionCheckoutViewModel? ProductionCheckout { get; private set; }
 
     public TerminalStatusViewModel TerminalStatus { get; }
 
@@ -82,6 +83,12 @@ public sealed class AppShellViewModel : ViewModelBase
         SyncStatus.QueueSummary = "Estado de cola no verificado; nunca marcar una venta manualmente como sincronizada.";
         CashShift.Status = "Caja no verificada. No se han registrado movimientos.";
         CashShift.ExpectedCashSummary = "Saldo de caja no calculado desde el ledger; acciones bloqueadas.";
+    }
+
+    public void AttachProductionCheckout(ProductionCheckoutViewModel checkout)
+    {
+        ProductionCheckout = checkout ?? throw new ArgumentNullException(nameof(checkout));
+        RaisePropertyChanged(nameof(ProductionCheckout));
     }
 
     public void InitializeForShell()

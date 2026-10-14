@@ -39,6 +39,7 @@ public sealed class ProductionLoginViewModel : ViewModelBase
     public string Operator => session is null ? "Sin operador autenticado" : session.DisplayName;
     public bool IsAuthenticated => session is not null && session.Status == "active"
         && session.ExpiresAtUtc > DateTimeOffset.UtcNow;
+    public LocalSession? ActiveSession => IsAuthenticated ? session : null;
 
     public async Task LoginAsync(string password)
     {
@@ -105,5 +106,6 @@ public sealed class ProductionLoginViewModel : ViewModelBase
         RaisePropertyChanged(nameof(CanLogout));
         RaisePropertyChanged(nameof(Operator));
         RaisePropertyChanged(nameof(IsAuthenticated));
+        RaisePropertyChanged(nameof(ActiveSession));
     }
 }
