@@ -8,6 +8,7 @@ public sealed class AppShellViewModel : ViewModelBase
 {
     private string shellStatus = "Terminal sin verificar. Operaciones deshabilitadas.";
     private bool isSelfTestMode;
+    private PosCoreStartupInspection? productionInspection;
 
     public Visibility SimulationTabVisibility => isSelfTestMode ? Visibility.Visible : Visibility.Collapsed;
     public Visibility ProductionTabVisibility => isSelfTestMode ? Visibility.Collapsed : Visibility.Visible;
@@ -54,6 +55,7 @@ public sealed class AppShellViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(inspection);
         isSelfTestMode = false;
+        productionInspection = inspection;
         ProductionLogin = auth is null ? null : new ProductionLoginViewModel(auth, inspection);
         ProductionCart = ProductionLogin is not null && repository is not null ? new ProductionCartViewModel(repository, ProductionLogin) : null;
         RaisePropertyChanged(nameof(ProductionLogin));
@@ -88,6 +90,16 @@ public sealed class AppShellViewModel : ViewModelBase
     public void AttachProductionCheckout(ProductionCheckoutViewModel checkout)
     {
         ProductionCheckout = checkout ?? throw new ArgumentNullException(nameof(checkout));
+        // Startup inspection is deliberately conservative; financial controls become
+        // operable only after the real transactional checkout is attached AND the
+        // operator has authenticated, opened a shift and passed permission checks.
+        if (!isSelfTestMode && productionInspection is
+            { TerminalBound: true, LocalUsersAvailable: true, CatalogAvailable: true } ready)
+        {
+            ShellStatus = "Terminal y catálogo local verificados. El cobro requiere sesión autorizada y caja abierta. Impresión física y ACK remoto no confirmados.";
+            TerminalStatus.Status = "Terminal v4 verificada; cobro condicionado a sesión, permisos y caja abierta.";
+            Sales.CatalogSummary = $"Productos en catálogo SQLite: {ready.CatalogProductCount}. Consulte el catálogo después de autenticarse.";
+        }
         RaisePropertyChanged(nameof(ProductionCheckout));
     }
 
