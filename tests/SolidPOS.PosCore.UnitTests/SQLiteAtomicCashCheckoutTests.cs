@@ -1,4 +1,7 @@
 using Microsoft.Data.Sqlite;
+using System.Diagnostics;
+using System.Text.Json;
+using SolidPOS.PosCore.CrashHarness;
 using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.Auth;
 using SolidPOS.PosCore.Application.OfflineSales;
@@ -361,6 +364,73 @@ BEGIN SELECT RAISE(ABORT, 'simulated audit persistence failure'); END;
         Assert.Equal(0, f.Count("local_checkout_recovery_resolutions"));
         Assert.NotNull(journal.FindUnresolved(f.Request.Sale.TenantId,
             f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+    }
+
+    [Theory]
+    [InlineData("before")]
+    [InlineData("after")]
+    public async Task Killed_external_process_preserves_or_reconciles_exactly_one_checkout(string killPoint)
+    {
+        using var f = await Fixture.CreateAsync();
+        var journal = new SQLiteCheckoutRecoveryJournal(f.Database);
+        journal.Register(f.Request);
+
+        string requestPath = f.Path + ".crash-request.json";
+        string markerPath = f.Path + ".crash-marker";
+        await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(f.Request));
+        string harness = typeof(CrashProbeMarker).Assembly.Location;
+
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo("dotnet")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            }
+        };
+        process.StartInfo.ArgumentList.Add(harness);
+        process.StartInfo.ArgumentList.Add(killPoint);
+        process.StartInfo.ArgumentList.Add(f.Path);
+        process.StartInfo.ArgumentList.Add(requestPath);
+        process.StartInfo.ArgumentList.Add(markerPath);
+        Assert.True(process.Start());
+        using (var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45)))
+        {
+            try { await process.WaitForExitAsync(timeout.Token); }
+            catch (OperationCanceledException)
+            {
+                if (!process.HasExited) process.Kill(entireProcessTree: true);
+                throw new TimeoutException("Fault injection child did not finish before timeout.");
+            }
+        }
+        string error = await process.StandardError.ReadToEndAsync();
+        Assert.True(File.Exists(markerPath),
+            $"Child crashed before planned point; exit={process.ExitCode}; stderr={error}");
+        Assert.Equal(killPoint, await File.ReadAllTextAsync(markerPath));
+        Assert.NotEqual(0, process.ExitCode);
+
+        var restarted = new SQLiteCheckoutRecoveryJournal(new SQLiteLocalDatabase(f.Path));
+        Assert.Equal(f.Request.Sale.LocalSaleId, restarted.FindUnresolved(
+            f.Request.Sale.TenantId, f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+
+        bool reconciled = restarted.ReconcileCommitted(f.Request.Sale.LocalSaleId);
+        Assert.Equal(killPoint == "after", reconciled);
+        Assert.Equal(killPoint == "after" ? 1 : 0, f.Count("offline_sales"));
+        Assert.Equal(killPoint == "after" ? 1 : 0, f.Count("local_checkout_commits"));
+        Assert.Equal(killPoint == "after" ? 1 : 0, f.Count("local_sale_payments"));
+        Assert.Equal(killPoint == "after" ? 1 : 0, f.Count("local_outbox_events"));
+        Assert.Equal(killPoint == "after" ? 1 : 0, f.Count("local_print_jobs"));
+        Assert.Equal(killPoint == "after" ? 9000 : 0,
+            f.Amount("local_cash_movements", "movement_type='sale_cash'"));
+        if (reconciled)
+            Assert.Null(restarted.FindUnresolved(
+                f.Request.Sale.TenantId, f.Request.Sale.StoreId, f.Request.Sale.TerminalId));
+        else
+            Assert.Throws<InvalidOperationException>(() =>
+                restarted.Register(f.Request with
+                { Sale = f.Request.Sale with { LocalSaleId = Guid.NewGuid() } }));
     }
 
     private sealed class FixedClock : IClock
