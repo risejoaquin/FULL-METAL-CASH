@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using SolidPOS.DiscountEngine;
+using SolidPOS.PosCore.Application.Abstractions;
 using SolidPOS.PosCore.Application.OfflineSales;
 using SolidPOS.PosCore.Domain;
 using SolidPOS.PosCore.Infrastructure.SQLite;
