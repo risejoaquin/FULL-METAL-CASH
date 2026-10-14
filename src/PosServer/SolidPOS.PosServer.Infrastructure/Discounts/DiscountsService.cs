@@ -203,7 +203,13 @@ public sealed class DiscountsService : IDiscountsService
             return null;
 
         Guid tenantId = _tenantContext.TenantId.Value;
-        DateTimeOffset now = request.OccurredAt ?? _clock.UtcNow;
+        DateTimeOffset now = _clock.UtcNow.ToUniversalTime();
+        // An untrusted terminal must not move the clock to redeem future
+        // or expired promotions. A small skew supports offline clients
+        // without turning the quote timestamp into an eligibility override.
+        if (request.OccurredAt.HasValue &&
+            Math.Abs((request.OccurredAt.Value.ToUniversalTime() - now).TotalSeconds) > 120)
+            return null;
         var rules = new List<DiscountRule>();
         var usedIds = new HashSet<Guid>();
         var products = new HashSet<Guid>();
