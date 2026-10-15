@@ -56,3 +56,21 @@ Do **not** change weights or mark any full manual scenario as complete based on 
 - First verify remote ACK and server processing **only against localhost PosServer and disposable local PostgreSQL**.
 - Separately perform physical print driver/peripheral testing and recovery.
 - Audit remaining manual coverage with test IDs and the current commit hash.
+
+
+## QA-004 follow-up: ACK/ingestion proven, processing still pending
+
+Operator ran `scripts/poscore/verify-sale-sync-status.py` against the same AC-DEV Windows SQLite and the **local** `full-metal-cash` PostgreSQL environment. Evidence from console:
+
+- Local sale `45f0a935-8d08-47e7-b170-72797424d34c`, **4,500 cents**.
+- Local outbox event `9bd6bac8-45a2-42e6-87ff-29f48c9ce514`: `status=2`, synced at `2026-10-15T03:35:46.4618676+00:00`.
+- Exactly one persisted local `acknowledged` row. Batch `35485a19-4732-4d17-ada0-cbc726cc17d5`.
+- Remote PostgreSQL `sync_inbox_events`: **exactly one** matching `sale.completed`, `status=received`, created `2026-10-15T03:35:46.398638+00:00`, `processedAt=null`.
+- Remote `pos.sales`: **zero** matching `local_sale_id` rows.
+- `QA-004` result: **PASS for durable ACK / ingestion only; NOT PASS for end-to-end server sale processing**.
+
+The subsequent user-run `sync-push` returned "No pending local outbox events to sync" and did not send a new event. A legacy QA script printed "ACK REMOTO CONFIRMADO" despite its initial expected-one-pending precondition failing; do **not** treat that banner as evidence of a new push.
+
+**Technical dependency discovered:** `PostgreSqlSalesRepository.CreateAsync` requires a matching `pos.cash_shifts` row in `open` status for the store, terminal and operator before it creates the server sale. A local SQLite cash-shift opening is not by itself proof of a central open shift. Next action is **read-only preflight** for central shift and event contract, followed by controlled processing of the exact received batch only when prerequisites are satisfied. Never replay or modify the already-acknowledged local sale as an ad hoc workaround.
+
+`PRN-03` remains pending because physical printing is not evidenced.
