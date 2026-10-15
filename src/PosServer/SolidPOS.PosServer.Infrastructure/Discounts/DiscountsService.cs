@@ -1,4 +1,5 @@
 using System.Globalization;
+using SolidPOS.DiscountEngine;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using SolidPOS.PosServer.Application.Abstractions.Tenancy;
@@ -109,6 +110,13 @@ public sealed class DiscountsService : IDiscountsService
         {
             return null;
         }
+        // Update payload may omit the type, in which case the existing type
+        // controls the new value. Do not let fractional cents enter a fixed
+        // amount rule through an otherwise-valid partial update.
+        string effectiveType = request.DiscountType ?? before.DiscountType;
+        decimal effectiveAmount = request.Value ?? before.Value;
+        if (!DiscountValueIsValid(effectiveType, effectiveAmount))
+            return null;
 
         UpdateDiscountRequest normalized = request with
         {
@@ -159,9 +167,114 @@ public sealed class DiscountsService : IDiscountsService
             return new ValidateDiscountResponse(discount.Id, false, rejection, grossCents, 0, grossCents, Formula);
         }
 
-        long discountCents = CalculateDiscount(discount, grossCents);
+        long discountCents;
+        try
+        {
+            discountCents = DiscountCalculator.CalculateAmountCents(
+                grossCents, discount.DiscountType, discount.Value);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or OverflowException)
+        {
+            return new ValidateDiscountResponse(
+                discount.Id, false, "INVALID_STORED_DISCOUNT", grossCents, 0, grossCents, Formula);
+        }
         long netCents = Math.Max(0, grossCents - discountCents);
         return new ValidateDiscountResponse(discount.Id, true, null, grossCents, discountCents, netCents, Formula);
+    }
+
+    /// <summary>
+    /// Server-backed quote only. Gross prices are caller supplied and MUST be
+    /// recalculated from trusted products/modifiers when creating a real sale.
+    /// A product/category eligibility claim is not accepted from the caller.
+    /// </summary>
+    public async Task<DiscountCartQuoteResponse?> QuoteCartAsync(
+        DiscountCartQuoteRequest request, CancellationToken cancellationToken)
+    {
+        if (request is null || !_tenantContext.TenantId.HasValue ||
+            !_tenantContext.StoreId.HasValue || !_tenantContext.UserId.HasValue ||
+            _tenantContext.UserId.Value == Guid.Empty ||
+            request.StoreId == Guid.Empty ||
+            request.StoreId != _tenantContext.StoreId.Value ||
+            request.Lines is null || request.Lines.Count is < 1 or > 200 ||
+            request.Lines.Any(x => x.LineId == Guid.Empty || x.ProductId == Guid.Empty ||
+                x.GrossCents < 0 || x.LineDiscountId == Guid.Empty) ||
+            request.Lines.Select(x => x.LineId).Distinct().Count() != request.Lines.Count ||
+            request.CartDiscountId == Guid.Empty)
+            return null;
+
+        Guid tenantId = _tenantContext.TenantId.Value;
+        DateTimeOffset now = _clock.UtcNow.ToUniversalTime();
+        // An untrusted terminal must not move the clock to redeem future
+        // or expired promotions. A small skew supports offline clients
+        // without turning the quote timestamp into an eligibility override.
+        if (request.OccurredAt.HasValue &&
+            Math.Abs((request.OccurredAt.Value.ToUniversalTime() - now).TotalSeconds) > 120)
+            return null;
+        var rules = new List<DiscountRule>();
+        var usedIds = new HashSet<Guid>();
+        var products = new HashSet<Guid>();
+        foreach (var line in request.Lines)
+        {
+            if (products.Add(line.ProductId) &&
+                !await _repository.ProductExistsAsync(tenantId, line.ProductId, cancellationToken))
+                return null;
+            if (!line.LineDiscountId.HasValue) continue;
+            if (!usedIds.Add(line.LineDiscountId.Value)) return null;
+
+            DiscountResponse? stored = await _repository.GetByIdAsync(
+                tenantId, line.LineDiscountId.Value, cancellationToken);
+            if (stored is null || !DiscountIsEligible(stored, request.StoreId,
+                line.ProductId, now) || stored.CategoryId.HasValue)
+                return null;
+
+            rules.Add(new DiscountRule(stored.Id, "line",
+                stored.DiscountType, stored.Value, line.LineId));
+        }
+
+        if (request.CartDiscountId.HasValue)
+        {
+            if (!usedIds.Add(request.CartDiscountId.Value)) return null;
+            DiscountResponse? stored = await _repository.GetByIdAsync(
+                tenantId, request.CartDiscountId.Value, cancellationToken);
+            if (stored is null || !DiscountIsEligible(stored, request.StoreId, null, now) ||
+                stored.ProductId.HasValue || stored.CategoryId.HasValue)
+                return null;
+            rules.Add(new DiscountRule(stored.Id, "cart",
+                stored.DiscountType, stored.Value));
+        }
+
+        try
+        {
+            var quote = DiscountCalculator.Quote(new DiscountQuoteRequest(
+                tenantId, request.StoreId, _tenantContext.UserId.Value,
+                request.Lines.Select(line =>
+                    new DiscountLine(line.LineId, line.GrossCents)).ToArray(),
+                rules, []));
+            return new DiscountCartQuoteResponse(
+                quote.GrossCents, quote.DiscountCents, quote.NetCents,
+                quote.Lines.Select(x => new DiscountCartQuoteLineResponse(
+                    x.LineId, x.GrossCents, x.LineDiscountCents,
+                    x.CartDiscountCents, x.NetCents)).ToArray(),
+                quote.Allocations.Select(x => new DiscountCartQuoteAllocationResponse(
+                    x.DiscountId, x.LineId, x.Scope, x.Cents)).ToArray(),
+                quote.ComputationVersion);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or OverflowException)
+        {
+            _logger.LogWarning("Cart discount preview rejected by financial validation");
+            return null;
+        }
+    }
+
+    private static bool DiscountIsEligible(
+        DiscountResponse discount, Guid storeId, Guid? productId, DateTimeOffset now)
+    {
+        return discount.Status == "active" &&
+            (!discount.StartsAt.HasValue || now >= discount.StartsAt.Value) &&
+            (!discount.EndsAt.HasValue || now <= discount.EndsAt.Value) &&
+            (!discount.StoreId.HasValue || discount.StoreId == storeId) &&
+            (!discount.ProductId.HasValue || discount.ProductId == productId) &&
+            discount.DiscountType is "percentage" or "fixed_amount";
     }
 
     private const string Formula = "grossSales - discounts = netSales + taxes/tips = totalSales";
@@ -204,16 +317,6 @@ public sealed class DiscountsService : IDiscountsService
         }
 
         return null;
-    }
-
-    private static long CalculateDiscount(DiscountResponse discount, long grossCents)
-    {
-        if (discount.DiscountType == "percentage")
-        {
-            return Math.Min(grossCents, ToCents(grossCents * discount.Value / 100m));
-        }
-
-        return Math.Min(grossCents, ToCents(discount.Value));
     }
 
     private async Task<bool> ScopeExistsAsync(Guid tenantId, Guid? storeId, Guid? categoryId, Guid? productId, CancellationToken cancellationToken)
@@ -298,7 +401,8 @@ public sealed class DiscountsService : IDiscountsService
             return value is > 0 and <= 100;
         }
 
-        return type?.Trim() == "fixed_amount" && value > 0;
+        return type?.Trim() == "fixed_amount" && value > 0
+            && value == decimal.Truncate(value);
     }
 
     private static bool ScopeIsValid(Guid? storeId, Guid? categoryId, Guid? productId)

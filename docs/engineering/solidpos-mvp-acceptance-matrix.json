@@ -1,0 +1,397 @@
+{
+  "schemaVersion": 2,
+  "product": "SolidPOS MVP comercial",
+  "scoring": "Escenarios independientes; automated TRX exact class.method, manual exige evidencia de aceptación; sin GO automático.",
+  "requirements": [
+    {
+      "id": "MVP-01",
+      "name": "Arranque comercial SQLite",
+      "weight": 10,
+      "scenarios": [
+        {
+          "id": "START-01",
+          "title": "Base nueva no habilita ventas",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "PosCoreStartupInspectionTests.Fresh_disposable_database_is_initialized_but_never_sale_ready"
+          ]
+        },
+        {
+          "id": "START-02",
+          "title": "Binding y SQLite sobreviven reinicio",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "PosCoreStartupInspectionTests.Restart_preserves_binding_and_shows_missing_real_user_without_demo_login"
+          ]
+        },
+        {
+          "id": "START-03",
+          "title": "Tenant o tienda incorrecta bloquea acceso",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "PosCoreStartupInspectionTests.User_from_other_tenant_or_store_never_activates_cashier_login"
+          ]
+        },
+        {
+          "id": "START-04",
+          "title": "Reinicio respeta WAL y estado",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "PosCoreStartupInspectionTests.Repeated_initialization_preserves_sqlite_state_and_wal"
+          ]
+        },
+        {
+          "id": "START-05",
+          "title": "Instalación Windows real",
+          "weight": 2,
+          "kind": "manual",
+          "procedure": "Instalar una terminal nueva y documentar arranque, reinicio, respaldo del SQLite y ausencia de cuentas demo"
+        }
+      ]
+    },
+    {
+      "id": "MVP-02",
+      "name": "Autenticación y ámbito de operador",
+      "weight": 12,
+      "scenarios": [
+        {
+          "id": "AUTH-01",
+          "title": "Usuario autorizado crea sesión",
+          "weight": 3,
+          "kind": "automated",
+          "testCases": [
+            "LocalAuthServiceTests.LoginAsync_WithCachedUserWithinOfflineWindow_CreatesLocalSession"
+          ]
+        },
+        {
+          "id": "AUTH-02",
+          "title": "Ventana offline vencida bloquea login",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "LocalAuthServiceTests.LoginAsync_BlocksWhenOfflineWindowExpired"
+          ]
+        },
+        {
+          "id": "AUTH-03",
+          "title": "Terminal rechaza usuario de otra tienda",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "LocalAuthServiceTests.LoginForTerminalAsync_RejectsOtherStoreBeforeSessionIsCreated"
+          ]
+        },
+        {
+          "id": "AUTH-04",
+          "title": "RBAC rechaza permisos insuficientes",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "LocalAuthServiceTests.RequirePermissionAsync_RejectsMissingLocalPermission"
+          ]
+        },
+        {
+          "id": "AUTH-05",
+          "title": "Acceso operativo en Windows",
+          "weight": 3,
+          "kind": "manual",
+          "procedure": "Probar login, logout, expiración, intentos fallidos y separación de cajero/supervisor desde WPF"
+        }
+      ]
+    },
+    {
+      "id": "MVP-03",
+      "name": "Catálogo y carrito real",
+      "weight": 13,
+      "scenarios": [
+        {
+          "id": "CAT-01",
+          "title": "Catálogo sincronizado a SQLite",
+          "weight": 3,
+          "kind": "automated",
+          "testCases": [
+            "CatalogCacheServiceTests.RefreshAsync_PersistsSellableProductsWithPriceSnapshot"
+          ]
+        },
+        {
+          "id": "CAT-02",
+          "title": "SKU real fluye de WPF a carrito y venta",
+          "weight": 3,
+          "kind": "automated",
+          "testCases": [
+            "ProductionCheckoutViewModelTests.Wpf_login_open_cash_cart_and_checkout_are_persisted_in_SQLite"
+          ]
+        },
+        {
+          "id": "CAT-03",
+          "title": "Carrito bloqueado no cambia durante cobro",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "ProductionCheckoutViewModelTests.Locked_checkout_cart_rejects_new_sku_without_mutating_total"
+          ]
+        },
+        {
+          "id": "CAT-04",
+          "title": "Precio modificado bloquea venta",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Changed_catalog_price_is_rejected_without_financial_writes"
+          ]
+        },
+        {
+          "id": "CAT-05",
+          "title": "Catálogo multiartículo desde UI",
+          "weight": 3,
+          "kind": "manual",
+          "procedure": "Operar venta de múltiples SKU, variantes, cantidades, inventario agotado y cambio de precio en WPF"
+        }
+      ]
+    },
+    {
+      "id": "MVP-04",
+      "name": "Cobro efectivo transaccional",
+      "weight": 20,
+      "scenarios": [
+        {
+          "id": "SALE-01",
+          "title": "Commit atomicidad integral",
+          "weight": 5,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Cash_checkout_commits_sale_lines_payment_cash_outbox_receipt_and_audit_together"
+          ]
+        },
+        {
+          "id": "SALE-02",
+          "title": "ID repetido no duplica pago",
+          "weight": 4,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Repeated_sale_id_returns_original_commit_without_double_charging_after_reopen"
+          ]
+        },
+        {
+          "id": "SALE-03",
+          "title": "Error al encolar ticket revierte venta",
+          "weight": 3,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Printing_queue_insert_failure_rolls_back_all_financial_records"
+          ]
+        },
+        {
+          "id": "SALE-04",
+          "title": "Reutilizar ID con datos alterados se rechaza",
+          "weight": 3,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Changed_sale_data_using_same_id_is_rejected_after_commit"
+          ]
+        },
+        {
+          "id": "SALE-05",
+          "title": "Cobro físico con conciliación",
+          "weight": 5,
+          "kind": "manual",
+          "procedure": "Completar venta real simulada en terminal Windows y reconciliar efectivo entregado, cambio, recibo y saldo sin SQL manual"
+        }
+      ]
+    },
+    {
+      "id": "MVP-05",
+      "name": "Tickets e impresión",
+      "weight": 10,
+      "scenarios": [
+        {
+          "id": "PRN-01",
+          "title": "Se registra trabajo de impresión pendiente",
+          "weight": 3,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Cash_checkout_commits_sale_lines_payment_cash_outbox_receipt_and_audit_together"
+          ]
+        },
+        {
+          "id": "PRN-02",
+          "title": "Fallo al crear trabajo no cobra",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Printing_queue_insert_failure_rolls_back_all_financial_records"
+          ]
+        },
+        {
+          "id": "PRN-03",
+          "title": "Impresora física y reintentos",
+          "weight": 5,
+          "kind": "manual",
+          "procedure": "Imprimir ticket físico una sola vez; desconectar y reconectar impresora, reintentar sin duplicar venta"
+        }
+      ]
+    },
+    {
+      "id": "MVP-06",
+      "name": "Sincronización offline y ACK",
+      "weight": 10,
+      "scenarios": [
+        {
+          "id": "SYNC-01",
+          "title": "ACK válido cambia evento a sincronizado",
+          "weight": 3,
+          "kind": "automated",
+          "testCases": [
+            "RemoteSyncPushServiceTests.PushPendingAsync_marks_events_synced_when_remote_acknowledges_batch"
+          ]
+        },
+        {
+          "id": "SYNC-02",
+          "title": "Fallo remoto no inventa ACK",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "RemoteSyncPushServiceTests.PushPendingAsync_marks_pending_events_failed_when_remote_call_fails"
+          ]
+        },
+        {
+          "id": "SYNC-03",
+          "title": "Reinicio reenvía una vez sin doble efecto",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteSyncRestartRecoveryTests.Two_abandoned_restarts_replay_one_event_without_repeating_business_effect"
+          ]
+        },
+        {
+          "id": "SYNC-04",
+          "title": "E2E de venta confirmada por servidor",
+          "weight": 3,
+          "kind": "manual",
+          "procedure": "Sincronizar una venta de una terminal desechable hacia servidor PostgreSQL descartable; demostrar ACK y conciliación por ID"
+        }
+      ]
+    },
+    {
+      "id": "MVP-07",
+      "name": "Turnos y ledger de caja",
+      "weight": 10,
+      "scenarios": [
+        {
+          "id": "CASH-01",
+          "title": "Abre/cierra turno y persiste importes",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "ProductionCheckoutViewModelTests.Wpf_cash_close_reconciles_physical_count_and_blocks_future_checkout"
+          ]
+        },
+        {
+          "id": "CASH-02",
+          "title": "Sin permiso no cierra caja",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "ProductionCheckoutViewModelTests.Wpf_close_without_cash_close_permission_keeps_turn_open"
+          ]
+        },
+        {
+          "id": "CASH-03",
+          "title": "Manipulación de ledger bloquea cierre",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "ProductionCheckoutViewModelTests.Ledger_tampering_and_audit_write_failure_prevent_closure"
+          ]
+        },
+        {
+          "id": "CASH-04",
+          "title": "Turno completo bajo UAT",
+          "weight": 4,
+          "kind": "manual",
+          "procedure": "Apertura, múltiples ventas, retiro, conteo físico, diferencia autorizada, cierre, reapertura y reporte de auditoría"
+        }
+      ]
+    },
+    {
+      "id": "MVP-08",
+      "name": "Recuperación tras caída y conciliación",
+      "weight": 15,
+      "scenarios": [
+        {
+          "id": "REC-01",
+          "title": "Reinicio conserva intentos pendientes",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteCheckoutRecoveryJournalTests.Restart_preserves_uncertain_checkout_and_blocks_new_sale_id",
+            "SQLiteAtomicCashCheckoutTests.Killed_external_process_preserves_or_reconciles_exactly_one_checkout"
+          ]
+        },
+        {
+          "id": "REC-02",
+          "title": "Commit confirmado reconcilia sin duplicar",
+          "weight": 3,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Crash_after_financial_commit_reconciles_journal_without_duplicate_money",
+            "ProductionCheckoutViewModelTests.Reopened_commercial_shell_reconciles_persisted_checkout_and_unlocks_cart",
+            "SQLiteAtomicCashCheckoutTests.Killed_external_process_preserves_or_reconciles_exactly_one_checkout"
+          ]
+        },
+        {
+          "id": "REC-03",
+          "title": "Ledger faltante impide desbloqueo",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteAtomicCashCheckoutTests.Missing_cash_ledger_evidence_keeps_restarted_terminal_blocked",
+            "SQLiteAtomicCashCheckoutTests.Supervisor_cannot_resolve_sale_that_already_committed",
+            "SQLiteAtomicCashCheckoutTests.Audit_insert_failure_rolls_back_supervised_resolution",
+            "SQLiteAtomicCashCheckoutTests.Orphaned_outbox_record_blocks_supervisor_from_claiming_no_sale"
+          ]
+        },
+        {
+          "id": "REC-04",
+          "title": "ID financiero alterado no se admite",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteCheckoutRecoveryJournalTests.Same_sale_id_cannot_change_amount_on_replay",
+            "SQLiteAtomicCashCheckoutTests.Supervisor_resolves_no_commit_with_audit_and_stale_worker_is_blocked",
+            "SQLiteAtomicCashCheckoutTests.Uncommitted_resolution_requires_reason_evidence_and_matching_tenant_store"
+          ]
+        },
+        {
+          "id": "REC-05",
+          "title": "Varios intentos pendientes bloquean",
+          "weight": 2,
+          "kind": "automated",
+          "testCases": [
+            "SQLiteCheckoutRecoveryJournalTests.Pending_intents_remain_visible_and_block_new_sale_after_restart",
+            "SQLiteAtomicCashCheckoutTests.Recovery_requires_both_supervisor_permissions_and_a_second_user",
+            "ProductionCheckoutViewModelTests.Independent_supervisor_can_resolve_uncommitted_intent_via_WPF_without_sale"
+          ]
+        },
+        {
+          "id": "REC-06",
+          "title": "Terminación forzada en Windows",
+          "weight": 2,
+          "kind": "manual",
+          "procedure": "Matar proceso antes y después de commit, reiniciar e inspeccionar ledger y ausencia de ventas duplicadas"
+        },
+        {
+          "id": "REC-07",
+          "title": "Conciliación supervisada con auditoría",
+          "weight": 2,
+          "kind": "manual",
+          "procedure": "Resolver caso incierto sin commit mediante permiso de supervisor, evidencia adjunta, decisión auditada e idempotencia"
+        }
+      ]
+    }
+  ]
+}

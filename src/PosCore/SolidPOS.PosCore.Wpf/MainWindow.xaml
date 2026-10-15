@@ -26,7 +26,7 @@
       </Border>
 
       <TabControl Grid.Row="1" Margin="0,16,0,0">
-        <TabItem Header="Branding">
+        <TabItem Header="Branding" Visibility="{Binding SimulationTabVisibility}">
           <StackPanel Margin="20">
             <TextBlock Text="Tenant branding" FontSize="20" FontWeight="Bold" />
             <TextBlock Text="{Binding Branding.Status}" Margin="0,12,0,0" />
@@ -45,7 +45,7 @@
           </StackPanel>
         </TabItem>
 
-        <TabItem Header="Login">
+        <TabItem Header="Login" Visibility="{Binding SimulationTabVisibility}">
           <StackPanel Margin="20">
             <TextBlock Text="Login local offline" FontSize="20" FontWeight="Bold" />
             <TextBlock Text="Email" FontWeight="Bold" Margin="0,12,0,2" />
@@ -56,6 +56,93 @@
           </StackPanel>
         </TabItem>
 
+        <TabItem Header="Activación / Estado real" Visibility="{Binding ProductionTabVisibility}">
+          <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="24">
+            <TextBlock Text="SolidPOS — operación local en validación técnica (NO-GO comercial)" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding ShellStatus}" TextWrapping="Wrap" Margin="0,18,0,10" FontSize="15"/>
+            <TextBlock Text="{Binding TerminalStatus.Status}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding TerminalStatus.BindingSummary}" TextWrapping="Wrap" Margin="0,8,0,10" />
+            <GroupBox Header="Catálogo y carrito local — sin cobro" Margin="0,8,0,8" MaxWidth="660" HorizontalAlignment="Left">
+              <StackPanel Margin="12" DataContext="{Binding ProductionCart}">
+                <TextBlock Text="Buscar SKU activo en SQLite" />
+                <TextBox Text="{Binding Sku, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" />
+                <StackPanel Orientation="Horizontal">
+                  <Button Content="Agregar SKU" Click="ProductionAddSku_Click" Padding="12,6" />
+                  <Button Content="Vaciar carrito" Click="ProductionClearCart_Click" IsEnabled="{Binding CanEdit}" Padding="12,6" Margin="8,0,0,0" />
+                </StackPanel>
+                <DataGrid ItemsSource="{Binding Lines}" AutoGenerateColumns="False" IsReadOnly="True" Height="150" Margin="0,10,0,0">
+                  <DataGrid.Columns>
+                    <DataGridTextColumn Header="SKU" Binding="{Binding Sku}" Width="*" />
+                    <DataGridTextColumn Header="Producto" Binding="{Binding Name}" Width="2*" />
+                    <DataGridTextColumn Header="Cant." Binding="{Binding Quantity}" />
+                    <DataGridTextColumn Header="Precio centavos" Binding="{Binding UnitPriceCents}" />
+                    <DataGridTextColumn Header="Subtotal centavos" Binding="{Binding SubtotalCents}" />
+                  </DataGrid.Columns>
+                </DataGrid>
+                <TextBlock Text="{Binding TotalCents, StringFormat={}{0} centavos}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+              </StackPanel>
+            </GroupBox>
+            <TextBlock Text="{Binding Sales.CatalogSummary}" TextWrapping="Wrap" />
+            <GroupBox Header="Acceso del operador (SQLite local)" Margin="0,12,0,12" MaxWidth="560" HorizontalAlignment="Left">
+              <StackPanel Margin="12" DataContext="{Binding ProductionLogin}">
+                <TextBlock Text="Correo electrónico" />
+                <TextBox Text="{Binding Email, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,8" />
+                <TextBlock Text="Contraseña" />
+                <PasswordBox x:Name="ProductionPassword" Margin="0,4,0,10" />
+                <StackPanel Orientation="Horizontal">
+                  <Button Content="Iniciar sesión" IsEnabled="{Binding CanLogin}" Click="ProductionLogin_Click" Padding="16,8" />
+                  <Button Content="Cerrar sesión" IsEnabled="{Binding CanLogout}" Click="ProductionLogout_Click" Margin="8,0,0,0" Padding="16,8" />
+                </StackPanel>
+                <TextBlock Text="{Binding Operator}" FontWeight="Bold" Margin="0,12,0,4" />
+                <TextBlock Text="{Binding Status}" TextWrapping="Wrap" />
+              </StackPanel>
+            </GroupBox>
+            <GroupBox Header="Caja y cobro efectivo locales — flujo financiero real" Margin="0,10,0,8" MaxWidth="680" HorizontalAlignment="Left">
+              <StackPanel Margin="12" DataContext="{Binding ProductionCheckout}">
+                <TextBlock Text="{Binding ShiftLabel}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding CashStatus}" TextWrapping="Wrap" />
+                <TextBlock Text="Fondo inicial (centavos MXN)" Margin="0,12,0,4" />
+                <TextBox Text="{Binding OpeningAmountCents, UpdateSourceTrigger=PropertyChanged}" Width="180" HorizontalAlignment="Left" />
+                <Button Content="Abrir turno en SQLite" Click="ProductionOpenShift_Click"
+                        IsEnabled="{Binding CanOpenShift}" Padding="12,7" HorizontalAlignment="Left" Margin="0,7,0,12" />
+                <TextBlock Text="Efectivo recibido (centavos MXN)" Margin="0,0,0,4" />
+                <TextBox Text="{Binding TenderedCents, UpdateSourceTrigger=PropertyChanged}" Width="180" HorizontalAlignment="Left" />
+                <Button Content="Confirmar cobro efectivo" Click="ProductionCheckout_Click"
+                        IsEnabled="{Binding CanCheckout}" Padding="14,9" FontWeight="SemiBold"
+                        HorizontalAlignment="Left" Margin="0,10,0,8" />
+                <TextBlock Text="{Binding SaleStatus}" TextWrapping="Wrap" />
+                <GroupBox Header="Conciliación excepcional — SOLO supervisor" Margin="0,10,0,10">
+                  <StackPanel Margin="10">
+                    <TextBlock Text="Use únicamente cuando NO hubo venta ni cobro y exista evidencia documental. Debe acceder otra persona con sales.void y cash.close." TextWrapping="Wrap" />
+                    <TextBlock Text="Motivo detallado (mínimo 20 caracteres)" Margin="0,8,0,4" />
+                    <TextBox Text="{Binding RecoveryReason, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Text="Referencia de incidencia y evidencia (mínimo 8 caracteres)" Margin="0,8,0,4" />
+                    <TextBox Text="{Binding RecoveryEvidence, UpdateSourceTrigger=PropertyChanged}" />
+                    <CheckBox IsChecked="{Binding RecoveryCashVerified, Mode=TwoWay}" Content="Confirmo revisión del efectivo físico y que no hubo cobro" Margin="0,10,0,0" />
+                    <Button Content="Resolver intento SIN venta (auditado)" Click="ProductionResolveUncommitted_Click"
+                            IsEnabled="{Binding CanResolveUncommitted}" Padding="12,8" Margin="0,10,0,0" HorizontalAlignment="Left" />
+                  </StackPanel>
+                </GroupBox>
+                <Button Content="Verificar cobro pendiente en SQLite" Click="ProductionVerifyRecovery_Click" Padding="12,7" HorizontalAlignment="Left" Margin="0,8,0,8" />
+                <TextBlock Text="Verificacion local solamente: no repite pagos ni libera operaciones inciertas sin evidencia." TextWrapping="Wrap" />
+                <Separator Margin="0,14,0,10"/>
+                <TextBlock Text="Cierre de caja (permiso cash.close)" FontWeight="SemiBold" />
+                <TextBlock Text="Efectivo contado físicamente (centavos MXN)" Margin="0,8,0,4" />
+                <TextBox Text="{Binding CountedCashCents, UpdateSourceTrigger=PropertyChanged}" Width="180" HorizontalAlignment="Left" />
+                <Button Content="Cerrar y conciliar turno en SQLite" Click="ProductionCloseShift_Click"
+                        IsEnabled="{Binding CanCloseShift}" Padding="14,9" HorizontalAlignment="Left" Margin="0,10,0,8" />
+                <TextBlock Text="El cierre exige carro vacío, sin cobro incierto, autorización y pagos conciliados con movimientos. La sincronización central es independiente." TextWrapping="Wrap" />
+                <TextBlock Text="La operación se guarda con ticket pendiente y outbox sin ACK. Repetir la confirmación tras error reutiliza el identificador original." TextWrapping="Wrap" Margin="0,8,0,0" />
+              </StackPanel>
+            </GroupBox>
+            <TextBlock Text="Cobro local habilitado únicamente con sesión, permiso y caja válida. Impresión física, sincronización y validación comercial completa siguen pendientes de certificación." TextWrapping="Wrap" FontWeight="SemiBold" />
+            <TextBlock Text="No presentar esta pantalla como sistema comercial certificado hasta validar instalación, hardware, sincronización, devoluciones y cierre." TextWrapping="Wrap" Margin="0,12,0,0" />
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
         <TabItem Header="Terminal">
           <StackPanel Margin="20">
             <TextBlock Text="Estado de terminal" FontSize="20" FontWeight="Bold" />
@@ -64,7 +151,7 @@
           </StackPanel>
         </TabItem>
 
-        <TabItem Header="Venta QSR">
+        <TabItem Header="Venta QSR" Visibility="{Binding SimulationTabVisibility}">
           <Grid Margin="20">
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="2*" />
@@ -117,7 +204,7 @@
           </Grid>
         </TabItem>
 
-        <TabItem Header="Sync">
+        <TabItem Header="Sync" Visibility="{Binding SimulationTabVisibility}">
           <StackPanel Margin="20">
             <TextBlock Text="Sync status" FontSize="20" FontWeight="Bold" />
             <TextBlock Text="{Binding SyncStatus.Status}" Margin="0,12,0,0" />
@@ -127,7 +214,7 @@
           </StackPanel>
         </TabItem>
 
-        <TabItem Header="Caja">
+        <TabItem Header="Caja" Visibility="{Binding SimulationTabVisibility}">
           <StackPanel Margin="20">
             <TextBlock Text="Caja local" FontSize="20" FontWeight="Bold" />
             <TextBlock Text="{Binding CashShift.Status}" Margin="0,12,0,0" />

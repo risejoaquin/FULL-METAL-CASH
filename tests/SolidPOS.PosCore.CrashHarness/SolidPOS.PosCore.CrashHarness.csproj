@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>SolidPOS.PosCore.CrashHarness</RootNamespace>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/PosCore/SolidPOS.PosCore.Application/SolidPOS.PosCore.Application.csproj" />
+    <ProjectReference Include="../../src/PosCore/SolidPOS.PosCore.Infrastructure/SolidPOS.PosCore.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

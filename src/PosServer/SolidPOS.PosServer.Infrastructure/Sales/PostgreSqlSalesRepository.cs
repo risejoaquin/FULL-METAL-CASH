@@ -1,4 +1,5 @@
 using System.Globalization;
+using SolidPOS.DiscountEngine;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
@@ -48,6 +49,8 @@ public sealed class PostgreSqlSalesRepository : ISalesRepository
         }
 
         List<PreparedSaleLine> preparedLines = [];
+        var selectedDiscounts = new Dictionary<Guid, PreparedDiscount>();
+        bool needsCartApportionmentValidation = false;
         int lineNumber = 1;
         foreach (CreateSaleLineRequest line in request.Lines)
         {
@@ -75,14 +78,13 @@ public sealed class PostgreSqlSalesRepository : ISalesRepository
                 return null;
             }
 
-            if (line.DiscountCents > 0)
+            if (line.DiscountCents > 0 && !line.DiscountId.HasValue)
             {
-                if (!line.DiscountId.HasValue)
-                {
-                    await transaction.RollbackAsync(cancellationToken);
-                    return null;
-                }
-
+                await transaction.RollbackAsync(cancellationToken);
+                return null;
+            }
+            if (line.DiscountId.HasValue)
+            {
                 PreparedDiscount? discount = await ReadActiveDiscountAsync(
                     connection,
                     transaction,
@@ -94,11 +96,25 @@ public sealed class PostgreSqlSalesRepository : ISalesRepository
                     request.OccurredAt,
                     cancellationToken);
 
-                if (discount is null || CalculateDiscountCents(discount, grossCents) != line.DiscountCents)
+                if (discount is null)
                 {
                     await transaction.RollbackAsync(cancellationToken);
                     return null;
                 }
+                selectedDiscounts[discount.Id] = discount;
+                long expectedLineDiscount;
+                try
+                {
+                    expectedLineDiscount = DiscountCalculator.CalculateAmountCents(
+                        grossCents, discount.DiscountType, discount.Value);
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or OverflowException)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return null;
+                }
+                if (expectedLineDiscount != line.DiscountCents)
+                    needsCartApportionmentValidation = true;
             }
 
             long lineTotalCents = grossCents - line.DiscountCents;
@@ -113,6 +129,47 @@ public sealed class PostgreSqlSalesRepository : ISalesRepository
                 lineTotalCents,
                 line.PreparationNote,
                 modifiers));
+        }
+
+        // Backward-compatible sync-v4 cart semantics: a single global rule
+        // on EVERY line with exact largest-remainder allocation. Legacy
+        // independent line discounts are accepted unchanged above. No new
+        // JSON fields, sale tables or customer-provided pricing authority.
+        if (needsCartApportionmentValidation)
+        {
+            Guid? sharedId = request.Lines.First().DiscountId;
+            if (!sharedId.HasValue ||
+                request.Lines.Any(line => line.DiscountId != sharedId) ||
+                !selectedDiscounts.TryGetValue(sharedId.Value, out PreparedDiscount? cartRule) ||
+                cartRule.ProductId.HasValue || cartRule.CategoryId.HasValue)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return null;
+            }
+
+            try
+            {
+                var calculated = DiscountCalculator.Quote(new DiscountQuoteRequest(
+                    tenantId, storeId, request.CashierUserId,
+                    preparedLines.Select((line, index) => new DiscountLine(
+                        DiscountCalculator.GetStableLineId(request.LocalSaleId, index),
+                        line.UnitPriceGrossCents)).ToArray(),
+                    [new DiscountRule(cartRule.Id, "cart",
+                        cartRule.DiscountType, cartRule.Value)],
+                    []));
+                if (calculated.Lines.Count != preparedLines.Count ||
+                    calculated.Lines.Where((total, index) =>
+                        total.CartDiscountCents != preparedLines[index].DiscountCents).Any())
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    return null;
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or OverflowException)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return null;
+            }
         }
 
         List<PreparedPayment> preparedPayments = [];
@@ -853,7 +910,7 @@ public sealed class PostgreSqlSalesRepository : ISalesRepository
         CancellationToken cancellationToken)
     {
         const string sql = """
-            SELECT id, discount_type, value
+            SELECT id, discount_type, value, product_id, category_id
             FROM pos.discounts
             WHERE tenant_id = @tenant_id
               AND id = @discount_id
@@ -881,17 +938,10 @@ public sealed class PostgreSqlSalesRepository : ISalesRepository
             return null;
         }
 
-        return new PreparedDiscount(reader.GetGuid(0), reader.GetString(1), reader.GetDecimal(2));
-    }
-
-    private static long CalculateDiscountCents(PreparedDiscount discount, long grossCents)
-    {
-        if (discount.DiscountType == "percentage")
-        {
-            return Math.Min(grossCents, ToCents(grossCents * discount.Value / 100m));
-        }
-
-        return Math.Min(grossCents, ToCents(discount.Value));
+        return new PreparedDiscount(
+            reader.GetGuid(0), reader.GetString(1), reader.GetDecimal(2),
+            reader.IsDBNull(3) ? null : reader.GetGuid(3),
+            reader.IsDBNull(4) ? null : reader.GetGuid(4));
     }
 
     private static async Task<PreparedProduct?> ReadProductAsync(
@@ -2071,7 +2121,7 @@ public sealed class PostgreSqlSalesRepository : ISalesRepository
 
     private sealed record PreparedPayment(PreparedPaymentMethod Method, Guid LocalPaymentId, long AmountCents, string? Reference);
 
-    private sealed record PreparedDiscount(Guid Id, string DiscountType, decimal Value);
+    private sealed record PreparedDiscount(Guid Id, string DiscountType, decimal Value, Guid? ProductId, Guid? CategoryId);
 
     private sealed record VoidableSale(Guid Id, Guid CashShiftId, string Status);
 

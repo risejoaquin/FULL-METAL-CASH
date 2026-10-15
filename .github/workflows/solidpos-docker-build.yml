@@ -1,0 +1,43 @@
+name: SolidPOS Docker Build
+
+on:
+  push:
+    branches:
+      - AC-DEV
+    paths:
+      - 'deploy/docker/Dockerfile'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'Directory.Build.props'
+      - 'src/PosServer/**'
+      - 'src/Shared/**'
+      - '.github/workflows/solidpos-docker-build.yml'
+  pull_request:
+    paths:
+      - 'deploy/docker/Dockerfile'
+      - '.dockerignore'
+      - 'docker-compose.yml'
+      - 'Directory.Build.props'
+      - 'src/PosServer/**'
+      - 'src/Shared/**'
+      - '.github/workflows/solidpos-docker-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-build:
+    name: Build PosServer image (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build exact Compose Dockerfile
+        run: >-
+          docker build
+          --progress=plain
+          --file deploy/docker/Dockerfile
+          --tag solidpos-posserver:ci
+          .

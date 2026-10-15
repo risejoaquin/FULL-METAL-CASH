@@ -3,6 +3,7 @@
     <RootNamespace>SolidPOS.PosCore.Application</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../Shared/SolidPOS.DiscountEngine/SolidPOS.DiscountEngine.csproj" />
     <ProjectReference Include="..\SolidPOS.PosCore.Domain\SolidPOS.PosCore.Domain.csproj" />
   </ItemGroup>
 </Project>

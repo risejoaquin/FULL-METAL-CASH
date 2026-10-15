@@ -15,5 +15,6 @@
     <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Domain\SolidPOS.PosCore.Domain.csproj" />
     <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Infrastructure\SolidPOS.PosCore.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\PosCore\SolidPOS.PosCore.Wpf\SolidPOS.PosCore.Wpf.csproj" />
+    <ProjectReference Include="..\SolidPOS.PosCore.CrashHarness\SolidPOS.PosCore.CrashHarness.csproj" />
   </ItemGroup>
 </Project>

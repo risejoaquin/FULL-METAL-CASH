@@ -7,6 +7,19 @@ public interface ILocalPosRepository
     Task InitializeAsync(CancellationToken cancellationToken = default);
     Task SaveTerminalBindingAsync(TerminalBinding binding, CancellationToken cancellationToken = default);
     Task<TerminalBinding?> GetTerminalBindingAsync(CancellationToken cancellationToken = default);
+    // Cash operations are supported by real SQLite repositories; older in-memory
+    // test doubles fail closed unless they explicitly implement them.
+    Task OpenLocalCashShiftAsync(LocalCashShift shift, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift persistence is not implemented.");
+    Task<LocalCashShift?> GetOpenLocalCashShiftAsync(CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift persistence is not implemented.");
+    Task<LocalCashShift?> GetLocalCashShiftAsync(Guid shiftId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift persistence is not implemented.");
+    Task<LocalCashShiftSummary> GetLocalCashShiftSummaryAsync(Guid shiftId, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift summary persistence is not implemented.");
+    Task CloseLocalCashShiftAsync(Guid shiftId, Guid closedByUserId, int countedCashCents,
+        DateTimeOffset closedAtUtc, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("Cash shift close is not implemented.");
     Task SaveOfflineSaleAsync(OfflineSaleDraft sale, LocalOutboxEvent outboxEvent, CancellationToken cancellationToken = default);
     Task SaveOfflineSaleWithInventoryAsync(OfflineSaleDraft sale, LocalOutboxEvent outboxEvent, IReadOnlyCollection<LocalInventoryMovement> movements, CancellationToken cancellationToken = default);
     Task SaveCatalogProductsAsync(IReadOnlyCollection<LocalCatalogProduct> products, DateTimeOffset syncedAtUtc, CancellationToken cancellationToken = default);
@@ -29,6 +42,23 @@ public interface ILocalPosRepository
     Task<int> RetryFailedOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default);
     Task<int> RecoverRetryPendingOutboxEventsAsync(int maxAttempts, string reason, CancellationToken cancellationToken = default) => RetryFailedOutboxEventsAsync(maxAttempts, reason, cancellationToken);
     Task SaveSyncAcknowledgementsAsync(IEnumerable<LocalSyncAcknowledgement> acknowledgements, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Atomically transitions acknowledged outbox events to Synced and records the
+    /// corresponding local evidence. The SQLite runtime overrides this method with
+    /// one database transaction. The compatibility default keeps existing test
+    /// repositories and other ILocalPosRepository implementations working, but
+    /// does not itself provide transactional guarantees.
+    /// </summary>
+    async Task CommitSyncAcknowledgementsAsync(
+        IReadOnlyCollection<LocalSyncAcknowledgement> acknowledgements,
+        DateTimeOffset syncedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(acknowledgements);
+        if (acknowledgements.Count == 0) return;
+        await MarkOutboxSyncedAsync(acknowledgements.Select(item => item.OutboxEventId), syncedAtUtc, cancellationToken).ConfigureAwait(false);
+        await SaveSyncAcknowledgementsAsync(acknowledgements, cancellationToken).ConfigureAwait(false);
+    }
     Task<int> CountOutboxByStatusAsync(LocalOutboxStatus status, CancellationToken cancellationToken = default);
     Task<LocalSyncQueueHealthSummary> GetLocalSyncQueueHealthAsync(DateTimeOffset nowUtc, TimeSpan processingTimeout, CancellationToken cancellationToken = default) =>
         Task.FromResult(new LocalSyncQueueHealthSummary(0, 0, 0, 0, null, null, false, false));
@@ -52,6 +82,14 @@ public interface ILocalPosRepository
     Task<bool> LocalUserHasPermissionAsync(Guid userId, string permissionCode, CancellationToken cancellationToken = default) => Task.FromResult(false);
     Task LogLocalAuditEventAsync(LocalAuditEvent auditEvent, CancellationToken cancellationToken = default) => Task.CompletedTask;
     Task<LocalAuthSummary> GetLocalAuthSummaryAsync(CancellationToken cancellationToken = default) => Task.FromResult(new LocalAuthSummary(0, 0, 0, 0, null));
+    /// <summary>
+    /// Fail-closed startup query. Compatibility implementations that cannot
+    /// verify scope report zero authorized users, never a global user count.
+    /// </summary>
+    Task<int> CountActiveLocalUsersForScopeAsync(
+        Guid tenantId, Guid storeId, CancellationToken cancellationToken = default)
+        => Task.FromResult(0);
+
 
 
     Task SaveReceiptPrintJobAsync(LocalReceiptPrintJob job, CancellationToken cancellationToken = default) => Task.CompletedTask;

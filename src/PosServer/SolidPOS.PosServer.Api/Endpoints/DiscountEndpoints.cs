@@ -73,6 +73,24 @@ public static class DiscountEndpoints
         .RequireAuthorization(PermissionCodes.DiscountsValidate)
         .WithName("ValidateDiscount");
 
+        group.MapPost("/quote", async Task<IResult> (
+            [FromBody] DiscountCartQuoteRequest request,
+            IDiscountsService discountsService,
+            CancellationToken cancellationToken) =>
+        {
+            DiscountCartQuoteResponse? result =
+                await discountsService.QuoteCartAsync(request, cancellationToken);
+            return result is null
+                ? Results.Problem(
+                    title: "Cart discount preview rejected",
+                    detail: "Check authenticated store scope, trusted rule eligibility, quote lines and amounts.",
+                    statusCode: StatusCodes.Status409Conflict,
+                    type: "https://solidpos.local/problems/cart-discount-preview-rejected")
+                : Results.Ok(result);
+        })
+        .RequireAuthorization(PermissionCodes.DiscountsValidate)
+        .WithName("PreviewDiscountCart");
+
         group.MapPatch("/{discountId:guid}", async Task<IResult> (
             [FromRoute] Guid discountId,
             [FromBody] UpdateDiscountRequest request,

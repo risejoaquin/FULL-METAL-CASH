@@ -16,10 +16,23 @@ public sealed class LocalAuthService
         _clock = clock;
     }
 
-    public async Task<LocalSession> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
+    public Task<LocalSession> LoginForTerminalAsync(string email, string password, Guid tenantId, Guid storeId, CancellationToken cancellationToken = default)
+    {
+        if (tenantId == Guid.Empty || storeId == Guid.Empty)
+            throw new InvalidOperationException("Terminal binding is missing.");
+        return LoginInternalAsync(email, password, tenantId, storeId, cancellationToken);
+    }
+
+    public Task<LocalSession> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
+        => LoginInternalAsync(email, password, null, null, cancellationToken);
+
+    private async Task<LocalSession> LoginInternalAsync(string email, string password, Guid? tenantId, Guid? storeId, CancellationToken cancellationToken)
     {
         var user = await _repository.GetLocalUserByEmailAsync(email, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("Invalid local credentials.");
+        if ((tenantId.HasValue && user.TenantId != tenantId.Value) ||
+            (storeId.HasValue && user.StoreId != storeId.Value))
+            throw new InvalidOperationException("Invalid local credentials.");
         var now = _clock.UtcNow;
         if (!_policy.IsWithinOfflineWindow(user, now))
         {

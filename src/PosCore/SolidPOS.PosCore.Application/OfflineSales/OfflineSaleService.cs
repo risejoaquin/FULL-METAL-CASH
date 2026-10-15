@@ -33,7 +33,7 @@ public sealed class OfflineSaleService
         return outboxEvent;
     }
 
-    private LocalOutboxEvent BuildSaleCompletedEvent(OfflineSaleDraft sale)
+    internal LocalOutboxEvent BuildSaleCompletedEvent(OfflineSaleDraft sale)
     {
         OfflineSaleCalculator.Validate(sale);
 

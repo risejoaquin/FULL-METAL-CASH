@@ -116,6 +116,49 @@ jobs:
           --logger "trx;LogFilePrefix=solidpos"
           --results-directory TestResults
 
+      - name: Setup Python for traceability report
+        if: always()
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test traceability calculator and acceptance manifest
+        shell: pwsh
+        run: python -m unittest discover -s tests/quality -p "test_*.py" -v
+
+      - name: Generate MVP acceptance traceability
+        if: always()
+        shell: pwsh
+        run: >-
+          python scripts/quality/solidpos_traceability.py
+          --matrix docs/engineering/solidpos-mvp-acceptance-matrix.json
+          --trx-dir TestResults
+          --commit "${{ github.sha }}"
+          --run-id "${{ github.run_id }}"
+          --output TestResults/solidpos-mvp-traceability.json
+          --markdown TestResults/solidpos-mvp-evidence.md
+          --strict
+
+      - name: Publish acceptance evidence to run summary
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path TestResults/solidpos-mvp-evidence.md) {
+            Get-Content TestResults/solidpos-mvp-evidence.md -Encoding UTF8 |
+              Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          }
+
+      - name: Upload MVP traceability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: solidpos-mvp-evidence-${{ github.run_id }}
+          path: |
+            TestResults/solidpos-mvp-traceability.json
+            TestResults/solidpos-mvp-evidence.md
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
