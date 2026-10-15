@@ -54,3 +54,17 @@
 - Esta sección documenta una prueba controlada de escritura desde la integración ChatGPT/GitHub en `AC-DEV`.
 - La lectura del archivo fue satisfactoria. La escritura quedará verificada únicamente si el commit de esta actualización se confirma.
 - No acredita ejecución de GitHub Actions, permisos de merge ni avance funcional del MVP.
+
+
+### SOLIDPOS-20261015T02 — 2026-10-15T10:01:34.541Z
+- Gate: G0/P0 integridad financiera / revisión contrato de turnos; COMMERCIAL_GO=NO-GO.
+- Estado: CHECKPOINT_NOT_PERSISTED (provisional hasta verificar commit y URL).
+- Rama: docs/solidpos-p0-shift-contract-review-20261015t02; SHA inicial AC-DEV 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3; SHA prewrite 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3; SHA final pendiente de verificación.
+- Cambios humanos/concurrentes: AC-DEV en 6ad19af8 (documentación humana P0 #18); PR #13/#14/#15/#16 abiertos Draft; T01 ya documentado en rama aislada, sin sobrescritura.
+- Archivos: rama aislada creada; intento de publicar docs/engineering/qa/P0_SHIFT_LIFECYCLE_CONTRACT_REVIEW_20261015T02.md rechazado por controles de seguridad; ningún cambio funcional publicado. PR nuevo: no creado.
+- Pruebas ejecutadas: JavaScript read-only (String/RegExp) sobre cinco archivos C# y matriz JSON del SHA 6ad19af8, 10/10 comprobaciones estructurales MATCH; sin pruebas .NET, SQLite, PostgreSQL, WPF Windows, impresora ni piloto en este run.
+- CI: SolidPOS CI SUCCESS para 6ad19af8 https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38701499590 ; no atribuir este resultado a SHA documental futuro.
+- Aceptación: matriz de 100 puntos (71 clasificados automáticos, 29 manuales); nuevos criterios certificados 0/100, acumulado N/D.
+- Bloqueos: issue #18 local shift open/close sin eventos outbox; contrato congelado schema_version_4 exige ADR/PO para identidad de turnos; publicación del documento bloqueada por safety checks. El ACK de inbox no acredita venta central.
+- Escalamiento: email_sent=false; correo deshabilitado en ejecución. Fingerprint de posible aprobación PO: risejoaquin/FULL-METAL-CASH|G0-P0|CONTRACT_REVIEW|issue-18. Sin mensaje enviado.
+- Próximo slice permitido: revisión ADR de mapeo localShiftId/remoteShiftId, orden y reintentos; tras aprobación pruebas SQLite y PostgreSQL aislado; preparar demo ficticia de bebidas y checklist manual sin contacto ni despliegue.
