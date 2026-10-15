@@ -74,3 +74,23 @@ The subsequent user-run `sync-push` returned "No pending local outbox events to 
 **Technical dependency discovered:** `PostgreSqlSalesRepository.CreateAsync` requires a matching `pos.cash_shifts` row in `open` status for the store, terminal and operator before it creates the server sale. A local SQLite cash-shift opening is not by itself proof of a central open shift. Next action is **read-only preflight** for central shift and event contract, followed by controlled processing of the exact received batch only when prerequisites are satisfied. Never replay or modify the already-acknowledged local sale as an ad hoc workaround.
 
 `PRN-03` remains pending because physical printing is not evidenced.
+
+
+## QA-004 central read-only preflight — confirmed P0 dependency
+
+The operator queried the isolated `full-metal-cash` PostgreSQL service in `BEGIN TRANSACTION READ ONLY` with tenant scope `11111111-1111-1111-1111-111111111111`. Exact results:
+
+| Assertion | Server result |
+| --- | --- |
+| Inbox event `9bd6bac8-45a2-42e6-87ff-29f48c9ce514` | 1 row, `sale.completed`, `status=received`, `processed_at=NULL` |
+| Batch | `35485a19-4732-4d17-ada0-cbc726cc17d5` |
+| Store+terminal central cash shift(s) | **0 rows** |
+| Central sale with local UUID `45f0a935-8d08-47e7-b170-72797424d34c` | **0 rows** |
+
+**Root cause confirmed from code:** local WPF opening and closing events are not enqueued, while the central sale processor requires an open central cash shift. An ingestion ACK is not a server posting. Processing without its missing dependency is unsafe.
+
+**QA-004 verdict:** `PASS_INGESTION_ONLY / BLOCKED_FINANCIAL_PROCESSING`.
+**Release verdict:** `NO-GO`.
+**Engineering defect:** [P0 issue #18](https://github.com/risejoaquin/FULL-METAL-CASH/issues/18).
+
+**Operator instruction:** Do not run `sync/process`, create an arbitrary central cash shift, requeue or resend this event, manually patch SQL rows, or repeat the original sale/closure. Preserve SQLite/PG evidence and wait for an audited shift-ordering/idempotency remediation.
