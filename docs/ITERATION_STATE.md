@@ -54,3 +54,18 @@
 - Esta sección documenta una prueba controlada de escritura desde la integración ChatGPT/GitHub en `AC-DEV`.
 - La lectura del archivo fue satisfactoria. La escritura quedará verificada únicamente si el commit de esta actualización se confirma.
 - No acredita ejecución de GitHub Actions, permisos de merge ni avance funcional del MVP.
+
+
+### SOLIDPOS-20261015T01 — 2026-10-15T08:57:59.024Z
+- Ejecutor y contexto: ciclo horario GitHub; America/Hermosillo 2026-10-15 01h; UTC 2026-10-15T08:57:59.024Z.
+- Gate: G0/P0 integridad financiera, pre-MVP comercial; COMMERCIAL_GO=NO-GO.
+- Estado: CHECKPOINT_NOT_PERSISTED (candidato de registro; solo cambiar a PARTIAL tras confirmación remota).
+- Rama: docs/solidpos-shift-lifecycle-evidence-20261015t01; SHA inicial 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3; SHA final pendiente de confirmación.
+- Trabajo humano concurrente: AC-DEV 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3 (commit lucilfer docs(qa) P0 #18); PR #13/#14/#15/#16 abiertos Draft; issue #18 abierto.
+- Cambios: rama aislada creada; intento de publicar 3 regresiones C# en test/solidpos-session-race-20261015t00 rechazado por safety checks; intento de publicar matriz P0 #18 rechazado; sin código ni documentación funcional persistida.
+- Evidencia ejecutada: siete comprobaciones estáticas JavaScript contra seis archivos GitHub del SHA 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3, 7/7 MATCH; NO se ejecutaron pruebas .NET, SQLite integrado, PostgreSQL nuevo, Windows UI, impresora ni piloto. CI previo del HEAD: https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38701499590 SUCCESS, SHA 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3; no cubre regresiones sin publicar.
+- Aceptación: matriz 100 puntos (71 automáticos, 29 manuales por clasificación); nuevos criterios certificados 0/100; aceptación global N/D.
+- Bloqueos: P0 #18 turno local sin eventos open/close y venta remota received no procesada; contratos schema-v4 congelados; escrituras rechazadas por safety checks, no hay evidencia de HTTP 403 solucionable por PO.
+- Escalamiento: email_sent=false; no enviado (canal de correo deshabilitado en esta ejecución); ESCALATION_PENDING=false hasta bloqueo PO accionable.
+- Próximo slice permitido: revisar ADR de identidad de turnos, pruebas negativas SHIFT-01..10 en entorno desechable; publicar regresiones de carrera y ejecutar CI Windows solo tras permitir escritura.
+- PR/files: https://github.com/risejoaquin/FULL-METAL-CASH/pull/15 ; https://github.com/risejoaquin/FULL-METAL-CASH/issues/18 ; docs/ITERATION_STATE.md (esta entrada si se confirma).
