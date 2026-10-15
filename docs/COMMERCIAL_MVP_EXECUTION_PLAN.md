@@ -1,5 +1,7 @@
 # SolidPOS — Plan de ejecución hacia MVP comercial
 
+> **Plan operativo con trazabilidad a código (corte 2026-10-14):** consultar [ROADMAP_MVP_COMERCIAL_CODE_AUDITADO_2026-10-14.md](engineering/ROADMAP_MVP_COMERCIAL_CODE_AUDITADO_2026-10-14.md) antes de elegir tareas. Ese documento añade inventario de código, backlog P0/P1, ruta crítica, riesgos y gates de aceptación. El presente plan general es una referencia histórica y no acredita comercialización. Nunca convertir CI o simulaciones en GO; no merge/deploy sin autorización.
+
 Fecha base: 2026-10-13. Documento de dirección, **no** certificación de funcionalidades existentes.
 
 ## Objetivo y límite
