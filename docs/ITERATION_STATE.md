@@ -54,3 +54,13 @@
 - Esta sección documenta una prueba controlada de escritura desde la integración ChatGPT/GitHub en `AC-DEV`.
 - La lectura del archivo fue satisfactoria. La escritura quedará verificada únicamente si el commit de esta actualización se confirma.
 - No acredita ejecución de GitHub Actions, permisos de merge ni avance funcional del MVP.
+
+### SOLIDPOS-20261015T13 — reconciliación 2026-10-15T20:57:10Z
+- Gate: G0/G1, QA-004/QA-005 (sin aprobación G2). Estado técnico PARTIAL; estado de persistencia previo CHECKPOINT_NOT_PERSISTED.
+- Rama: fix/solidpos-financial-proof-qa004-qa005-20261015t12; SHA base/final verificado antes de escritura: 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3; sin nuevos commits humanos en AC-DEV según PR #13/compare; PR #13/#14/#15/#16 abiertos Draft. PR #15 tiene trabajo concurrente de sesión/carrito y no se modificó.
+- Archivo candidato: scripts/poscore/verify-sale-sync-status.py; intento de update_file sobre blob a893dd642d87d54da22651d02a50fd3b1b2feb57 rechazado por controles de seguridad; no se publicó código ni PR. Revisión sin cambios de contratos congelados.
+- Pruebas ejecutadas en candidato aislado (NO GitHub): python3 -m unittest discover -s tests/quality -p 'test_*.py' -v => 28/28 PASS (Linux, Python 3.13.5, SQLite temporal, PostgreSQL/Docker simulados); python3 -m compileall -q scripts/poscore tests/quality => PASS. Pruebas recuperadas, no 28 criterios comerciales nuevos. Windows/impresora/PostgreSQL real/piloto: NO EJECUTADAS.
+- CI para SHA base 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3: 4 workflow runs completados SUCCESS (38701499576, 38701499671, 38701499551, 38701499590). Candidato QA-004/QA-005 sin SHA publicado y sin CI propio.
+- Aceptación: matriz 100 puntos (71 automáticos y 29 manuales por clasificación, no aprobados); nuevos puntos de esta reconciliación 0/100; aceptación global N/D. COMMERCIAL_GO=NO-GO.
+- Bloqueos: integración GitHub update_file: 'This tool call was blocked by OpenAI's safety checks'; P0 issue #18 por identidad/orden de turnos local-central; requiere revisión/decisión PO antes de cambiar contrato. ESCALATION_PENDING, email_sent=false (canal de correo no habilitado).
+- Próximo: recuperar candidato y pruebas sin duplicar run/PR, publicar cuando escritura permitida, CI sobre SHA nuevo, resolver P0 #18 con contrato revisado. Sin merge, deploy, producción, gastos ni contacto comercial.
