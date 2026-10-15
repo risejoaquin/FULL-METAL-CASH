@@ -126,3 +126,14 @@
 - Aceptación: matriz 38 escenarios / 100 puntos; 71 clasificados automatizados y 29 manuales, NO equivalen a puntos certificados. Nuevos puntos certificados en este ciclo: 0/100; aceptación comercial global N/D. Instalación Windows, impresora real, recuperación, piloto 3 días y PO GO pendientes.
 - Bloqueo: GitHub create_file para C# bloqueado por safety checks (no HTTP 403 confirmado); no cambiar a main ni usar force push. No hay evidencia de que cambiar permisos del PO resuelva este control; email_sent=false; escalamiento por correo no realizado.
 - Siguiente slice permitido: publicar las tres regresiones en rama autorizada cuando se permita, ejecutar CI Windows sobre SHA que las contenga, corregir/revalidar; después integrar UX táctil con datos ficticios y mantener hardware/piloto sujetos a GO explícito.
+
+
+#### T20 CI and regression publication addendum — 2026-10-15T03:59Z
+- Reconciled run_id: SOLIDPOS-20261014T20 (existing checkpoint retained; this is not a second run). State: PARTIAL; gate G0/G1, COMMERCIAL_GO NO-GO.
+- Branch HEAD before append: f4bad687dc51433a4f03c8af9735e6563984ef3b. AC-DEV still a2961f4e14ebe0a18ec1c6a93db5ca3b6ac73655. PR #13/#14/#15/#16 remain open Draft.
+- New verified CI evidence for exact T20 documentation SHA f4bad687dc51433a4f03c8af9735e6563984ef3b: Windows .NET 8 Build and test SUCCESS, https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38674098513 and job https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38674098513/job/116223825347. This CI does not contain the missing C# regressions.
+- Tests actually executed in this addendum: python verify_static.py against local recovered T18 C# candidate, Linux/Python, 12/12 static PASS, no GitHub SHA for candidate. dotnet test NOT RUN (.NET SDK unavailable); SQLite runtime/Windows WPF/physical printer NOT RUN.
+- Reattempted publishing tests/SolidPOS.PosCore.UnitTests/ProductionCartSessionRaceTests.cs on isolated branch; connector returned 'This tool call was blocked by OpenAI's safety checks'. No C# file or commit created.
+- Acceptance: official 38 scenarios/100 weighted points; 71 classified automated, 29 manual, not approved by category. New commercial points certified: 0/100; total acceptance N/D.
+- Next permitted slice: publish deterministic tests when permitted; run Windows .NET 8 CI on exact code SHA, then continue beverage touch UI with fictional catalog. Hardware/3-day pilot and PO GO remain separate gates. No merge, deploy, production or expenses.
+- Persistence of this addendum requires GitHub commit SHA and subsequent read; no final SHA asserted in advance.
