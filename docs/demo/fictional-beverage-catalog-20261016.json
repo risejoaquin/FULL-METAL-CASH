@@ -1,0 +1,29 @@
+{
+  "fixtureVersion": 1,
+  "fixtureOnly": true,
+  "businessName": "Bebidas Demo (ficticio)",
+  "currency": "MXN",
+  "generatedAtUtc": "2026-10-16T10:00:00Z",
+  "integrationStatus": {
+    "posCoreCatalogSnapshotCompatible": true,
+    "touchSelectionImplemented": false,
+    "toppingsBoundToParentDrink": false,
+    "realCheckoutVerified": false,
+    "printerVerified": false,
+    "productionReady": false
+  },
+  "catalogSnapshots": [
+    {"productId":"11111111-1111-4111-8111-111111111111","variantId":"11111111-1111-4111-8111-111111111112","sku":"DEMO-COFFEE-12","name":"Café helado 12 oz","priceCents":4500,"currency":"MXN","status":"active","updatedAtUtc":"2026-10-16T10:00:00Z","demoCategory":"Bebidas","demoSize":"12 oz"},
+    {"productId":"11111111-1111-4111-8111-111111111111","variantId":"11111111-1111-4111-8111-111111111113","sku":"DEMO-COFFEE-16","name":"Café helado 16 oz","priceCents":5900,"currency":"MXN","status":"active","updatedAtUtc":"2026-10-16T10:00:00Z","demoCategory":"Bebidas","demoSize":"16 oz"},
+    {"productId":"22222222-2222-4222-8222-222222222222","variantId":"22222222-2222-4222-8222-222222222223","sku":"DEMO-TEA-12","name":"Té frutal 12 oz","priceCents":4800,"currency":"MXN","status":"active","updatedAtUtc":"2026-10-16T10:00:00Z","demoCategory":"Bebidas","demoSize":"12 oz"},
+    {"productId":"22222222-2222-4222-8222-222222222222","variantId":"22222222-2222-4222-8222-222222222224","sku":"DEMO-TEA-16","name":"Té frutal 16 oz","priceCents":6200,"currency":"MXN","status":"active","updatedAtUtc":"2026-10-16T10:00:00Z","demoCategory":"Bebidas","demoSize":"16 oz"},
+    {"productId":"33333333-3333-4333-8333-333333333333","variantId":null,"sku":"DEMO-PEARLS","name":"Extra perlas (demo)","priceCents":900,"currency":"MXN","status":"active","updatedAtUtc":"2026-10-16T10:00:00Z","demoCategory":"Extras","demoSize":null},
+    {"productId":"44444444-4444-4444-8444-444444444444","variantId":null,"sku":"DEMO-CREAM","name":"Extra crema (demo)","priceCents":700,"currency":"MXN","status":"active","updatedAtUtc":"2026-10-16T10:00:00Z","demoCategory":"Extras","demoSize":null},
+    {"productId":"55555555-5555-4555-8555-555555555555","variantId":null,"sku":"DEMO-SYRUP","name":"Extra jarabe (demo)","priceCents":600,"currency":"MXN","status":"active","updatedAtUtc":"2026-10-16T10:00:00Z","demoCategory":"Extras","demoSize":null},
+    {"productId":"66666666-6666-4666-8666-666666666666","variantId":null,"sku":"DEMO-WATER","name":"Agua embotellada (demo)","priceCents":2000,"currency":"MXN","status":"active","updatedAtUtc":"2026-10-16T10:00:00Z","demoCategory":"Bebidas","demoSize":null}
+  ],
+  "sampleQuotes": [
+    {"id":"DEMO-Q1","description":"Dos cafés grandes, cada uno con perlas y crema; extras como líneas independientes, sin vínculo automático","lines":[{"sku":"DEMO-COFFEE-16","quantity":2},{"sku":"DEMO-PEARLS","quantity":2},{"sku":"DEMO-CREAM","quantity":2}],"totalCents":15000,"tenderedCents":20000,"changeCents":5000},
+    {"id":"DEMO-Q2","description":"Un té pequeño con jarabe; extras como líneas independientes","lines":[{"sku":"DEMO-TEA-12","quantity":1},{"sku":"DEMO-SYRUP","quantity":1}],"totalCents":5400,"tenderedCents":10000,"changeCents":4600}
+  ]
+}
