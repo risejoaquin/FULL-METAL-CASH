@@ -21,6 +21,11 @@ public static class BeverageQuoteComposer
 
         ValidateProduct(beverage);
         var usedSkus = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { beverage.Sku };
+        // A renamed SKU must not allow the same catalog identity to be billed twice.
+        var usedCatalogIdentities = new HashSet<(Guid ProductId, Guid? VariantId)>
+        {
+            (beverage.ProductId, beverage.VariantId)
+        };
         var lines = new List<OfflineSaleLineDraft>();
         var links = new List<BeverageExtraLink>();
         long total = checked((long)beverageQuantity * beverage.PriceCents);
@@ -34,8 +39,10 @@ public static class BeverageQuoteComposer
             ValidateProduct(extra.Product);
             if (extra.QuantityPerBeverage <= 0)
                 throw new InvalidOperationException("Extra quantity per beverage must be positive.");
-            if (!usedSkus.Add(extra.Product.Sku))
-                throw new InvalidOperationException("Duplicate or self-referential extra SKU.");
+            if (extra.Product.ProductId == beverage.ProductId ||
+                !usedSkus.Add(extra.Product.Sku) ||
+                !usedCatalogIdentities.Add((extra.Product.ProductId, extra.Product.VariantId)))
+                throw new InvalidOperationException("Duplicate or self-referential extra catalog identity.");
 
             long requestedQuantity = checked((long)beverageQuantity * extra.QuantityPerBeverage);
             if (requestedQuantity > int.MaxValue)
