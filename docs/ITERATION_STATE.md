@@ -96,3 +96,17 @@
 - Bloqueos: escritura del archivo de código bloqueada por seguridad de integración, no permiso de PO; no eludir. Sin correo de escalamiento (deshabilitado y no es aprobación PO).
 - Siguiente slice: publicar parche con regresiones por vía autorizada, ejecutar CI sobre SHA exacto, PR Draft; si persiste bloqueo, priorizar otro slice independiente sin interferir con PR #15.
 - Checkpoint: confirmar persistencia mediante lectura posterior del archivo y SHA del commit.
+
+### SOLIDPOS-20261016T16 — 2026-10-16T23:01:14Z
+- Ejecutor: ChatGPT hourly; America/Hermosillo 2026-10-16 16:01 (-07:00).
+- Objetivo P1 POS-06: impedir que un SKU alternativo facture dos veces una misma identidad de catálogo como extra de bebida.
+- Cambios humanos/concurrentes: AC-DEV observado en 6ad19af8c659c43f15edc81760d7a3a4bd8bf5f3; PR #13/#14/#15/#16/#17 Draft; PR #15 protege carrito/sesiones; issue P0 #18 sigue abierto. No se modificaron ramas ajenas.
+- Rama/SHA remoto: feature/solidpos-beverage-quote-20261016t09 @ f5f390473e6446e3506d89e3108b2cd2d965ffee (sin commit de código nuevo).
+- Archivos de código candidatos NO PUBLICADOS: src/PosCore/SolidPOS.PosCore.Application/Catalog/BeverageQuoteComposer.cs y tests/SolidPOS.PosCore.UnitTests/BeverageQuoteComposerTests.cs (2 casos xUnit). Intento de actualizar compositor RECHAZADO por safety checks; no se eludieron controles.
+- Tests REALMENTE ejecutados: python -m unittest discover -s tests/quality -p 'test_*.py' -v en recuperación local con SQLite temporal y PostgreSQL simulado: primer intento FAIL por fixture ausente; fixture restaurada; segunda corrida 69/69 PASS. python -m py_compile scripts/poscore/verify-sale-sync-status.py PASS. C# xUnit nuevo NO EJECUTADO; .NET SDK no disponible localmente; PostgreSQL real, WPF interactivo e impresora NO EJECUTADOS.
+- CI exacto SHA remoto: GitHub Actions https://github.com/risejoaquin/FULL-METAL-CASH/actions/runs/38973287470 SUCCESS sobre f5f390473e6446e3506d89e3108b2cd2d965ffee; anterior al parche local y no lo certifica.
+- PR: intento de abrir PR Draft hacia AC-DEV RECHAZADO por safety checks; PR nuevo NO CREADO. No merge/deploy.
+- Aceptación: 0 puntos comerciales nuevos acreditados / 100 puntos de matriz; global N/D, 29 puntos manuales pendientes; NO-GO.
+- Bloqueo: controles de escritura de integración, no aprobación del PO. Evidencia local recuperable SOLIDPOS_20261016T16_RECOVERY.zip, con log de pruebas, parche pendiente y SHA256.
+- Siguiente slice: publicar legítimamente corrección y 2 xUnit, ejecutar CI sobre SHA definitivo, abrir PR Draft; si persiste bloqueo, trabajar en slice independiente sin alterar contratos. No contacto, gastos, piloto ni escalamiento por correo.
+- Checkpoint: verificar por lectura posterior la presencia del ID y SHA blob; el commit de esta entrada es sólo documental.
